@@ -1,0 +1,90 @@
+import { Menu, Tray, app, nativeImage } from 'electron'
+import { ALL_CATEGORY, CATEGORIES } from './categories.js'
+
+const traySvg = encodeURIComponent(`
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
+  <rect x="6" y="5" width="20" height="22" rx="4" fill="#f2ca52"/>
+  <path d="M10 11h12M10 16h12M10 21h8" stroke="#31413f" stroke-width="2" stroke-linecap="round"/>
+</svg>`)
+
+export class TrayController {
+  constructor(windowManager) {
+    this.windowManager = windowManager
+    this.tray = null
+    this.counts = {}
+  }
+
+  create() {
+    if (this.tray) {
+      return this.tray
+    }
+
+    const image = nativeImage.createFromDataURL(`data:image/svg+xml;charset=UTF-8,${traySvg}`)
+    this.tray = new Tray(image)
+    this.tray.setToolTip('便签')
+    this.tray.on('click', () => this.windowManager.toggle())
+    this.rebuildMenu(this.counts)
+    return this.tray
+  }
+
+  rebuildMenu(counts = this.counts) {
+    this.counts = counts
+
+    if (!this.tray) {
+      return
+    }
+
+    const interactionState = this.windowManager.getInteractionState()
+
+    const categoryItems = CATEGORIES.map((category) => ({
+      label: `${category}${counts[category] ? ` (${counts[category]})` : ''}`,
+      click: () => this.windowManager.show(category)
+    }))
+
+    const contextMenu = Menu.buildFromTemplate([
+      {
+        label: `全部便签${this.totalCount() ? ` (${this.totalCount()})` : ''}`,
+        click: () => this.windowManager.show(ALL_CATEGORY)
+      },
+      {
+        label: '分类',
+        submenu: categoryItems
+      },
+      { type: 'separator' },
+      {
+        label: '新建便签',
+        click: () => this.windowManager.openNewNote()
+      },
+      {
+        label: '鼠标穿透',
+        type: 'checkbox',
+        checked: interactionState.passThrough,
+        click: (menuItem) => {
+          this.windowManager.setPassThroughMode(menuItem.checked)
+          this.rebuildMenu(this.counts)
+        }
+      },
+      { type: 'separator' },
+      {
+        label: '退出',
+        click: () => {
+          app.isQuitting = true
+          app.exit(0)
+        }
+      }
+    ])
+
+    this.tray.setContextMenu(contextMenu)
+  }
+
+  totalCount() {
+    return Object.values(this.counts).reduce((sum, count) => sum + Number(count || 0), 0)
+  }
+
+  destroy() {
+    if (this.tray) {
+      this.tray.destroy()
+      this.tray = null
+    }
+  }
+}

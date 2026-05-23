@@ -1,0 +1,18 @@
+:root {
+  --accent: #2f7d78;
+  --accent-soft: rgba(47, 125, 120, 0.12);
+  --accent-strong: #215d59;
+  --text: #243230;
+  --text-muted: #64736f;
+  --bg-window: rgba(250, 252, 250, 0.88);
+  --bg-card: rgba(255, 255, 255, 0.88);
+  --bg-card-hover: rgba(246, 252, 249, 0.96);
+  --border: rgba(38, 57, 54, 0.12);
+  --shadow: 0 18px 42px rgba(32, 44, 42, 0.18);
+  --danger: #ba4b4b;
+  --warning: #c58a25;
+  --radius-window: 18px;
+  --radius-panel: 12px;
+  --radius-control: 8px;
+  --radius-small: 6px;
+}
