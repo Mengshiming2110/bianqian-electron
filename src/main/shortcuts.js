@@ -3,6 +3,7 @@ import { getShortcuts } from './store.js'
 import { ALL_CATEGORY, CATEGORIES } from './categories.js'
 
 let registeredBindings = {}
+let beforeInputWindowId = null
 
 export function registerAllShortcuts(windowManager) {
   const shortcuts = getShortcuts()
@@ -21,8 +22,9 @@ export function registerAllShortcuts(windowManager) {
   })
 
   // Window-level shortcuts (before-input-event)
-  if (window) {
+  if (window && beforeInputWindowId !== window.id) {
     window.webContents.on('before-input-event', handleBeforeInput)
+    beforeInputWindowId = window.id
   }
 
   // Store reference for reregisterShortcut
@@ -72,8 +74,6 @@ function registerBinding(accelerator, callback) {
 }
 
 export function reregisterShortcut(id, newBinding, windowManager) {
-  const shortcuts = getShortcuts()
-  const oldBinding = Object.entries(shortcuts).find(([, v]) => v === newBinding)
   // Unregister old accelerator for this id
   globalShortcut.unregisterAll()
   // Re-register all global shortcuts
@@ -84,4 +84,5 @@ export function reregisterShortcut(id, newBinding, windowManager) {
 export function unregisterAllShortcuts() {
   globalShortcut.unregisterAll()
   registeredBindings = {}
+  beforeInputWindowId = null
 }

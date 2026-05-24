@@ -190,7 +190,15 @@ bianqian-electron/
 |---|---|---|
 | F3 | 全局 | 切换云游窗口显示/隐藏 |
 | Escape | 云游窗口内 | 隐藏云游窗口 |
-| Alt+1~9 | 云游窗口内 | 快捷切换分类（预留） |
+| Ctrl+Shift+P | 全局 | 切换穿透模式 |
+| Alt+1~9 | 云游窗口内 | 快捷切换分类 |
+
+**快捷键配置面板：**
+- 托盘菜单「快捷键设置」→ 打开独立配置窗口（340×420）
+- 表格列出所有功能及当前快捷键，点击 ✏ 录制新组合
+- 录制中按 Esc 取消；冲突时自动清空被占用项
+- 「恢复默认」一键重置
+- 配置持久化到 electron-store settings.shortcuts |
 
 ---
 
@@ -244,6 +252,25 @@ bianqian-electron/
 
 ---
 
+### 2.10 附件 Popover
+
+**触发：** 点击便签卡片上的 `[📎 N]` pill
+
+**外观：** 200px 宽浮动面板，从 pill 右下角 scale 弹出，右对齐
+
+**内部结构：**
+- 顶栏：`📎 附件 (N)` + ✕ 关闭
+- 文件列表：emoji + 文件名（截断）+ ✕ 删除；点击文件名调用系统程序打开
+- 底部：`+ 添加附件` 按钮
+
+**拖拽添加：** 整个面板区域接受从资源管理器拖入的文件，无 UI 提示
+
+**定位：** Teleport 到 #popover-root，position: fixed；坐标值在点击时从 pill 的 getBoundingClientRect 捕获
+
+**关闭：** ✕ 按钮 / 点击背景遮罩 / 按 Esc
+
+---
+
 ## 三、可扩展性设计
 
 | 设计点 | 当前实现 | 日后扩展方向 |
@@ -253,6 +280,8 @@ bianqian-electron/
 | IPC 桥接 | preload 暴露完整 `window.api` | 加功能：只需在 ipc.js 添加新的 handle |
 | 提醒抽象 | `notifyReminder()` 单独函数 | 换 Windows Toast API 只需改这处 |
 | 穿透机制 | `_setClickThrough()` 封装 | 换实现只需改 window-manager.js |
+| 快捷键 | 动态注册 + electron-store 配置 | 新增快捷功能只需加一个 ID + 默认绑定 |
+| 附件交互 | Popover 面板 + 拖拽 | 加缩略图预览只需改 AttachmentPopover |
 
 ---
 
@@ -271,6 +300,9 @@ bianqian-electron/
 - [x] F3 全局快捷键
 - [x] NSIS 安装向导打包
 - [x] electron-builder 二进制损坏修复（asar: false）
+- [x] 附件 Popover（卡片 pill 点击弹出面板，文件查看/打开/删除/拖拽添加）
+- [x] 穿透模式快捷键（Ctrl+Shift+P）
+- [x] 快捷键配置面板（自定义所有快捷键，托盘菜单入口）
 
 ---
 
@@ -278,7 +310,6 @@ bianqian-electron/
 
 - [ ] Windows 原生 Toast 通知（替代 Web Notifications）
 - [ ] 数据备份/导出（JSON / CSV）
-- [ ] 快捷键自定义
 - [ ] 多个云游窗口（独立卡片模式）
 - [ ] 云同步
 - [ ] 重复任务

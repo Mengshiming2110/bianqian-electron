@@ -146,12 +146,27 @@ function clampOpacity(value) {
   return Math.min(1, Math.max(0.35, number))
 }
 
+const DEFAULT_SHORTCUTS = {
+  'toggle-window': 'F3',
+  'hide-window': 'Escape',
+  'toggle-passthrough': 'Ctrl+Shift+P',
+  'category-全部': 'Alt+1',
+  'category-工作': 'Alt+2',
+  'category-生活': 'Alt+3',
+  'category-学习': 'Alt+4',
+  'category-会议': 'Alt+5',
+  'category-其他': 'Alt+6'
+}
+
 export function getSettings() {
   const settings = getBackingStore().get('settings', {})
 
   return {
     opacity: clampOpacity(settings.opacity),
-    shortcuts: settings.shortcuts || {}
+    shortcuts: {
+      ...DEFAULT_SHORTCUTS,
+      ...(settings.shortcuts || {})
+    }
   }
 }
 
@@ -180,18 +195,6 @@ export function setShortcut(id, binding) {
   shortcuts[id] = binding
   updateSettings({ shortcuts })
   return getShortcuts()
-}
-
-const DEFAULT_SHORTCUTS = {
-  'toggle-window': 'F3',
-  'hide-window': 'Escape',
-  'toggle-passthrough': 'Ctrl+Shift+P',
-  'category-全部': 'Alt+1',
-  'category-工作': 'Alt+2',
-  'category-生活': 'Alt+3',
-  'category-学习': 'Alt+4',
-  'category-会议': 'Alt+5',
-  'category-其他': 'Alt+6'
 }
 
 export function resetShortcuts() {

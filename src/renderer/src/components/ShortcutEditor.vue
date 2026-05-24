@@ -74,7 +74,7 @@ async function load() {
 }
 
 function close() {
-  window.api?.window.hide()
+  window.close()
 }
 
 function startRecord(id) {

@@ -1,45 +1,51 @@
 <template>
-  <Teleport to="body">
+  <Teleport to="#popover-root">
     <div
       v-if="visible"
-      ref="popoverRef"
-      class="attach-popover"
-      :class="{ closing: isClosing, 'drag-over': dragOver }"
+      class="attach-popover-anchor"
       :style="popoverStyle"
-      @dragover.prevent="onDragOver"
-      @dragleave="onDragLeave"
-      @drop.prevent="onDrop"
     >
-      <div class="popover-header">
-        <span>附件 ({{ attachments.length }})</span>
-        <button class="popover-close" type="button" @click="closePanel">&#10005;</button>
-      </div>
-
-      <div class="popover-files">
-        <div
-          v-for="(file, index) in attachments"
-          :key="`${file}-${index}`"
-          class="popover-file-row"
-        >
-          <span class="file-emoji">📄</span>
-          <span class="file-name" :title="file" @click="$emit('open', file)">{{ fileName(file) }}</span>
-          <button class="file-remove" type="button" @click="$emit('remove', file)">&#10005;</button>
+      <div
+        ref="popoverRef"
+        class="attach-popover"
+        :class="{ closing: isClosing, 'drag-over': dragOver }"
+        @dragover.prevent="onDragOver"
+        @dragleave="onDragLeave"
+        @drop.prevent="onDrop"
+      >
+        <div class="popover-header">
+          <span>附件 ({{ attachments.length }})</span>
+          <button class="popover-close" type="button" @click="closePanel">&#10005;</button>
         </div>
-      </div>
 
-      <div class="popover-footer">
-        <button class="popover-add-btn" type="button" @click="pickFiles">+ 添加附件</button>
+        <div class="popover-files">
+          <div
+            v-for="(file, index) in attachments"
+            :key="`${file}-${index}`"
+            class="popover-file-row"
+          >
+            <span class="file-emoji">📄</span>
+            <span class="file-name" :title="file" @click="$emit('open', file)">{{ fileName(file) }}</span>
+            <button class="file-remove" type="button" @click="$emit('remove', file)">&#10005;</button>
+          </div>
+        </div>
+
+        <div class="popover-footer">
+          <button class="popover-add-btn" type="button" @click="pickFiles">+ 添加附件</button>
+        </div>
       </div>
     </div>
   </Teleport>
 </template>
 
 <script setup>
-import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { computed, ref } from 'vue'
 
 const props = defineProps({
   attachments: { type: Array, default: () => [] },
-  anchorEl: { type: Object, default: null },
+  anchorRight: { type: Number, default: 0 },
+  anchorBottom: { type: Number, default: 0 },
+  anchorTop: { type: Number, default: 0 },
   visible: { type: Boolean, default: false }
 })
 
@@ -47,7 +53,6 @@ const emit = defineEmits(['close', 'add', 'remove', 'open'])
 
 const isClosing = ref(false)
 const dragOver = ref(false)
-const recalcKey = ref(0)
 const closeTimer = ref(null)
 
 function fileName(path) {
@@ -61,21 +66,6 @@ function closePanel() {
     emit('close')
   }, 150)
 }
-
-function handleScrollOrResize() {
-  recalcKey.value++
-}
-
-onMounted(() => {
-  window.addEventListener('scroll', handleScrollOrResize, true)
-  window.addEventListener('resize', handleScrollOrResize)
-})
-
-onUnmounted(() => {
-  window.removeEventListener('scroll', handleScrollOrResize, true)
-  window.removeEventListener('resize', handleScrollOrResize)
-  if (closeTimer.value) clearTimeout(closeTimer.value)
-})
 
 async function pickFiles() {
   const files = await window.api?.files.selectAttachments()
@@ -104,26 +94,19 @@ function onDrop(e) {
 }
 
 const popoverStyle = computed(() => {
-  void recalcKey.value
-  if (!props.anchorEl) return { display: 'none' }
-  const rect = props.anchorEl.getBoundingClientRect()
-  const popoverWidth = 200
+  if (!props.visible) return { display: 'none' }
+  const pw = 200
   const gap = 4
-  const maxHeight = 280
+  const maxH = 280
 
-  let top = rect.bottom + gap
-  let left = rect.right - popoverWidth
+  let top = props.anchorBottom + gap
+  let left = props.anchorRight - pw
 
-  // clamp to viewport
   if (left < 8) left = 8
-  if (left + popoverWidth > window.innerWidth - 8) {
-    left = window.innerWidth - popoverWidth - 8
-  }
+  if (left + pw > window.innerWidth - 8) left = window.innerWidth - pw - 8
 
-  // flip to top if not enough space below
-  const estHeight = maxHeight
-  if (top + estHeight > window.innerHeight - 8) {
-    top = rect.top - estHeight - gap
+  if (top + maxH > window.innerHeight - 8) {
+    top = props.anchorTop - maxH - gap
     if (top < 8) top = 8
   }
 
@@ -131,14 +114,17 @@ const popoverStyle = computed(() => {
     position: 'fixed',
     top: `${top}px`,
     left: `${left}px`,
-    width: `${popoverWidth}px`,
-    maxHeight: `${maxHeight}px`,
+    width: `${pw}px`,
     zIndex: 9999
   }
 })
 </script>
 
 <style scoped>
+.attach-popover-anchor {
+  /* position: fixed comes from JS, no transform here */
+}
+
 .attach-popover {
   background: rgba(255, 255, 255, 0.98);
   border: 1px solid rgba(47, 125, 120, 0.22);
@@ -150,6 +136,8 @@ const popoverStyle = computed(() => {
   flex-direction: column;
   animation: popIn 180ms ease-out;
   transform-origin: top right;
+  width: 100%;
+  max-height: 280px;
 }
 
 .attach-popover.closing {

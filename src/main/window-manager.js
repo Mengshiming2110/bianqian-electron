@@ -224,8 +224,10 @@ export class WindowManager {
     })
 
     this.shortcutEditor.on('close', (event) => {
-      event.preventDefault()
-      this.shortcutEditor.hide()
+      if (!app.isQuitting) {
+        event.preventDefault()
+        this.shortcutEditor.hide()
+      }
     })
 
     if (process.env.ELECTRON_RENDERER_URL) {
