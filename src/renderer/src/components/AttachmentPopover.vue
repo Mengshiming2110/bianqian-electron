@@ -17,8 +17,8 @@
 
       <div class="popover-files">
         <div
-          v-for="file in attachments"
-          :key="file"
+          v-for="(file, index) in attachments"
+          :key="`${file}-${index}`"
           class="popover-file-row"
         >
           <span class="file-emoji">📄</span>
@@ -35,7 +35,7 @@
 </template>
 
 <script setup>
-import { computed, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 
 const props = defineProps({
   attachments: { type: Array, default: () => [] },
@@ -47,6 +47,8 @@ const emit = defineEmits(['close', 'add', 'remove', 'open'])
 
 const isClosing = ref(false)
 const dragOver = ref(false)
+const recalcKey = ref(0)
+const closeTimer = ref(null)
 
 function fileName(path) {
   return path.split(/[\\/]/).pop()
@@ -54,11 +56,26 @@ function fileName(path) {
 
 function closePanel() {
   isClosing.value = true
-  setTimeout(() => {
+  closeTimer.value = setTimeout(() => {
     isClosing.value = false
     emit('close')
   }, 150)
 }
+
+function handleScrollOrResize() {
+  recalcKey.value++
+}
+
+onMounted(() => {
+  window.addEventListener('scroll', handleScrollOrResize, true)
+  window.addEventListener('resize', handleScrollOrResize)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('scroll', handleScrollOrResize, true)
+  window.removeEventListener('resize', handleScrollOrResize)
+  if (closeTimer.value) clearTimeout(closeTimer.value)
+})
 
 async function pickFiles() {
   const files = await window.api?.files.selectAttachments()
@@ -87,6 +104,7 @@ function onDrop(e) {
 }
 
 const popoverStyle = computed(() => {
+  void recalcKey.value
   if (!props.anchorEl) return { display: 'none' }
   const rect = props.anchorEl.getBoundingClientRect()
   const popoverWidth = 200
@@ -103,9 +121,10 @@ const popoverStyle = computed(() => {
   }
 
   // flip to top if not enough space below
-  const estHeight = Math.min(40 + props.attachments.length * 24 + 36, maxHeight)
+  const estHeight = maxHeight
   if (top + estHeight > window.innerHeight - 8) {
     top = rect.top - estHeight - gap
+    if (top < 8) top = 8
   }
 
   return {
