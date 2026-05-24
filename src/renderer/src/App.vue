@@ -1,5 +1,6 @@
 <template>
-  <main class="app-shell" :class="{ 'pass-through-mode': passThroughMode }">
+  <ShortcutEditor v-if="isShortcutEditor" />
+  <main v-else class="app-shell" :class="{ 'pass-through-mode': passThroughMode }">
     <header class="app-header">
       <div>
         <p class="eyebrow">{{ notes.activeCategory }}</p>
@@ -84,7 +85,7 @@
           <span
             v-if="note.attachments.length"
             class="attach-pill"
-            @click.stop="openAttachPopover(note, $event.currentTarget)"
+            @click.stop="openAttachPopover(note, $event)"
           >
             <Paperclip :size="12" />
             {{ note.attachments.length }}
@@ -193,7 +194,9 @@
 
     <AttachmentPopover
       :attachments="attachPopover.note?.attachments || []"
-      :anchor-el="attachPopover.anchorEl"
+      :anchor-right="attachPopover.anchorRight"
+      :anchor-bottom="attachPopover.anchorBottom"
+      :anchor-top="attachPopover.anchorTop"
       :visible="attachPopover.visible"
       @close="closeAttachPopover"
       @add="handleAttachAdd"
@@ -222,7 +225,10 @@ import {
   X
 } from 'lucide-vue-next'
 import AttachmentPopover from './components/AttachmentPopover.vue'
+import ShortcutEditor from './components/ShortcutEditor.vue'
 import { ALL_CATEGORY, CATEGORIES, useNotesStore } from './stores/notes'
+
+const isShortcutEditor = window.location.hash === '#shortcut-editor'
 
 const notes = useNotesStore()
 const categories = CATEGORIES
@@ -238,23 +244,27 @@ const draft = reactive(defaultDraft())
 const attachPopover = reactive({
   visible: false,
   note: null,
-  anchorEl: null
+  anchorRight: 0,
+  anchorBottom: 0,
+  anchorTop: 0
 })
 
-function openAttachPopover(note, el) {
+function openAttachPopover(note, event) {
   if (attachPopover.visible && attachPopover.note?.id === note.id) {
     closeAttachPopover()
     return
   }
+  const rect = event.currentTarget.getBoundingClientRect()
   attachPopover.note = note
-  attachPopover.anchorEl = el
+  attachPopover.anchorRight = rect.right
+  attachPopover.anchorBottom = rect.bottom
+  attachPopover.anchorTop = rect.top
   attachPopover.visible = true
 }
 
 function closeAttachPopover() {
   attachPopover.visible = false
   attachPopover.note = null
-  attachPopover.anchorEl = null
 }
 
 async function handleAttachAdd(paths) {
