@@ -64,6 +64,10 @@ export class TrayController {
           this.rebuildMenu(this.counts)
         }
       },
+      {
+        label: '快捷键设置',
+        click: () => this.windowManager.openShortcutEditor()
+      },
       { type: 'separator' },
       {
         label: '退出',

@@ -3,10 +3,14 @@ import {
   createNote,
   deleteNote,
   getNotes,
+  getShortcuts,
   saveNotes,
+  setShortcut,
+  resetShortcuts,
   toggleNote,
   updateNote
 } from './store.js'
+import { reregisterShortcut, registerAllShortcuts } from './shortcuts.js'
 
 export function registerIpc(windowManager, trayController) {
   ipcMain.handle('notes:list', () => getNotes())
@@ -50,5 +54,19 @@ export function registerIpc(windowManager, trayController) {
 
   ipcMain.on('tray:update-counts', (_event, counts) => {
     trayController.rebuildMenu(counts)
+  })
+
+  ipcMain.handle('shortcuts:list', () => getShortcuts())
+
+  ipcMain.handle('shortcuts:update', (_event, id, binding) => {
+    const result = setShortcut(id, binding)
+    reregisterShortcut(id, binding, windowManager)
+    return { ok: true, shortcuts: result }
+  })
+
+  ipcMain.handle('shortcuts:reset', () => {
+    const result = resetShortcuts()
+    registerAllShortcuts(windowManager)
+    return { ok: true, shortcuts: result }
   })
 }

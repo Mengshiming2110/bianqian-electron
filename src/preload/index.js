@@ -32,5 +32,10 @@ contextBridge.exposeInMainWorld('api', {
     onFilterCategory: (callback) => on('notes:filter', callback),
     onCreateNote: (callback) => on('editor:new', callback),
     onInteractionState: (callback) => on('window:interaction-state', callback)
+  },
+  shortcuts: {
+    list: () => ipcRenderer.invoke('shortcuts:list'),
+    update: (id, binding) => ipcRenderer.invoke('shortcuts:update', id, binding),
+    reset: () => ipcRenderer.invoke('shortcuts:reset')
   }
 })

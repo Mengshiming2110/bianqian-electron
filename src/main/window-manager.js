@@ -18,6 +18,7 @@ export class WindowManager {
     this.passThroughMode = false
     this.alwaysOnTop = true
     this.opacity = getSettings().opacity
+    this.shortcutEditor = null
   }
 
   async createFloatingWindow() {
@@ -198,6 +199,44 @@ export class WindowManager {
     }
 
     this.window.webContents.send(channel, payload)
+  }
+
+  openShortcutEditor() {
+    if (this.shortcutEditor && !this.shortcutEditor.isDestroyed()) {
+      this.shortcutEditor.show()
+      this.shortcutEditor.focus()
+      return
+    }
+
+    this.shortcutEditor = new BrowserWindow({
+      width: 340,
+      height: 420,
+      resizable: false,
+      frame: false,
+      parent: this.window,
+      show: false,
+      backgroundColor: '#ffffff',
+      webPreferences: {
+        preload: join(__dirname, '../preload/index.mjs'),
+        contextIsolation: true,
+        nodeIntegration: false
+      }
+    })
+
+    this.shortcutEditor.on('close', (event) => {
+      event.preventDefault()
+      this.shortcutEditor.hide()
+    })
+
+    if (process.env.ELECTRON_RENDERER_URL) {
+      this.shortcutEditor.loadURL(process.env.ELECTRON_RENDERER_URL + '#shortcut-editor')
+    } else {
+      this.shortcutEditor.loadFile(join(__dirname, '../renderer/index.html'), { hash: 'shortcut-editor' })
+    }
+
+    this.shortcutEditor.once('ready-to-show', () => {
+      this.shortcutEditor.show()
+    })
   }
 
   placeNearTopRight() {
