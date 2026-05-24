@@ -81,9 +81,13 @@
         <p class="note-preview">{{ note.content || ' ' }}</p>
         <div class="card-row card-meta">
           <span class="category-pill">{{ note.category }}</span>
-          <span v-if="note.attachments.length" class="attachment-count">
-            <Paperclip :size="13" />
-            {{ note.attachments.length }} 个附件
+          <span
+            v-if="note.attachments.length"
+            class="attach-pill"
+            @click.stop="openAttachPopover(note, $event.target)"
+          >
+            <Paperclip :size="12" />
+            {{ note.attachments.length }}
           </span>
         </div>
       </article>
@@ -180,6 +184,22 @@
         </footer>
       </form>
     </div>
+
+    <div
+      v-if="attachPopover.visible"
+      class="popover-backdrop"
+      @click="closeAttachPopover"
+    />
+
+    <AttachmentPopover
+      :attachments="attachPopover.note?.attachments || []"
+      :anchor-el="attachPopover.anchorEl"
+      :visible="attachPopover.visible"
+      @close="closeAttachPopover"
+      @add="handleAttachAdd"
+      @remove="handleAttachRemove"
+      @open="handleAttachOpen"
+    />
   </main>
 </template>
 
@@ -201,6 +221,7 @@ import {
   Trash2,
   X
 } from 'lucide-vue-next'
+import AttachmentPopover from './components/AttachmentPopover.vue'
 import { ALL_CATEGORY, CATEGORIES, useNotesStore } from './stores/notes'
 
 const notes = useNotesStore()
@@ -213,6 +234,46 @@ const unsubscribeHandlers = []
 let reminderTimer = null
 
 const draft = reactive(defaultDraft())
+
+const attachPopover = reactive({
+  visible: false,
+  note: null,
+  anchorEl: null
+})
+
+function openAttachPopover(note, el) {
+  if (attachPopover.visible && attachPopover.note?.id === note.id) {
+    closeAttachPopover()
+    return
+  }
+  attachPopover.note = note
+  attachPopover.anchorEl = el
+  attachPopover.visible = true
+}
+
+function closeAttachPopover() {
+  attachPopover.visible = false
+  attachPopover.note = null
+  attachPopover.anchorEl = null
+}
+
+async function handleAttachAdd(paths) {
+  if (!attachPopover.note) return
+  const merged = [...new Set([...attachPopover.note.attachments, ...paths])]
+  await notes.update(attachPopover.note.id, { attachments: merged })
+  attachPopover.note.attachments = merged
+}
+
+async function handleAttachRemove(path) {
+  if (!attachPopover.note) return
+  const next = attachPopover.note.attachments.filter(f => f !== path)
+  await notes.update(attachPopover.note.id, { attachments: next })
+  attachPopover.note.attachments = next
+}
+
+function handleAttachOpen(path) {
+  window.api?.files.openPath(path)
+}
 
 const todayLabel = computed(() =>
   new Intl.DateTimeFormat('zh-CN', {
@@ -328,6 +389,12 @@ async function setWindowOpacity(value) {
   }
 }
 
+function onKeyDown(e) {
+  if (e.key === 'Escape' && attachPopover.visible) {
+    closeAttachPopover()
+  }
+}
+
 onMounted(async () => {
   await notes.load()
   await refreshInteractionState()
@@ -349,11 +416,14 @@ onMounted(async () => {
       })
     )
   }
+
+  document.addEventListener('keydown', onKeyDown)
 })
 
 onBeforeUnmount(() => {
   unsubscribeHandlers.forEach((unsubscribe) => unsubscribe())
   clearInterval(reminderTimer)
+  document.removeEventListener('keydown', onKeyDown)
 })
 </script>
 
@@ -407,7 +477,6 @@ onBeforeUnmount(() => {
 .card-row,
 .search-box,
 .remind-toggle,
-.attachment-count,
 .secondary-button,
 .primary-button,
 .danger-button,
@@ -621,10 +690,20 @@ onBeforeUnmount(() => {
   white-space: nowrap;
 }
 
-.attachment-count {
-  gap: 4px;
-  color: var(--warning);
-  font-size: 12px;
+.attach-pill {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  padding: 3px 8px;
+  border-radius: 4px;
+  color: var(--accent-strong);
+  background: var(--accent-soft);
+  font-size: 10px;
+  cursor: pointer;
+}
+
+.attach-pill:hover {
+  background: rgba(47, 125, 120, 0.2);
 }
 
 .empty-state {
@@ -805,5 +884,11 @@ onBeforeUnmount(() => {
 .danger-button {
   color: #fff;
   background: var(--danger);
+}
+
+.popover-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 9998;
 }
 </style>
