@@ -1,5 +1,10 @@
 <template>
-  <div class="shortcut-editor">
+  <div
+    class="shortcut-editor"
+    ref="rootEl"
+    tabindex="-1"
+    @keydown="onRootKeydown"
+  >
     <div class="se-header">
       <span>快捷键设置</span>
       <button class="se-close" type="button" @click="close">&#10005;</button>
@@ -16,7 +21,7 @@
           <span
             v-if="recordingId === item.id"
             class="se-recording"
-          >按下组合键...</span>
+          >{{ lastCapturedKey || '按下组合键...' }}</span>
           <span
             v-else
             class="se-key"
@@ -44,10 +49,25 @@
 </template>
 
 <script setup>
-import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
+
+const FALLBACK_SHORTCUTS = {
+  'toggle-window': 'F3',
+  'hide-window': 'Escape',
+  'toggle-passthrough': 'Ctrl+Shift+P',
+  'category-全部': 'Alt+1',
+  'category-工作': 'Alt+2',
+  'category-生活': 'Alt+3',
+  'category-学习': 'Alt+4',
+  'category-会议': 'Alt+5',
+  'category-其他': 'Alt+6'
+}
 
 const shortcuts = ref({})
 const recordingId = ref(null)
+const lastCapturedKey = ref('')
+const rootEl = ref(null)
+let unsubscribeKeydown = null
 
 const shortcutLabels = {
   'toggle-window': '切换窗口显示',
@@ -70,37 +90,61 @@ const shortcutList = computed(() =>
 )
 
 async function load() {
-  shortcuts.value = (await window.api?.shortcuts.list()) || {}
+  try {
+    const data = await window.api?.shortcuts.list()
+    if (data && Object.keys(data).length > 0) {
+      shortcuts.value = data
+    } else {
+      shortcuts.value = { ...FALLBACK_SHORTCUTS }
+    }
+  } catch {
+    shortcuts.value = { ...FALLBACK_SHORTCUTS }
+  }
 }
 
 function close() {
   window.close()
 }
 
-function startRecord(id) {
+async function startRecord(id) {
+  await window.api?.shortcuts.startRecord()
   recordingId.value = id
+  lastCapturedKey.value = ''
+  await nextTick()
+  rootEl.value?.focus()
 }
 
-function cancelRecord() {
+async function cancelRecord() {
   recordingId.value = null
+  lastCapturedKey.value = ''
+  await window.api?.shortcuts.stopRecord()
 }
 
-async function saveRecording(id, binding) {
-  const result = await window.api?.shortcuts.update(id, binding)
-  if (result?.ok) {
-    shortcuts.value = result.shortcuts
-  }
-  recordingId.value = null
+let lastRecordingTime = 0
+
+function inputToBinding(e) {
+  const parts = []
+  if (e.ctrlKey) parts.push('Ctrl')
+  if (e.altKey) parts.push('Alt')
+  if (e.shiftKey) parts.push('Shift')
+  if (e.metaKey) parts.push('Meta')
+  const key = e.key.length === 1 ? e.key.toUpperCase() : e.key
+  parts.push(key)
+  return parts.join('+')
 }
 
-async function resetAll() {
-  const result = await window.api?.shortcuts.reset()
-  if (result?.ok) {
-    shortcuts.value = result.shortcuts
-  }
+function handleKeyCapture(binding) {
+  const now = Date.now()
+  if (now - lastRecordingTime < 300) return
+
+  if (!recordingId.value) return
+
+  lastRecordingTime = now
+  lastCapturedKey.value = binding
+  saveRecording(recordingId.value, binding)
 }
 
-function onKeyDown(e) {
+function onRootKeydown(e) {
   if (!recordingId.value) return
   e.preventDefault()
   e.stopPropagation()
@@ -110,28 +154,67 @@ function onKeyDown(e) {
     return
   }
 
-  // Ignore modifier-only presses
-  if (['Control', 'Alt', 'Shift', 'Meta'].includes(e.key)) {
+  if (['Control', 'Alt', 'Shift', 'Meta'].includes(e.key)) return
+
+  handleKeyCapture(inputToBinding(e))
+}
+
+function handleIpcKeydown({ binding, key }) {
+  if (!recordingId.value) return
+  if (['Control', 'Alt', 'Shift', 'Meta'].includes(key)) return
+
+  if (key === 'Escape') {
+    cancelRecord()
     return
   }
 
-  const parts = []
-  if (e.ctrlKey) parts.push('Ctrl')
-  if (e.altKey) parts.push('Alt')
-  if (e.shiftKey) parts.push('Shift')
-  if (e.metaKey) parts.push('Meta')
-  parts.push(e.key.length === 1 ? e.key.toUpperCase() : e.key)
+  handleKeyCapture(binding)
+}
 
-  saveRecording(recordingId.value, parts.join('+'))
+function handleDomKeydown(e) {
+  if (!recordingId.value) return
+  e.preventDefault()
+  e.stopPropagation()
+
+  if (e.key === 'Escape') {
+    cancelRecord()
+    return
+  }
+
+  if (['Control', 'Alt', 'Shift', 'Meta'].includes(e.key)) return
+
+  handleKeyCapture(inputToBinding(e))
+}
+
+async function saveRecording(id, binding) {
+  try {
+    const result = await window.api?.shortcuts.update(id, binding)
+    if (result?.ok) {
+      shortcuts.value = result.shortcuts
+    }
+  } finally {
+    lastCapturedKey.value = ''
+    recordingId.value = null
+    await window.api?.shortcuts.stopRecord()
+  }
+}
+
+async function resetAll() {
+  const result = await window.api?.shortcuts.reset()
+  if (result?.ok) {
+    shortcuts.value = result.shortcuts
+  }
 }
 
 onMounted(() => {
   load()
-  window.addEventListener('keydown', onKeyDown, true)
+  unsubscribeKeydown = window.api?.shortcuts.onKeydown(handleIpcKeydown)
+  window.addEventListener('keydown', handleDomKeydown, true)
 })
 
-onUnmounted(() => {
-  window.removeEventListener('keydown', onKeyDown, true)
+onBeforeUnmount(() => {
+  unsubscribeKeydown?.()
+  window.removeEventListener('keydown', handleDomKeydown, true)
 })
 </script>
 
@@ -145,6 +228,7 @@ onUnmounted(() => {
   font-family: "Microsoft YaHei", "PingFang SC", sans-serif;
   font-size: 12px;
   user-select: none;
+  outline: none;
 }
 
 .se-header {

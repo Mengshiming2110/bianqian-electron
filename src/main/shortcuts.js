@@ -9,6 +9,8 @@ export function registerAllShortcuts(windowManager) {
   const shortcuts = getShortcuts()
   const window = windowManager.getWindow()
 
+  console.log('[shortcuts] loaded:', JSON.stringify(shortcuts))
+
   globalShortcut.unregisterAll()
   registeredBindings = {}
 
@@ -65,11 +67,17 @@ function inputToBinding(input) {
 }
 
 function registerBinding(accelerator, callback) {
-  if (!accelerator) return
+  if (!accelerator) {
+    console.error('[shortcuts] empty accelerator, skipping')
+    return
+  }
   try {
-    globalShortcut.register(accelerator, callback)
+    const ok = globalShortcut.register(accelerator, callback)
+    if (!ok) {
+      console.error('[shortcuts] registration failed (possibly taken by another app):', accelerator)
+    }
   } catch (e) {
-    console.error('Failed to register shortcut:', accelerator, e)
+    console.error('[shortcuts] registration error:', accelerator, e)
   }
 }
 

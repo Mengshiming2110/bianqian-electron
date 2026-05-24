@@ -1,4 +1,4 @@
-import { dialog, ipcMain, shell } from 'electron'
+import { dialog, globalShortcut, ipcMain, shell } from 'electron'
 import {
   createNote,
   deleteNote,
@@ -68,5 +68,15 @@ export function registerIpc(windowManager, trayController) {
     const result = resetShortcuts()
     registerAllShortcuts(windowManager)
     return { ok: true, shortcuts: result }
+  })
+
+  ipcMain.handle('shortcuts:start-record', () => {
+    globalShortcut.unregisterAll()
+    return true
+  })
+
+  ipcMain.handle('shortcuts:stop-record', () => {
+    registerAllShortcuts(windowManager)
+    return true
   })
 }

@@ -1,6 +1,6 @@
 # 快捷键系统 — 设计文档
 
-> Date: 2026-05-24 | Status: approved
+> Date: 2026-05-24 | Status: implemented (2026-05-25)
 
 ## Goal
 

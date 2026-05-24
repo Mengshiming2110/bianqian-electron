@@ -215,12 +215,29 @@ export class WindowManager {
       frame: false,
       parent: this.window,
       show: false,
+      focusable: true,
       backgroundColor: '#ffffff',
       webPreferences: {
         preload: join(__dirname, '../preload/index.mjs'),
         contextIsolation: true,
-        nodeIntegration: false
+        nodeIntegration: false,
+        sandbox: false
       }
+    })
+
+    this.shortcutEditor.webContents.on('before-input-event', (event, input) => {
+      if (input.type !== 'keyDown') return
+      const parts = []
+      if (input.control) parts.push('Ctrl')
+      if (input.alt) parts.push('Alt')
+      if (input.shift) parts.push('Shift')
+      if (input.meta) parts.push('Meta')
+      const key = input.key.length === 1 ? input.key.toUpperCase() : input.key
+      parts.push(key)
+      this.shortcutEditor.webContents.send('shortcut-editor:keydown', {
+        binding: parts.join('+'),
+        key: input.key
+      })
     })
 
     this.shortcutEditor.on('close', (event) => {
@@ -238,6 +255,7 @@ export class WindowManager {
 
     this.shortcutEditor.once('ready-to-show', () => {
       this.shortcutEditor.show()
+      this.shortcutEditor.focus()
     })
   }
 
