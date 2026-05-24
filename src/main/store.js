@@ -10,7 +10,18 @@ function createStore() {
     defaults: {
       notes: [],
       settings: {
-        opacity: 0.92
+        opacity: 0.92,
+        shortcuts: {
+          'toggle-window': 'F3',
+          'hide-window': 'Escape',
+          'toggle-passthrough': 'Ctrl+Shift+P',
+          'category-全部': 'Alt+1',
+          'category-工作': 'Alt+2',
+          'category-生活': 'Alt+3',
+          'category-学习': 'Alt+4',
+          'category-会议': 'Alt+5',
+          'category-其他': 'Alt+6'
+        }
       }
     }
   })
@@ -139,7 +150,8 @@ export function getSettings() {
   const settings = getBackingStore().get('settings', {})
 
   return {
-    opacity: clampOpacity(settings.opacity)
+    opacity: clampOpacity(settings.opacity),
+    shortcuts: settings.shortcuts || {}
   }
 }
 
@@ -152,4 +164,37 @@ export function updateSettings(patch = {}) {
   nextSettings.opacity = clampOpacity(nextSettings.opacity)
   getBackingStore().set('settings', nextSettings)
   return nextSettings
+}
+
+export function getShortcuts() {
+  return getSettings().shortcuts
+}
+
+export function setShortcut(id, binding) {
+  const shortcuts = { ...getShortcuts() }
+  for (const [key, value] of Object.entries(shortcuts)) {
+    if (value === binding && key !== id) {
+      shortcuts[key] = ''
+    }
+  }
+  shortcuts[id] = binding
+  updateSettings({ shortcuts })
+  return getShortcuts()
+}
+
+const DEFAULT_SHORTCUTS = {
+  'toggle-window': 'F3',
+  'hide-window': 'Escape',
+  'toggle-passthrough': 'Ctrl+Shift+P',
+  'category-全部': 'Alt+1',
+  'category-工作': 'Alt+2',
+  'category-生活': 'Alt+3',
+  'category-学习': 'Alt+4',
+  'category-会议': 'Alt+5',
+  'category-其他': 'Alt+6'
+}
+
+export function resetShortcuts() {
+  updateSettings({ shortcuts: { ...DEFAULT_SHORTCUTS } })
+  return getShortcuts()
 }
