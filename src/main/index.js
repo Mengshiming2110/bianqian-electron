@@ -2,7 +2,7 @@ import { app } from 'electron'
 import { WindowManager } from './window-manager.js'
 import { TrayController } from './tray.js'
 import { registerIpc } from './ipc.js'
-import { registerShortcuts, unregisterShortcuts } from './shortcuts.js'
+import { registerAllShortcuts, unregisterAllShortcuts } from './shortcuts.js'
 
 let windowManager
 let trayController
@@ -23,14 +23,14 @@ if (!gotLock) {
     registerIpc(windowManager, trayController)
     await windowManager.createFloatingWindow()
     trayController.create()
-    registerShortcuts(windowManager)
+    registerAllShortcuts(windowManager)
 
     windowManager.show()
   })
 
   app.on('before-quit', () => {
     app.isQuitting = true
-    unregisterShortcuts()
+    unregisterAllShortcuts()
     trayController?.destroy()
   })
 
