@@ -84,7 +84,7 @@
           <span
             v-if="note.attachments.length"
             class="attach-pill"
-            @click.stop="openAttachPopover(note, $event.target)"
+            @click.stop="openAttachPopover(note, $event.currentTarget)"
           >
             <Paperclip :size="12" />
             {{ note.attachments.length }}
