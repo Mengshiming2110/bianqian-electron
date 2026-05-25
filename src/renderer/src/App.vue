@@ -195,9 +195,8 @@
 
     <AttachmentPopover
       :attachments="attachPopover.note?.attachments || []"
-      :anchor-right="attachPopover.anchorRight"
+      :anchor-left="attachPopover.anchorLeft"
       :anchor-bottom="attachPopover.anchorBottom"
-      :anchor-top="attachPopover.anchorTop"
       :visible="attachPopover.visible"
       @close="closeAttachPopover"
       @add="handleAttachAdd"
@@ -260,9 +259,8 @@ const draft = reactive(defaultDraft())
 const attachPopover = reactive({
   visible: false,
   note: null,
-  anchorRight: 0,
-  anchorBottom: 0,
-  anchorTop: 0
+  anchorLeft: 0,
+  anchorBottom: 0
 })
 
 const contextMenu = reactive({
@@ -279,9 +277,8 @@ function openAttachPopover(note, event) {
   }
   const rect = event.currentTarget.getBoundingClientRect()
   attachPopover.note = note
-  attachPopover.anchorRight = rect.right
+  attachPopover.anchorLeft = rect.left
   attachPopover.anchorBottom = rect.bottom
-  attachPopover.anchorTop = rect.top
   attachPopover.visible = true
 }
 
