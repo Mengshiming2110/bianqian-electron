@@ -18,13 +18,12 @@
         </button>
         <button
           class="icon-button"
-          :class="{ active: isMiniMode }"
-          :title="isMiniMode ? '恢复列表模式' : '迷你卡片模式'"
+          :class="{ active: settingsOpen }"
+          title="设置"
           type="button"
-          @click="toggleMiniMode"
+          @click="toggleSettings"
         >
-          <Maximize2 v-if="isMiniMode" :size="18" />
-          <Minimize2 v-else :size="18" />
+          <Settings :size="18" />
         </button>
         <button class="icon-button" title="新建便签" type="button" @click="openEditor()">
           <Plus :size="18" />
@@ -45,43 +44,6 @@
           @input="notes.setSearch($event.target.value)"
           @keydown.enter="handleSearchEnter"
         />
-      </div>
-
-      <div class="preset-strip">
-        <button
-          v-for="preset in modePresets"
-          :key="preset.id"
-          type="button"
-          @click="applyPreset(preset)"
-        >
-          {{ preset.label }}
-        </button>
-      </div>
-
-      <div class="opacity-control" title="透明度">
-        <SlidersHorizontal :size="14" />
-        <input
-          :value="Math.round(windowOpacity * 100)"
-          type="range"
-          min="35"
-          max="100"
-          step="5"
-          @input="setWindowOpacity($event.target.value)"
-        />
-        <span>{{ Math.round(windowOpacity * 100) }}%</span>
-      </div>
-
-      <div class="category-tabs">
-        <button
-          v-for="category in visibleCategories"
-          :key="category"
-          type="button"
-          :class="{ active: notes.activeCategory === category }"
-          @click="notes.setFilter(category)"
-        >
-          <span>{{ category }}</span>
-          <small>{{ categoryCount(category) }}</small>
-        </button>
       </div>
     </section>
 
@@ -245,6 +207,78 @@
         <button type="button" @click="ctxDelete">删除</button>
       </div>
     </Teleport>
+
+    <Teleport to="#popover-root">
+      <div v-if="settingsOpen" class="settings-panel-overlay" @click.self="settingsOpen = false">
+        <div class="settings-panel" @click.stop>
+          <div class="settings-section">
+            <h3>模式预设</h3>
+            <div class="preset-grid">
+              <button
+                v-for="preset in modePresets"
+                :key="preset.id"
+                type="button"
+                @click="applyPreset(preset)"
+              >
+                {{ preset.label }}
+              </button>
+            </div>
+          </div>
+
+          <div class="settings-section">
+            <h3>透明度</h3>
+            <div class="opacity-control" title="透明度">
+              <SlidersHorizontal :size="14" />
+              <input
+                :value="Math.round(windowOpacity * 100)"
+                type="range"
+                min="35"
+                max="100"
+                step="5"
+                @input="setWindowOpacity($event.target.value)"
+              />
+              <span>{{ Math.round(windowOpacity * 100) }}%</span>
+            </div>
+          </div>
+
+          <div class="settings-section">
+            <h3>分类筛选</h3>
+            <div class="category-grid">
+              <button
+                v-for="category in visibleCategories"
+                :key="category"
+                type="button"
+                :class="{ active: notes.activeCategory === category }"
+                @click="notes.setFilter(category)"
+              >
+                <span>{{ category }}</span>
+                <small>{{ categoryCount(category) }}</small>
+              </button>
+            </div>
+          </div>
+
+          <div class="settings-section">
+            <h3>窗口模式</h3>
+            <div class="mode-switch">
+              <button
+                :class="{ active: !isMiniMode }"
+                type="button"
+                @click="setMode('normal')"
+              >
+                列表模式
+              </button>
+              <button
+                :class="{ active: isMiniMode }"
+                type="button"
+                @click="setMode('mini')"
+              >
+                迷你模式
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </Teleport>
   </main>
 </template>
 
@@ -255,15 +289,14 @@ import {
   BellOff,
   CheckCircle,
   Circle,
-  Maximize2,
   Minus,
-  Minimize2,
   MousePointer2,
   Paperclip,
   Pin,
   Plus,
   Save,
   Search,
+  Settings,
   SlidersHorizontal,
   StickyNote,
   Trash2,
@@ -279,6 +312,7 @@ const notes = useNotesStore()
 const categories = CATEGORIES
 const visibleCategories = [ALL_CATEGORY, ...CATEGORIES]
 const editorOpen = ref(false)
+const settingsOpen = ref(false)
 watch(editorOpen, (val) => {
   window.api?.window.setEditing(val)
 })
@@ -312,6 +346,10 @@ const modePresets = [
   { id: 'meeting', label: '会议', opacity: 0.72, passThrough: true, mode: 'normal' },
   { id: 'minimal', label: '极简', opacity: 0.48, passThrough: true, mode: 'mini' }
 ]
+
+function toggleSettings() {
+  settingsOpen.value = !settingsOpen.value
+}
 
 function openAttachPopover(note, event) {
   if (attachPopover.visible && attachPopover.note?.id === note.id) {
@@ -497,8 +535,8 @@ async function setWindowOpacity(value) {
   }
 }
 
-async function toggleMiniMode() {
-  const state = await window.api?.window.setMode?.(isMiniMode.value ? 'normal' : 'mini')
+async function setMode(mode) {
+  const state = await window.api?.window.setMode?.(mode)
   windowMode.value = state?.windowMode || windowMode.value
 }
 
@@ -542,7 +580,7 @@ function parseQuickNote(text) {
     .replace(/\b\d{4}-\d{1,2}-\d{1,2}\b/, '')
     .replace(/今天|明天|后天/, '')
 
-  const timeMatch = source.match(/(?:(上午|早上|下午|晚上)\s*(\d{1,2})(?:[:：点时](\d{1,2})?)?|(\d{1,2})[:：点时](\d{1,2})?)/)
+  const timeMatch = source.match(/(?:(上午|早上|下午|晚上)\s*(\d{1,2})(?:[:：点时](\d{1,2}))?|(\d{1,2})[:：点时](\d{1,2})?)/)
   let time = '09:00'
   if (timeMatch) {
     let hour = Number(timeMatch[2] || timeMatch[4])
@@ -733,27 +771,6 @@ onBeforeUnmount(() => {
   padding: 0 12px 10px;
 }
 
-.preset-strip {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 6px;
-  margin-top: 8px;
-}
-
-.preset-strip button {
-  height: 28px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-control);
-  color: var(--text-muted);
-  background: rgba(255, 255, 255, 0.62);
-  font-size: 12px;
-}
-
-.preset-strip button:hover {
-  color: var(--accent-strong);
-  background: var(--accent-soft);
-}
-
 .search-box {
   gap: 8px;
   height: 34px;
@@ -770,64 +787,6 @@ onBeforeUnmount(() => {
   outline: 0;
   background: transparent;
   font-size: 13px;
-}
-
-.opacity-control {
-  display: grid;
-  grid-template-columns: auto 1fr 38px;
-  align-items: center;
-  gap: 8px;
-  height: 30px;
-  margin-top: 8px;
-  padding: 0 10px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-control);
-  color: var(--text-muted);
-  background: rgba(255, 255, 255, 0.62);
-}
-
-.opacity-control input {
-  width: 100%;
-  accent-color: var(--accent);
-}
-
-.opacity-control span {
-  font-size: 12px;
-  text-align: right;
-}
-
-.category-tabs {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 6px;
-  margin-top: 8px;
-}
-
-.category-tabs button {
-  display: flex;
-  min-width: 0;
-  height: 30px;
-  align-items: center;
-  justify-content: center;
-  gap: 5px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-control);
-  color: var(--text-muted);
-  background: rgba(255, 255, 255, 0.62);
-  font-size: 12px;
-}
-
-.category-tabs button.active {
-  border-color: rgba(47, 125, 120, 0.42);
-  color: var(--accent-strong);
-  background: var(--accent-soft);
-  font-weight: 700;
-}
-
-.category-tabs small {
-  min-width: 18px;
-  color: inherit;
-  opacity: 0.72;
 }
 
 .note-list {
@@ -1223,5 +1182,130 @@ onBeforeUnmount(() => {
 
 .context-menu button:last-child:hover {
   background: rgba(255, 107, 107, 0.12);
+}
+
+.settings-panel-overlay {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: start end;
+  padding: 12px;
+  z-index: 1000;
+}
+
+.settings-panel {
+  width: 260px;
+  background: rgba(255, 255, 255, 0.98);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+  padding: 12px;
+  display: grid;
+  gap: 16px;
+}
+
+.settings-section h3 {
+  margin: 0 0 8px 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.preset-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+
+.preset-grid button {
+  height: 30px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  color: var(--text-muted);
+  background: rgba(255, 255, 255, 0.62);
+  font-size: 12px;
+}
+
+.preset-grid button:hover {
+  color: var(--accent-strong);
+  background: var(--accent-soft);
+}
+
+.category-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+
+.category-grid button {
+  display: flex;
+  min-width: 0;
+  height: 30px;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  color: var(--text-muted);
+  background: rgba(255, 255, 255, 0.62);
+  font-size: 12px;
+}
+
+.category-grid button.active {
+  border-color: rgba(47, 125, 120, 0.42);
+  color: var(--accent-strong);
+  background: var(--accent-soft);
+  font-weight: 700;
+}
+
+.category-grid small {
+  min-width: 18px;
+  color: inherit;
+  opacity: 0.72;
+}
+
+.opacity-control {
+  display: grid;
+  grid-template-columns: auto 1fr 38px;
+  align-items: center;
+  gap: 8px;
+  height: 30px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  color: var(--text-muted);
+  background: rgba(255, 255, 255, 0.62);
+}
+
+.opacity-control input {
+  width: 100%;
+  accent-color: var(--accent);
+}
+
+.opacity-control span {
+  font-size: 12px;
+  text-align: right;
+}
+
+.mode-switch {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+
+.mode-switch button {
+  height: 30px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  color: var(--text-muted);
+  background: rgba(255, 255, 255, 0.62);
+  font-size: 12px;
+}
+
+.mode-switch button.active {
+  border-color: rgba(47, 125, 120, 0.42);
+  color: var(--accent-strong);
+  background: var(--accent-soft);
+  font-weight: 700;
 }
 </style>
