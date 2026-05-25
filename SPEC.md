@@ -1,7 +1,7 @@
 # 便签 Electron 版 — 功能规格文档
 
 > 本文档是开发的唯一事实来源。每个功能必须有对应的 SPEC 条目。
-> 日期：2026-05-24
+> 日期：2026-05-24 | 最后更新：2026-05-25 (v0.3.0)
 
 ---
 
@@ -69,7 +69,10 @@ bianqian-electron/
 │       └── src/
 │           ├── main.js
 │           ├── App.vue
-│           ├── stores/notes.js   # Pinia 便签状态
+│           ├── components/
+│           │   ├── ShortcutEditor.vue     # 快捷键编辑器
+│           │   └── AttachmentPopover.vue  # 附件弹出面板
+│           ├── stores/notes.js            # Pinia 便签状态
 │           └── assets/styles/
 │               ├── variables.css
 │               └── global.css
@@ -194,11 +197,21 @@ bianqian-electron/
 | Alt+1~9 | 云游窗口内 | 快捷切换分类 |
 
 **快捷键配置面板：**
-- 托盘菜单「快捷键设置」→ 打开独立配置窗口（340×420）
+- 托盘菜单「快捷键设置」→ 打开独立配置窗口（340×420，frameless，子窗口）
 - 表格列出所有功能及当前快捷键，点击 ✏ 录制新组合
-- 录制中按 Esc 取消；冲突时自动清空被占用项
+- 录制中按 Esc 取消；冲突时自动清空被占用项（不弹确认）
 - 「恢复默认」一键重置
-- 配置持久化到 electron-store settings.shortcuts |
+- 配置持久化到 electron-store settings.shortcuts
+
+**录制流程：**
+- `startRecord` → `globalShortcut.unregisterAll()` 释放全局快捷键 → 窗口获得焦点
+- 按键通过 `before-input-event`（Electron 原生，主进程发 IPC）+ DOM `keydown`（捕获阶段兜底）双路监听
+- 去抖 300ms 防止双路重复触发 → 保存新快捷键 → `registerAllShortcuts` 恢复注册
+
+**已知踩坑：**
+- 快捷键编辑器 `BrowserWindow` 必须设 `sandbox: false`，否则 preload ES module 无法加载
+- `saveRecording` 中 `recordingId` 必须在 IPC 更新完成后（finally 块）置 null，否则 UI 不会显示捕获的按键
+- electron-store 对已有数据不深度合并 defaults，需 spread：`{ ...DEFAULTS, ...(settings.shortcuts || {}) }`
 
 ---
 
@@ -271,6 +284,33 @@ bianqian-electron/
 
 ---
 
+### 2.11 附件文件保护
+
+**问题：** 原始路径存储方式下，用户移动或删除原文件后附件链接断裂。
+
+**方案：** 选择附件时自动将文件复制到 `%APPDATA%/bianqian-electron/attachments/` 目录，文件名格式 `时间戳_原始文件名`，返回副本路径存入便签。原文件变动不影响附件可用性。
+
+**实现：** `ipc.js` 的 `dialog:select-attachments` handler 中，`copyFileSync` + `mkdirSync`。
+
+---
+
+### 2.12 右键上下文菜单
+
+**触发：** 便签卡片上右键（`contextmenu` 事件）
+
+**菜单项：**
+| 操作 | 行为 |
+|---|---|
+| 编辑 | 打开编辑器浮层 |
+| 标记完成 / 取消完成 | 切换完成状态 |
+| 删除 | 红色高亮，删除便签 |
+
+**外观：** `position: fixed` 定位在鼠标坐标，毛玻璃暗色主题（`backdrop-filter: blur(24px)`），最小宽度 140px。点击菜单外任意处自动关闭。
+
+**实现：** `App.vue` 新增 `contextMenu` reactive 状态 + `<Teleport to="body">` 渲染菜单 DOM。
+
+---
+
 ## 三、可扩展性设计
 
 | 设计点 | 当前实现 | 日后扩展方向 |
@@ -301,8 +341,11 @@ bianqian-electron/
 - [x] NSIS 安装向导打包
 - [x] electron-builder 二进制损坏修复（asar: false）
 - [x] 附件 Popover（卡片 pill 点击弹出面板，文件查看/打开/删除/拖拽添加）
-- [x] 穿透模式快捷键（Ctrl+Shift+P）
-- [x] 快捷键配置面板（自定义所有快捷键，托盘菜单入口）
+- [x] 穿透模式快捷键（可自定义，默认 Ctrl+Shift+P）
+- [x] 快捷键配置面板（自定义所有快捷键，录制/保存/重置/冲突检测）
+- [x] 快捷键录制双路监听（before-input-event IPC + DOM keydown 兜底）
+- [x] 附件文件复制到本地（原文件移动/删除后附件不失效）
+- [x] 右键上下文菜单（编辑/标记完成/删除）
 
 ---
 
