@@ -71,17 +71,6 @@
         <span>{{ Math.round(windowOpacity * 100) }}%</span>
       </div>
 
-      <div class="edge-options">
-        <label>
-          <input
-            type="checkbox"
-            :checked="edgeAutoHide"
-            @change="toggleEdgeAutoHide"
-          />
-          <span>贴边收纳</span>
-        </label>
-      </div>
-
       <div class="category-tabs">
         <button
           v-for="category in visibleCategories"
@@ -513,11 +502,6 @@ async function toggleMiniMode() {
   windowMode.value = state?.windowMode || windowMode.value
 }
 
-async function toggleEdgeAutoHide() {
-  const state = await window.api?.window.setEdgeAutoHide?.(!edgeAutoHide.value)
-  edgeAutoHide.value = Boolean(state?.edgeAutoHide)
-}
-
 async function applyPreset(preset) {
   const modeState = await window.api?.window.setMode?.(preset.mode)
   const opacityState = await window.api?.window.setOpacity?.(preset.opacity)
@@ -810,37 +794,6 @@ onBeforeUnmount(() => {
 .opacity-control span {
   font-size: 12px;
   text-align: right;
-}
-
-.edge-options {
-  margin-top: 8px;
-}
-
-.edge-options label {
-  display: flex;
-  height: 28px;
-  align-items: center;
-  justify-content: center;
-  gap: 5px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-control);
-  color: var(--text-muted);
-  background: rgba(255, 255, 255, 0.62);
-  font-size: 12px;
-}
-
-.edge-options label:has(input:checked) {
-  border-color: rgba(47, 125, 120, 0.42);
-  color: var(--accent-strong);
-  background: var(--accent-soft);
-  font-weight: 700;
-}
-
-.edge-options input {
-  width: 13px;
-  height: 13px;
-  margin: 0;
-  accent-color: var(--accent);
 }
 
 .category-tabs {

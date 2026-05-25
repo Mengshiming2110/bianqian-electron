@@ -120,6 +120,8 @@ export class WindowManager {
     this.pendingFilter = category || ALL_CATEGORY
     if (this.isEdgeHidden()) {
       this.showEdge()
+    } else if (this.isEdgeDocked()) {
+      // keep docked position
     } else {
       this.placeNearTopRight()
     }
@@ -259,7 +261,17 @@ export class WindowManager {
       return
     }
 
-    this._setClickThrough(true, true)
+    if (this.isEdgeHidden() || this.edgeAnimating) {
+      this._setClickThrough(true, true)
+      return
+    }
+
+    if (this.isEdgeDocked()) {
+      this._setClickThrough(false, false)
+      return
+    }
+
+    this._setClickThrough(false, false)
   }
 
   applyOpacity() {
@@ -407,6 +419,7 @@ export class WindowManager {
   checkSnap() {
     if (!this.window || this.window.isDestroyed() || this.edgeAnimating) return
     if (this.isPinned) return
+    if (!this.edgeAutoHide) return
 
     const bounds = this.window.getBounds()
     const area = this.getWorkArea()
@@ -468,7 +481,7 @@ export class WindowManager {
 
     if (this.edgeState === EDGE_STATE.DOCKED_LEFT) {
       this.edgeState = EDGE_STATE.HIDDEN_LEFT
-      this.animateTo(-bounds.width + EDGE_EXPOSED)
+      this.animateTo(area.x - bounds.width + EDGE_EXPOSED)
     } else if (this.edgeState === EDGE_STATE.DOCKED_RIGHT) {
       this.edgeState = EDGE_STATE.HIDDEN_RIGHT
       this.animateTo(area.x + area.width - EDGE_EXPOSED)
@@ -596,11 +609,11 @@ export class WindowManager {
 
     // Reveal trigger when hidden
     if (this.isEdgeHidden() && !this.edgeAnimating) {
-      if (this.edgeState === EDGE_STATE.HIDDEN_LEFT && cursor.x <= area.x + 2) {
+      if (this.edgeState === EDGE_STATE.HIDDEN_LEFT && cursor.x <= area.x + EDGE_EXPOSED) {
         this.showEdge()
         return
       }
-      if (this.edgeState === EDGE_STATE.HIDDEN_RIGHT && cursor.x >= area.x + area.width - 2) {
+      if (this.edgeState === EDGE_STATE.HIDDEN_RIGHT && cursor.x >= area.x + area.width - EDGE_EXPOSED) {
         this.showEdge()
         return
       }
@@ -640,6 +653,11 @@ export class WindowManager {
 
     if (this.passThroughMode) {
       this._setClickThrough(true, false)
+      return
+    }
+
+    if (this.isEdgeDocked()) {
+      this._setClickThrough(false, false)
       return
     }
 
