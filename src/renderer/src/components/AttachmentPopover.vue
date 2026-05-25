@@ -2,8 +2,8 @@
   <Teleport to="#popover-root">
     <div
       v-if="visible"
-      class="attach-popover-anchor"
-      :style="popoverStyle"
+      class="attach-popover-wrap"
+      :style="wrapStyle"
     >
       <div
         ref="popoverRef"
@@ -39,20 +39,140 @@
 </template>
 
 <script setup>
-import { computed, ref } from 'vue'
+import { ref, watch, onMounted, onUnmounted, nextTick } from 'vue'
 
 const props = defineProps({
   attachments: { type: Array, default: () => [] },
-  anchorLeft: { type: Number, default: 0 },
-  anchorBottom: { type: Number, default: 0 },
-  visible: { type: Boolean, default: false }
+  anchorEl:    { type: Object, default: null },
+  visible:     { type: Boolean, default: false }
 })
 
 const emit = defineEmits(['close', 'add', 'remove', 'open'])
 
-const isClosing = ref(false)
-const dragOver = ref(false)
-const closeTimer = ref(null)
+const isClosing  = ref(false)
+const dragOver   = ref(false)
+const wrapStyle  = ref({ display: 'none' })
+let   closeTimer = null
+let   rafId      = null
+let   trackingId = null
+let   lastStyleKey = ''
+
+const SAFE = 12
+const POPOVER_W = 168
+const POPOVER_H = 180
+const MIN_W = 132
+const MIN_H = 120
+const GAP = 6
+
+function calcStyle() {
+  if (!props.visible || !props.anchorEl) {
+    wrapStyle.value = { display: 'none' }
+    lastStyleKey = ''
+    return
+  }
+
+  if (!props.anchorEl.isConnected) {
+    wrapStyle.value = { display: 'none' }
+    lastStyleKey = ''
+    return
+  }
+
+  const rect = props.anchorEl.getBoundingClientRect()
+  const viewport = window.visualViewport
+  const vw = viewport?.width || window.innerWidth
+  const vh = viewport?.height || window.innerHeight
+  const width = Math.min(POPOVER_W, Math.max(MIN_W, vw - SAFE * 2))
+  const height = Math.min(POPOVER_H, Math.max(MIN_H, vh - SAFE * 2))
+
+  const belowSpace = vh - rect.bottom - GAP - SAFE
+  const aboveSpace = rect.top - GAP - SAFE
+  let top = (belowSpace >= height || belowSpace >= aboveSpace)
+    ? rect.bottom + GAP
+    : rect.top - height - GAP
+
+  const rightSpace = vw - rect.left - SAFE
+  const leftSpace = rect.right - SAFE
+  let left = (rightSpace >= width || rightSpace >= leftSpace)
+    ? rect.left
+    : rect.right - width
+
+  left = Math.max(SAFE, Math.min(left, vw - width - SAFE))
+  top = Math.max(SAFE, Math.min(top, vh - height - SAFE))
+
+  const nextStyle = {
+    position: 'absolute',
+    top: `${Math.round(top)}px`,
+    left: `${Math.round(left)}px`,
+    width: `${Math.round(width)}px`,
+    height: `${Math.round(height)}px`,
+    zIndex: 1
+  }
+
+  const styleKey = `${nextStyle.top}|${nextStyle.left}|${nextStyle.width}|${nextStyle.height}`
+  if (styleKey !== lastStyleKey) {
+    lastStyleKey = styleKey
+    wrapStyle.value = nextStyle
+  }
+}
+
+function scheduleCalc() {
+  cancelAnimationFrame(rafId)
+  nextTick(() => {
+    rafId = requestAnimationFrame(calcStyle)
+  })
+}
+
+watch(
+  () => [props.visible, props.anchorEl],
+  () => {
+    if (props.visible) {
+      startTracking()
+    } else {
+      stopTracking()
+      scheduleCalc()
+    }
+  },
+  { immediate: true }
+)
+
+function onResize() { scheduleCalc() }
+
+function onScroll() { scheduleCalc() }
+
+function trackAnchor() {
+  calcStyle()
+  trackingId = requestAnimationFrame(trackAnchor)
+}
+
+function startTracking() {
+  stopTracking()
+  nextTick(() => {
+    trackingId = requestAnimationFrame(trackAnchor)
+  })
+}
+
+function stopTracking() {
+  cancelAnimationFrame(trackingId)
+  trackingId = null
+  lastStyleKey = ''
+}
+
+onMounted(() => {
+  window.addEventListener('resize', onResize)
+  window.addEventListener('scroll', onScroll, true)
+  window.visualViewport?.addEventListener('resize', onResize)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('resize', onResize)
+  window.removeEventListener('scroll', onScroll, true)
+  window.visualViewport?.removeEventListener('resize', onResize)
+  cancelAnimationFrame(rafId)
+  stopTracking()
+  clearTimeout(closeTimer)
+})
+
+// ── 其余逻辑不变 ──────────────────────────────────────────────
 
 function fileName(path) {
   return path.split(/[\\/]/).pop()
@@ -60,7 +180,7 @@ function fileName(path) {
 
 function closePanel() {
   isClosing.value = true
-  closeTimer.value = setTimeout(() => {
+  closeTimer = setTimeout(() => {
     isClosing.value = false
     emit('close')
   }, 150)
@@ -71,9 +191,7 @@ async function pickFiles() {
   if (files?.length) emit('add', files)
 }
 
-function onDragOver() {
-  dragOver.value = true
-}
+function onDragOver() { dragOver.value = true }
 
 function onDragLeave(e) {
   if (!e.currentTarget.contains(e.relatedTarget)) {
@@ -86,45 +204,14 @@ function onDrop(e) {
   const files = e.dataTransfer?.files
   if (!files?.length) return
   const paths = []
-  for (const f of files) {
-    if (f.path) paths.push(f.path)
-  }
+  for (const f of files) { if (f.path) paths.push(f.path) }
   if (paths.length) emit('add', paths)
 }
-
-const popoverStyle = computed(() => {
-  if (!props.visible) return { display: 'none' }
-  const pw = 168
-  const gap = 6
-  const maxH = 180
-
-  let top = props.anchorBottom + gap
-  let left = props.anchorLeft
-
-  // boundary: keep inside viewport
-  if (left + pw > window.innerWidth - 4) left = window.innerWidth - pw - 4
-  if (left < 4) left = 4
-
-  // flip above if not enough room below
-  if (top + maxH > window.innerHeight - 4) {
-    top = props.anchorBottom - maxH - gap - 16  // pill height ~16px
-    if (top < 4) top = 4
-  }
-
-  return {
-    position: 'fixed',
-    top: `${top}px`,
-    left: `${left}px`,
-    width: `${pw}px`,
-    maxHeight: `${maxH}px`,
-    zIndex: 9999
-  }
-})
 </script>
 
 <style scoped>
-.attach-popover-anchor {
-  /* position: fixed comes from JS, no transform here */
+.attach-popover-wrap {
+  pointer-events: auto;
 }
 
 .attach-popover {
@@ -137,7 +224,7 @@ const popoverStyle = computed(() => {
   flex-direction: column;
   animation: popIn 180ms ease-out;
   width: 100%;
-  max-height: inherit;
+  height: 100%;
 }
 
 .attach-popover.closing {
@@ -191,14 +278,9 @@ const popoverStyle = computed(() => {
   gap: 5px;
 }
 
-.popover-file-row:hover {
-  background: rgba(0, 0, 0, 0.03);
-}
+.popover-file-row:hover { background: rgba(0, 0, 0, 0.03); }
 
-.file-emoji {
-  font-size: 12px;
-  flex-shrink: 0;
-}
+.file-emoji { font-size: 12px; flex-shrink: 0; }
 
 .file-name {
   flex: 1;
@@ -210,9 +292,7 @@ const popoverStyle = computed(() => {
   color: var(--text);
 }
 
-.file-name:hover {
-  color: var(--accent);
-}
+.file-name:hover { color: var(--accent); }
 
 .file-remove {
   color: #ccc;
@@ -225,9 +305,7 @@ const popoverStyle = computed(() => {
   line-height: 1;
 }
 
-.file-remove:hover {
-  color: var(--danger);
-}
+.file-remove:hover { color: var(--danger); }
 
 .popover-footer {
   border-top: 1px solid rgba(47, 125, 120, 0.07);
@@ -246,7 +324,5 @@ const popoverStyle = computed(() => {
   font-weight: 600;
 }
 
-.popover-add-btn:hover {
-  background: rgba(47, 125, 120, 0.15);
-}
+.popover-add-btn:hover { background: rgba(47, 125, 120, 0.15); }
 </style>

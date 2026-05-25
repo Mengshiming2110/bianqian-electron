@@ -10,6 +10,24 @@ body,
   margin: 0;
 }
 
+#popover-root {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  overflow: visible;
+  pointer-events: none;
+  transform: none;
+  filter: none;
+  backdrop-filter: none;
+  contain: layout style;
+  z-index: 2147483000;
+}
+
+#popover-root > * {
+  pointer-events: auto;
+}
+
 body {
   overflow: hidden;
   color: var(--text);

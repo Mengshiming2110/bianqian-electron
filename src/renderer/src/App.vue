@@ -187,16 +187,9 @@
       </form>
     </div>
 
-    <div
-      v-if="attachPopover.visible"
-      class="popover-backdrop"
-      @click="closeAttachPopover"
-    />
-
     <AttachmentPopover
       :attachments="attachPopover.note?.attachments || []"
-      :anchor-left="attachPopover.anchorLeft"
-      :anchor-bottom="attachPopover.anchorBottom"
+      :anchor-el="attachPopover.anchorEl"
       :visible="attachPopover.visible"
       @close="closeAttachPopover"
       @add="handleAttachAdd"
@@ -204,7 +197,7 @@
       @open="handleAttachOpen"
     />
 
-    <Teleport to="body">
+    <Teleport to="#popover-root">
       <div
         v-if="contextMenu.visible"
         class="context-menu"
@@ -259,8 +252,7 @@ const draft = reactive(defaultDraft())
 const attachPopover = reactive({
   visible: false,
   note: null,
-  anchorLeft: 0,
-  anchorBottom: 0
+  anchorEl: null
 })
 
 const contextMenu = reactive({
@@ -275,10 +267,8 @@ function openAttachPopover(note, event) {
     closeAttachPopover()
     return
   }
-  const rect = event.currentTarget.getBoundingClientRect()
   attachPopover.note = note
-  attachPopover.anchorLeft = rect.left
-  attachPopover.anchorBottom = rect.bottom
+  attachPopover.anchorEl = event.currentTarget
   attachPopover.visible = true
 }
 
@@ -495,10 +485,8 @@ onBeforeUnmount(() => {
   border: 1px solid var(--border);
   border-radius: var(--radius-window);
   background: var(--bg-window);
-  background-clip: padding-box;
   box-shadow: var(--shadow);
   backdrop-filter: blur(18px);
-  clip-path: inset(0 round var(--radius-window));
   isolation: isolate;
 }
 
@@ -942,12 +930,6 @@ onBeforeUnmount(() => {
 .danger-button {
   color: #fff;
   background: var(--danger);
-}
-
-.popover-backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 9998;
 }
 
 .context-menu {
