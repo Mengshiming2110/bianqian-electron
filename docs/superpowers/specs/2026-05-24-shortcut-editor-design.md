@@ -133,6 +133,43 @@ shortcuts:reset        → 恢复默认
 | `src/renderer/src/components/ShortcutEditor.vue` | 新建：快捷键编辑器组件 |
 | `src/renderer/src/App.vue` | hash 路由判断 + ShortcutEditor 渲染 |
 
+## Implementation Notes (2026-05-25)
+
+### 录制流程
+
+```
+用户点击 ✏ → startRecord(id)
+  → IPC: globalShortcut.unregisterAll()  // 释放所有全局快捷键
+  → recordingId.value = id
+  → rootEl.focus()  // 确保窗口获得键盘焦点
+
+用户按下组合键 →
+  ├─ before-input-event (Electron 原生, 主进程)
+  │   → 格式化 key → webContents.send('shortcut-editor:keydown', payload)
+  │   → IPC → renderer → handleIpcKeydown → handleKeyCapture
+  └─ DOM keydown (capture phase, 兜底)
+      → handleDomKeydown → handleKeyCapture
+
+handleKeyCapture:
+  → 去抖检查 (300ms, 防止 IPC + DOM 双重触发)
+  → lastCapturedKey.value = binding  // UI 立即显示捕获的按键
+  → saveRecording(id, binding)
+    → IPC: shortcuts:update → setShortcut + reregisterShortcut
+    → finally: shortcuts:stop-record → registerAllShortcuts  // 恢复注册
+```
+
+### 关键踩坑
+
+**sandbox: false**: 快捷键编辑器窗口的 BrowserWindow 必须设置 `sandbox: false`。否则预加载脚本的 ES module 语法（`import`）在沙箱 VM 中无法执行，报 `Cannot use import statement outside a module`，导致 `contextBridge` 暴露的 `window.api` 为 undefined，所有 IPC 调用静默失败。
+
+**before-input-event vs DOM keydown**: `globalShortcut.register()` 在 OS 层面拦截按键，DOM `keydown` 事件不会触发。录制期间先 `unregisterAll()` 释放全局快捷键，然后用 `before-input-event`（Electron 原生，在主进程发 IPC）作为主路径，DOM `keydown` 作为兜底。
+
+**recordingId 时序**: `saveRecording` 中 `recordingId` 必须在 `finally` 块（IPC 更新完成后）置 null，不能在一开始就置 null。否则 Vue 渲染时录制模式已退出，`lastCapturedKey` 永远不会显示。
+
+**store 默认值合并**: `electron-store` 的 `defaults` 不会深度合并已有数据。`getSettings()` 需要用 spread：`{ ...DEFAULT_SHORTCUTS, ...(settings.shortcuts || {}) }`。
+
+**冲突处理**: 同一快捷键绑定多个功能时，旧功能自动清空（设为空字符串），不弹确认对话框。
+
 ## Not In Scope
 
 - 鼠标按键绑定

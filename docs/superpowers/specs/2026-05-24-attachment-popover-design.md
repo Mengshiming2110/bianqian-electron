@@ -1,6 +1,6 @@
 # 附件 Popover 交互改进 — 设计文档
 
-> Date: 2026-05-24 | Status: approved
+> Date: 2026-05-24 | Status: implemented (2026-05-24), v0.3.0 additions (2026-05-25)
 
 ## Goal
 
@@ -147,6 +147,25 @@ const attachPopover = reactive({
 | `src/renderer/src/components/AttachmentPopover.vue` | 新建 |
 | `src/renderer/src/App.vue` | 卡片附件区域改造 + popover 状态管理 |
 | `src/renderer/src/stores/notes.js` | 无需改动（已有 chooseAttachments / openAttachment） |
+
+## v0.3.0 Additions (2026-05-25)
+
+### 附件文件复制到应用数据目录
+
+选择附件后，文件被复制到 `%APPDATA%/bianqian-electron/attachments/时间戳_文件名`，返回副本路径存入便签。原始文件移动或删除后附件不受影响。
+
+**实现**: `ipc.js` 的 `dialog:select-attachments` handler 中，对每个文件调用 `copyFileSync(src, dest)`。
+
+### 右键上下文菜单
+
+便签卡片上右键弹出操作菜单：
+- 编辑 — 打开编辑面板
+- 标记完成/取消完成 — 切换完成状态
+- 删除 — 删除便签（红色高亮）
+
+菜单通过 `<Teleport to="body">` 渲染，`position: fixed` 定位在鼠标坐标，毛玻璃暗色主题。点击菜单外任意处自动关闭。
+
+**实现**: `App.vue` 新增 `contextMenu` reactive 状态 + `@contextmenu.prevent` + 菜单 HTML + CSS。
 
 ## Interaction Matrix
 
