@@ -65,6 +65,24 @@ export class TrayController {
         }
       },
       {
+        label: '迷你卡片',
+        type: 'checkbox',
+        checked: interactionState.windowMode === 'mini',
+        click: (menuItem) => {
+          this.windowManager.setWindowMode(menuItem.checked ? 'mini' : 'normal')
+          this.rebuildMenu(this.counts)
+        }
+      },
+      {
+        label: '贴边收纳',
+        type: 'checkbox',
+        checked: interactionState.edgeAutoHide,
+        click: (menuItem) => {
+          this.windowManager.setEdgeAutoHide(menuItem.checked)
+          this.rebuildMenu(this.counts)
+        }
+      },
+      {
         label: '快捷键设置',
         click: () => this.windowManager.openShortcutEditor()
       },

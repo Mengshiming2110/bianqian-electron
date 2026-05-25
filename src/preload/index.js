@@ -29,6 +29,12 @@ contextBridge.exposeInMainWorld('api', {
     getInteractionState: () => ipcRenderer.invoke('window:get-interaction-state'),
     setPassThrough: (enabled) => ipcRenderer.invoke('window:set-pass-through', enabled),
     setOpacity: (opacity) => ipcRenderer.invoke('window:set-opacity', opacity),
+    setMode: (mode) => ipcRenderer.invoke('window:set-mode', mode),
+    setEdgeAutoHide: (enabled) => ipcRenderer.invoke('window:set-edge-auto-hide', enabled),
+    mouseLeave: () => ipcRenderer.send('window:mouse-leave'),
+    mouseEnter: () => ipcRenderer.send('window:mouse-enter'),
+    setEditing: (editing) => ipcRenderer.send('window:set-editing', editing),
+    setPinned: (pinned) => ipcRenderer.send('window:set-pinned', pinned),
     onFilterCategory: (callback) => on('notes:filter', callback),
     onCreateNote: (callback) => on('editor:new', callback),
     onInteractionState: (callback) => on('window:interaction-state', callback)

@@ -23,6 +23,7 @@ function normalizeNote(input = {}) {
     date: /^\d{4}-\d{2}-\d{2}$/.test(input.date || '') ? input.date : today(),
     time: /^\d{2}:\d{2}$/.test(input.time || '') ? input.time : '09:00',
     completed: Boolean(input.completed),
+    pinned: Boolean(input.pinned),
     remind: input.remind !== false,
     attachments: Array.isArray(input.attachments) ? input.attachments.map(String) : [],
     createdAt: input.createdAt || new Date().toISOString()
@@ -66,7 +67,12 @@ export const useNotesStore = defineStore('notes', {
 
           return `${note.title} ${note.content}`.toLowerCase().includes(keyword)
         })
-        .sort((a, b) => `${a.date} ${a.time}`.localeCompare(`${b.date} ${b.time}`))
+        .sort((a, b) => {
+          if (a.pinned !== b.pinned) {
+            return a.pinned ? -1 : 1
+          }
+          return `${a.date} ${a.time}`.localeCompare(`${b.date} ${b.time}`)
+        })
     }
   },
   actions: {
@@ -125,6 +131,14 @@ export const useNotesStore = defineStore('notes', {
 
       this.persistFallback()
       this.syncTrayCounts()
+    },
+    async togglePinned(id) {
+      const note = this.notes.find((item) => item.id === String(id))
+      if (!note) {
+        return
+      }
+
+      await this.update(id, { pinned: !note.pinned })
     },
     async chooseAttachments() {
       return api ? api.files.selectAttachments() : []

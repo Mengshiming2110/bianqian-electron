@@ -64,6 +64,21 @@ export function registerIpc(windowManager, trayController) {
     const state = windowManager.setOpacity(opacity)
     return state
   })
+  ipcMain.handle('window:set-mode', (_event, mode) => {
+    const state = windowManager.setWindowMode(mode)
+    trayController.rebuildMenu(trayController.counts)
+    return state
+  })
+  ipcMain.handle('window:set-edge-auto-hide', (_event, enabled) => {
+    const state = windowManager.setEdgeAutoHide(enabled)
+    trayController.rebuildMenu(trayController.counts)
+    return state
+  })
+
+  ipcMain.on('window:mouse-leave', () => windowManager.onMouseLeave())
+  ipcMain.on('window:mouse-enter', () => windowManager.onMouseEnter())
+  ipcMain.on('window:set-editing', (_event, editing) => windowManager.setEditing(editing))
+  ipcMain.on('window:set-pinned', (_event, pinned) => windowManager.setPinned(pinned))
 
   ipcMain.on('tray:update-counts', (_event, counts) => {
     trayController.rebuildMenu(counts)

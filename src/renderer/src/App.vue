@@ -1,6 +1,6 @@
 <template>
   <ShortcutEditor v-if="isShortcutEditor" />
-  <main v-else class="app-shell" :class="{ 'pass-through-mode': passThroughMode }">
+  <main v-else class="app-shell" :class="{ 'pass-through-mode': passThroughMode, 'mini-mode': isMiniMode }">
     <header class="app-header">
       <div>
         <p class="eyebrow">{{ notes.activeCategory }}</p>
@@ -16,6 +16,16 @@
         >
           <MousePointer2 :size="18" />
         </button>
+        <button
+          class="icon-button"
+          :class="{ active: isMiniMode }"
+          :title="isMiniMode ? '恢复列表模式' : '迷你卡片模式'"
+          type="button"
+          @click="toggleMiniMode"
+        >
+          <Maximize2 v-if="isMiniMode" :size="18" />
+          <Minimize2 v-else :size="18" />
+        </button>
         <button class="icon-button" title="新建便签" type="button" @click="openEditor()">
           <Plus :size="18" />
         </button>
@@ -25,15 +35,27 @@
       </div>
     </header>
 
-    <section class="toolbar">
+    <section v-if="!isMiniMode" class="toolbar">
       <div class="search-box">
         <Search :size="15" />
         <input
           :value="notes.search"
           type="search"
-          placeholder="搜索标题或备注"
+          placeholder="搜索，或输入：明天9点交报告 #工作"
           @input="notes.setSearch($event.target.value)"
+          @keydown.enter="handleSearchEnter"
         />
+      </div>
+
+      <div class="preset-strip">
+        <button
+          v-for="preset in modePresets"
+          :key="preset.id"
+          type="button"
+          @click="applyPreset(preset)"
+        >
+          {{ preset.label }}
+        </button>
       </div>
 
       <div class="opacity-control" title="透明度">
@@ -47,6 +69,17 @@
           @input="setWindowOpacity($event.target.value)"
         />
         <span>{{ Math.round(windowOpacity * 100) }}%</span>
+      </div>
+
+      <div class="edge-options">
+        <label>
+          <input
+            type="checkbox"
+            :checked="edgeAutoHide"
+            @change="toggleEdgeAutoHide"
+          />
+          <span>贴边收纳</span>
+        </label>
       </div>
 
       <div class="category-tabs">
@@ -65,7 +98,7 @@
 
     <section class="note-list" aria-label="便签列表">
       <article
-        v-for="note in notes.filteredNotes"
+        v-for="note in displayedNotes"
         :key="note.id"
         class="note-card"
         :class="{ completed: note.completed }"
@@ -76,6 +109,15 @@
           <button class="check-button" title="切换完成状态" type="button" @click.stop="notes.toggleCompleted(note.id)">
             <CheckCircle v-if="note.completed" :size="18" />
             <Circle v-else :size="18" />
+          </button>
+          <button
+            class="pin-button"
+            :class="{ active: note.pinned }"
+            :title="note.pinned ? '取消置顶' : '置顶便签'"
+            type="button"
+            @click.stop="notes.togglePinned(note.id)"
+          >
+            <Pin :size="14" />
           </button>
           <strong>{{ note.title }}</strong>
           <time>{{ note.time }}</time>
@@ -100,7 +142,7 @@
       </div>
     </section>
 
-    <footer class="app-footer">
+    <footer v-if="!isMiniMode" class="app-footer">
       <span>{{ notes.filteredNotes.length }} 条</span>
       <span>{{ todayLabel }}</span>
     </footer>
@@ -205,6 +247,9 @@
         @click.stop
       >
         <button type="button" @click="ctxEdit">编辑</button>
+        <button type="button" @click="ctxTogglePin">
+          {{ contextMenu.note?.pinned ? '取消置顶' : '置顶' }}
+        </button>
         <button type="button" @click="ctxToggleComplete">
           {{ contextMenu.note?.completed ? '取消完成' : '标记完成' }}
         </button>
@@ -215,15 +260,18 @@
 </template>
 
 <script setup>
-import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import {
   Bell,
   BellOff,
   CheckCircle,
   Circle,
+  Maximize2,
   Minus,
+  Minimize2,
   MousePointer2,
   Paperclip,
+  Pin,
   Plus,
   Save,
   Search,
@@ -242,8 +290,13 @@ const notes = useNotesStore()
 const categories = CATEGORIES
 const visibleCategories = [ALL_CATEGORY, ...CATEGORIES]
 const editorOpen = ref(false)
+watch(editorOpen, (val) => {
+  window.api?.window.setEditing(val)
+})
 const passThroughMode = ref(false)
 const windowOpacity = ref(0.92)
+const windowMode = ref('normal')
+const edgeAutoHide = ref(false)
 const unsubscribeHandlers = []
 let reminderTimer = null
 
@@ -261,6 +314,15 @@ const contextMenu = reactive({
   y: 0,
   note: null
 })
+
+const isMiniMode = computed(() => windowMode.value === 'mini')
+const displayedNotes = computed(() => (isMiniMode.value ? notes.filteredNotes.slice(0, 3) : notes.filteredNotes))
+const modePresets = [
+  { id: 'default', label: '常规', opacity: 0.92, passThrough: false, mode: 'normal' },
+  { id: 'focus', label: '专注', opacity: 1, passThrough: false, mode: 'normal' },
+  { id: 'meeting', label: '会议', opacity: 0.72, passThrough: true, mode: 'normal' },
+  { id: 'minimal', label: '极简', opacity: 0.48, passThrough: true, mode: 'mini' }
+]
 
 function openAttachPopover(note, event) {
   if (attachPopover.visible && attachPopover.note?.id === note.id) {
@@ -297,6 +359,11 @@ function ctxEdit() {
 
 async function ctxToggleComplete() {
   if (contextMenu.note) await notes.toggleCompleted(contextMenu.note.id)
+  closeContextMenu()
+}
+
+async function ctxTogglePin() {
+  if (contextMenu.note) await notes.togglePinned(contextMenu.note.id)
   closeContextMenu()
 }
 
@@ -418,12 +485,16 @@ async function refreshInteractionState() {
   const state = await window.api?.window.getInteractionState?.()
   passThroughMode.value = Boolean(state?.passThrough)
   windowOpacity.value = Number(state?.opacity || 0.92)
+  windowMode.value = state?.windowMode || 'normal'
+  edgeAutoHide.value = Boolean(state?.edgeAutoHide)
 }
 
 async function togglePassThrough() {
   const state = await window.api?.window.setPassThrough?.(!passThroughMode.value)
   passThroughMode.value = Boolean(state?.passThrough)
   windowOpacity.value = Number(state?.opacity || windowOpacity.value)
+  windowMode.value = state?.windowMode || windowMode.value
+  edgeAutoHide.value = Boolean(state?.edgeAutoHide)
 }
 
 async function setWindowOpacity(value) {
@@ -435,6 +506,104 @@ async function setWindowOpacity(value) {
   if (state?.opacity) {
     windowOpacity.value = Number(state.opacity)
   }
+}
+
+async function toggleMiniMode() {
+  const state = await window.api?.window.setMode?.(isMiniMode.value ? 'normal' : 'mini')
+  windowMode.value = state?.windowMode || windowMode.value
+}
+
+async function toggleEdgeAutoHide() {
+  const state = await window.api?.window.setEdgeAutoHide?.(!edgeAutoHide.value)
+  edgeAutoHide.value = Boolean(state?.edgeAutoHide)
+}
+
+async function applyPreset(preset) {
+  const modeState = await window.api?.window.setMode?.(preset.mode)
+  const opacityState = await window.api?.window.setOpacity?.(preset.opacity)
+  const passState = await window.api?.window.setPassThrough?.(preset.passThrough)
+  const state = passState || opacityState || modeState
+  passThroughMode.value = Boolean(state?.passThrough ?? preset.passThrough)
+  windowOpacity.value = Number(state?.opacity || preset.opacity)
+  windowMode.value = state?.windowMode || preset.mode
+  edgeAutoHide.value = Boolean(state?.edgeAutoHide)
+}
+
+function handleSearchEnter(event) {
+  const text = event.target.value.trim()
+  if (!text) {
+    return
+  }
+
+  createQuickNote(text)
+}
+
+async function createQuickNote(text) {
+  const parsed = parseQuickNote(text)
+  await notes.create(parsed)
+  notes.setSearch('')
+}
+
+function parseQuickNote(text) {
+  let source = text.trim()
+  let category = '工作'
+  const categoryMatch = source.match(/#(工作|生活|学习|会议|其他)(?=\s|$)/)
+  if (categoryMatch) {
+    category = categoryMatch[1]
+    source = source.replace(categoryMatch[0], '')
+  }
+
+  const date = parseNaturalDate(source)
+  source = source
+    .replace(/\b\d{4}-\d{1,2}-\d{1,2}\b/, '')
+    .replace(/今天|明天|后天/, '')
+
+  const timeMatch = source.match(/(?:(上午|早上|下午|晚上)\s*(\d{1,2})(?:[:：点时](\d{1,2})?)?|(\d{1,2})[:：点时](\d{1,2})?)/)
+  let time = '09:00'
+  if (timeMatch) {
+    let hour = Number(timeMatch[2] || timeMatch[4])
+    const minute = Number(timeMatch[3] || timeMatch[5] || 0)
+    const prefix = timeMatch[1] || ''
+    if ((prefix.includes('下午') || prefix.includes('晚上')) && hour < 12) {
+      hour += 12
+    }
+    time = `${String(Math.min(hour, 23)).padStart(2, '0')}:${String(Math.min(minute, 59)).padStart(2, '0')}`
+    source = source.replace(timeMatch[0], '')
+  }
+
+  const title = source.replace(/\s+/g, ' ').trim() || text
+
+  return {
+    title,
+    content: '',
+    category,
+    date,
+    time,
+    remind: true,
+    completed: false,
+    pinned: false,
+    attachments: []
+  }
+}
+
+function parseNaturalDate(text) {
+  const explicit = text.match(/\b(\d{4})-(\d{1,2})-(\d{1,2})\b/)
+  if (explicit) {
+    const [, year, month, day] = explicit
+    return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`
+  }
+
+  const date = new Date()
+  if (text.includes('明天')) {
+    date.setDate(date.getDate() + 1)
+  } else if (text.includes('后天')) {
+    date.setDate(date.getDate() + 2)
+  }
+
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
 }
 
 function onKeyDown(e) {
@@ -461,11 +630,24 @@ onMounted(async () => {
       window.api.window.onInteractionState((state) => {
         passThroughMode.value = Boolean(state?.passThrough)
         windowOpacity.value = Number(state?.opacity || windowOpacity.value)
+        windowMode.value = state?.windowMode || windowMode.value
+        edgeAutoHide.value = Boolean(state?.edgeAutoHide)
       })
     )
   }
 
   document.addEventListener('keydown', onKeyDown)
+
+  document.addEventListener('mouseout', (e) => {
+    if (!e.relatedTarget) {
+      window.api?.window.mouseLeave()
+    }
+  })
+  document.addEventListener('mouseover', (e) => {
+    if (!e.relatedTarget) {
+      window.api?.window.mouseEnter()
+    }
+  })
 })
 
 onBeforeUnmount(() => {
@@ -487,6 +669,7 @@ onBeforeUnmount(() => {
   background: var(--bg-window);
   box-shadow: var(--shadow);
   backdrop-filter: blur(18px);
+  clip-path: inset(0 round var(--radius-window));
   isolation: isolate;
 }
 
@@ -522,6 +705,7 @@ onBeforeUnmount(() => {
 .editor-actions,
 .card-row,
 .search-box,
+.pin-button,
 .remind-toggle,
 .secondary-button,
 .primary-button,
@@ -565,6 +749,27 @@ onBeforeUnmount(() => {
   padding: 0 12px 10px;
 }
 
+.preset-strip {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.preset-strip button {
+  height: 28px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  color: var(--text-muted);
+  background: rgba(255, 255, 255, 0.62);
+  font-size: 12px;
+}
+
+.preset-strip button:hover {
+  color: var(--accent-strong);
+  background: var(--accent-soft);
+}
+
 .search-box {
   gap: 8px;
   height: 34px;
@@ -605,6 +810,37 @@ onBeforeUnmount(() => {
 .opacity-control span {
   font-size: 12px;
   text-align: right;
+}
+
+.edge-options {
+  margin-top: 8px;
+}
+
+.edge-options label {
+  display: flex;
+  height: 28px;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  color: var(--text-muted);
+  background: rgba(255, 255, 255, 0.62);
+  font-size: 12px;
+}
+
+.edge-options label:has(input:checked) {
+  border-color: rgba(47, 125, 120, 0.42);
+  color: var(--accent-strong);
+  background: var(--accent-soft);
+  font-weight: 700;
+}
+
+.edge-options input {
+  width: 13px;
+  height: 13px;
+  margin: 0;
+  accent-color: var(--accent);
 }
 
 .category-tabs {
@@ -704,6 +940,29 @@ onBeforeUnmount(() => {
   border-radius: 999px;
   color: var(--accent);
   background: transparent;
+}
+
+.pin-button {
+  width: 20px;
+  height: 20px;
+  justify-content: center;
+  border-radius: 5px;
+  color: var(--text-muted);
+  background: transparent;
+}
+
+.pin-button.active {
+  color: var(--accent-strong);
+  background: var(--accent-soft);
+}
+
+.pin-button:not(.active) {
+  opacity: 0;
+}
+
+.note-card:hover .pin-button,
+.pin-button:focus-visible {
+  opacity: 1;
 }
 
 .note-preview {
@@ -933,7 +1192,7 @@ onBeforeUnmount(() => {
 }
 
 .context-menu {
-  position: fixed;
+  position: absolute;
   z-index: 10000;
   display: flex;
   flex-direction: column;
@@ -944,6 +1203,50 @@ onBeforeUnmount(() => {
   background: rgba(30, 35, 34, 0.94);
   backdrop-filter: blur(24px) saturate(180%);
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+}
+
+.mini-mode {
+  grid-template-rows: auto 1fr;
+}
+
+.mini-mode .app-header {
+  padding: 10px 10px 7px;
+}
+
+.mini-mode .app-header h1 {
+  font-size: 17px;
+}
+
+.mini-mode .eyebrow {
+  font-size: 11px;
+}
+
+.mini-mode .header-actions {
+  gap: 4px;
+}
+
+.mini-mode .icon-button {
+  width: 28px;
+  height: 28px;
+}
+
+.mini-mode .note-list {
+  gap: 6px;
+  padding: 0 10px 10px;
+}
+
+.mini-mode .note-card {
+  padding: 8px;
+}
+
+.mini-mode .note-preview {
+  min-height: 0;
+  margin: 3px 0 5px 29px;
+  -webkit-line-clamp: 1;
+}
+
+.mini-mode .card-meta {
+  display: none;
 }
 
 .context-menu button {

@@ -11,6 +11,8 @@ function createStore() {
       notes: [],
       settings: {
         opacity: 0.92,
+        windowMode: 'normal',
+        edgeAutoHide: false,
         shortcuts: {
           'toggle-window': 'F3',
           'hide-window': 'Escape',
@@ -61,6 +63,7 @@ export function normalizeNote(input = {}) {
     date: normalizeDate(input.date),
     time: normalizeTime(input.time),
     completed: Boolean(input.completed),
+    pinned: Boolean(input.pinned),
     remind: input.remind !== false,
     attachments: Array.isArray(input.attachments)
       ? input.attachments.map((item) => String(item))
@@ -163,6 +166,8 @@ export function getSettings() {
 
   return {
     opacity: clampOpacity(settings.opacity),
+    windowMode: settings.windowMode === 'mini' ? 'mini' : 'normal',
+    edgeAutoHide: Boolean(settings.edgeAutoHide),
     shortcuts: {
       ...DEFAULT_SHORTCUTS,
       ...(settings.shortcuts || {})
