@@ -1,6 +1,6 @@
 {
   "name": "bianqian-electron",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Floating desktop notes built with Electron and Vue.",
   "author": "Codex",
   "main": "out/main/index.js",

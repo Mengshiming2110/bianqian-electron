@@ -1,0 +1,170 @@
+<h2>附件 Popover v6 — 从 pill 弹出动效 + 紧凑尺寸 + 右对齐</h2>
+<p class="subtitle">Popover 从 📎 pill 位置放大弹出，无向下展开，紧凑小尺寸</p>
+
+<div class="split">
+  <div class="mockup">
+    <div class="mockup-header">便签列表窗口 (280px)</div>
+    <div class="mockup-body" style="padding:12px 12px 20px;display:flex;flex-direction:column;gap:8px;font-family:sans-serif;">
+
+      <!-- Card 1: Normal -->
+      <div style="background:rgba(255,255,255,0.88);border:1px solid rgba(38,57,54,0.12);border-radius:8px;padding:10px;font-size:12px;">
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">
+          <div style="width:18px;height:18px;border:2px solid #2f7d78;border-radius:50%;flex-shrink:0;"></div>
+          <strong style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;">周报提交</strong>
+          <span style="color:#999;font-size:11px;">09:00</span>
+        </div>
+        <p style="color:#999;font-size:11px;margin:2px 0 6px 24px;line-height:1.4;">本周工作总结及下周计划安排</p>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-left:24px;">
+          <span style="background:rgba(47,125,120,0.12);color:#2f7d78;padding:3px 8px;border-radius:4px;font-size:10px;">工作</span>
+          <span style="background:rgba(47,125,120,0.12);color:#2f7d78;padding:3px 8px;border-radius:4px;font-size:10px;display:flex;align-items:center;gap:3px;">📎 1</span>
+        </div>
+      </div>
+
+      <!-- Card 2: Active — popover popping out from pill position -->
+      <div style="background:rgba(255,255,255,0.96);border:1px solid rgba(47,125,120,0.4);border-radius:8px;padding:10px;font-size:12px;margin-bottom:2px;">
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">
+          <div style="width:18px;height:18px;border:2px solid #2f7d78;border-radius:50%;flex-shrink:0;"></div>
+          <strong style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;">项目资料整理</strong>
+          <span style="color:#999;font-size:11px;">14:30</span>
+        </div>
+        <p style="color:#999;font-size:11px;margin:2px 0 6px 24px;line-height:1.4;">需求文档、设计稿、会议纪要</p>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-left:24px;">
+          <span style="background:rgba(47,125,120,0.12);color:#2f7d78;padding:3px 8px;border-radius:4px;font-size:10px;">工作</span>
+          <span style="background:rgba(47,125,120,0.12);color:#2f7d78;padding:3px 8px;border-radius:4px;font-size:10px;display:flex;align-items:center;gap:3px;">📎 3</span>
+        </div>
+      </div>
+
+      <!-- Direction hint -->
+      <div style="display:flex;align-items:center;justify-content:flex-end;padding:0 24px;position:relative;z-index:5;">
+        <div style="font-size:20px;color:#2f7d78;animation:pulse 1s infinite;">⬆</div>
+        <span style="font-size:10px;color:#2f7d78;margin-left:4px;">从 pill 位置弹出，向下覆盖</span>
+      </div>
+
+      <!-- Popover: positioned right-aligned under the card, popping out from pill -->
+      <!-- In real code: transform from scale(0) at pill position to scale(1) at final position -->
+      <div style="
+        position:relative;
+        margin-left:auto;
+        width:200px;
+        background:rgba(255,255,255,0.98);
+        border:1px solid rgba(47,125,120,0.22);
+        border-radius:10px;
+        box-shadow:0 8px 28px rgba(32,44,42,0.18);
+        backdrop-filter:blur(14px);
+        z-index:998;
+        animation: popIn 0.2s ease-out;
+      ">
+        <!-- Header -->
+        <div style="
+          display:flex;justify-content:space-between;align-items:center;
+          padding:5px 8px;
+          border-bottom:1px solid rgba(47,125,120,0.08);
+        ">
+          <span style="font-size:10px;color:#2f7d78;">📎 附件 (3)</span>
+          <span style="cursor:pointer;color:#bbb;font-size:11px;line-height:1;">✕</span>
+        </div>
+        <!-- File list — compact -->
+        <div style="padding:2px 6px 0;">
+          <div style="display:flex;align-items:center;justify-content:space-between;padding:3px 4px;border-radius:3px;font-size:10px;">
+            <div style="display:flex;align-items:center;gap:4px;overflow:hidden;flex:1;min-width:0;cursor:pointer;">
+              <span style="font-size:11px;flex-shrink:0;">📄</span>
+              <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">需求文档_v3.docx</span>
+            </div>
+            <span style="color:#ccc;cursor:pointer;font-size:10px;flex-shrink:0;margin-left:4px;">✕</span>
+          </div>
+          <div style="display:flex;align-items:center;justify-content:space-between;padding:3px 4px;border-radius:3px;font-size:10px;">
+            <div style="display:flex;align-items:center;gap:4px;overflow:hidden;flex:1;min-width:0;cursor:pointer;">
+              <span style="font-size:11px;flex-shrink:0;">🖼</span>
+              <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">UI设计稿_最终版.png</span>
+            </div>
+            <span style="color:#ccc;cursor:pointer;font-size:10px;flex-shrink:0;margin-left:4px;">✕</span>
+          </div>
+          <div style="display:flex;align-items:center;justify-content:space-between;padding:3px 4px;border-radius:3px;font-size:10px;">
+            <div style="display:flex;align-items:center;gap:4px;overflow:hidden;flex:1;min-width:0;cursor:pointer;">
+              <span style="font-size:11px;flex-shrink:0;">📊</span>
+              <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">Q2数据报表.xlsx</span>
+            </div>
+            <span style="color:#ccc;cursor:pointer;font-size:10px;flex-shrink:0;margin-left:4px;">✕</span>
+          </div>
+        </div>
+        <!-- Add button -->
+        <div style="border-top:1px solid rgba(47,125,120,0.07);padding:4px 7px;">
+          <button style="width:100%;border:0;border-radius:4px;padding:4px;background:rgba(47,125,120,0.08);color:#2f7d78;font-size:10px;cursor:pointer;">+ 添加附件</button>
+        </div>
+      </div>
+
+      <!-- Card 3 -->
+      <div style="background:rgba(255,255,255,0.88);border:1px solid rgba(38,57,54,0.12);border-radius:8px;padding:10px;font-size:12px;opacity:0.6;">
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">
+          <div style="width:18px;height:18px;border:2px solid #2f7d78;border-radius:50%;flex-shrink:0;"></div>
+          <strong style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;">买咖啡豆</strong>
+          <span style="color:#999;font-size:11px;">16:00</span>
+        </div>
+        <p style="color:#999;font-size:11px;margin:2px 0 6px 24px;line-height:1.4;">蓝山拼配，500g</p>
+        <div style="display:flex;align-items:center;margin-left:24px;">
+          <span style="background:rgba(47,125,120,0.12);color:#2f7d78;padding:3px 8px;border-radius:4px;font-size:10px;">生活</span>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Right -->
+  <div style="display:flex;flex-direction:column;gap:12px;">
+    <div class="mockup">
+      <div class="mockup-header">动效描述</div>
+      <div class="mockup-body" style="padding:12px;font-size:13px;line-height:1.7;">
+        <strong>弹出动画</strong><br>
+        <span style="color:#64736f;">
+        transform: scale(0) → scale(1)<br>
+        transform-origin: 以 📎 pill 的右下角为原点<br>
+        opacity: 0 → 1<br>
+        时长: ~180ms ease-out
+        </span><br><br>
+        <strong>消失动画</strong><br>
+        <span style="color:#64736f;">
+        反向播放：scale(1) → scale(0)<br>
+        opacity: 1 → 0<br>
+        缩回 pill 位置
+        </span><br><br>
+        <strong>位置</strong><br>
+        <span style="color:#64736f;">
+        右对齐卡片右边缘<br>
+        popover 左上角与 📎 pill 右下角重合或略微偏移
+        </span>
+      </div>
+    </div>
+
+    <div class="mockup">
+      <div class="mockup-header">实现方式</div>
+      <div class="mockup-body" style="padding:12px;font-size:12px;color:#64736f;line-height:1.6;">
+        <code>Teleport to="body"</code> 突破 overflow<br>
+        JS 获取 pill 的 <code>getBoundingClientRect()</code><br>
+        用 <code>position: fixed</code> 定位 popover<br>
+        CSS <code>@keyframes popIn</code> 实现缩放+淡入<br>
+        <code>transform-origin: top right</code> 对齐 pill 锚点
+      </div>
+    </div>
+
+    <div class="mockup">
+      <div class="mockup-header">Popover 尺寸</div>
+      <div class="mockup-body" style="padding:12px;font-size:12px;color:#64736f;line-height:1.6;">
+        宽度: 200px (之前 240px)<br>
+        行高: 紧凑 padding<br>
+        字号: 10px<br>
+        整体高度: 由文件数量动态决定，max-height 限制
+      </div>
+    </div>
+  </div>
+</div>
+
+<style>
+@keyframes popIn {
+  from { transform: scale(0); opacity: 0; }
+  to   { transform: scale(1); opacity: 1; }
+}
+@keyframes pulse {
+  0%,100% { opacity: 1; }
+  50%     { opacity: 0.3; }
+}
+</style>

@@ -1,0 +1,140 @@
+<h2>附件 Popover v4 — 卡片附件区融合为 Popover 标题栏</h2>
+<p class="subtitle">"📎 3 个附件" 从卡片底部文字延伸为 popover 顶栏，无缝隙一体感</p>
+
+<div class="split">
+  <!-- Main window mockup -->
+  <div class="mockup">
+    <div class="mockup-header">便签列表窗口 (280px)</div>
+    <div class="mockup-body" style="padding:12px 12px 20px;display:flex;flex-direction:column;gap:8px;font-family:sans-serif;position:relative;">
+
+      <!-- Card 1: Normal -->
+      <div style="background:rgba(255,255,255,0.88);border:1px solid rgba(38,57,54,0.12);border-radius:8px;padding:10px;font-size:12px;">
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">
+          <div style="width:18px;height:18px;border:2px solid #2f7d78;border-radius:50%;flex-shrink:0;"></div>
+          <strong style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;">周报提交</strong>
+          <span style="color:#999;font-size:11px;">09:00</span>
+        </div>
+        <p style="color:#999;font-size:11px;margin:2px 0 6px 24px;line-height:1.4;">本周工作总结及下周计划安排</p>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-left:24px;">
+          <span style="background:rgba(47,125,120,0.12);color:#2f7d78;padding:2px 7px;border-radius:4px;font-size:10px;">工作</span>
+          <span style="color:#c58a25;font-size:11px;display:flex;align-items:center;gap:3px;">📎 1 个附件</span>
+        </div>
+      </div>
+
+      <!-- Card 2: Active — attachment area merged into popover -->
+      <div style="position:relative;">
+        <!-- Card body (without attachment bar) -->
+        <div style="background:rgba(255,255,255,0.96);border:1px solid rgba(47,125,120,0.5);border-top:1px solid rgba(38,57,54,0.12);border-radius:0 0 8px 8px;padding:10px 10px 8px;font-size:12px;box-shadow:0 0 0 3px rgba(47,125,120,0.12);">
+          <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">
+            <div style="width:18px;height:18px;border:2px solid #2f7d78;border-radius:50%;flex-shrink:0;"></div>
+            <strong style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;">项目资料整理</strong>
+            <span style="color:#999;font-size:11px;">14:30</span>
+          </div>
+          <p style="color:#999;font-size:11px;margin:2px 0 4px 24px;line-height:1.4;">需求文档、设计稿、会议纪要</p>
+          <div style="display:flex;align-items:center;margin-left:24px;">
+            <span style="background:rgba(47,125,120,0.12);color:#2f7d78;padding:2px 7px;border-radius:4px;font-size:10px;">工作</span>
+          </div>
+        </div>
+
+        <!-- Popover — attached directly below card, sharing the attachment label as header -->
+        <div style="
+          background:rgba(255,255,255,0.98);
+          border:1px solid rgba(47,125,120,0.22);
+          border-top:0;
+          border-radius:0 0 10px 10px;
+          box-shadow:0 8px 28px rgba(32,44,42,0.18);
+          backdrop-filter:blur(14px);
+          overflow:hidden;
+        ">
+          <!-- Header bar: "📎 3 个附件" — same text that was in the card, now the popover header -->
+          <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 10px;background:rgba(47,125,120,0.04);border-bottom:1px solid rgba(38,57,54,0.06);">
+            <span style="font-size:11px;color:#2f7d78;">📎 附件 (3)</span>
+            <span style="cursor:pointer;color:#bbb;font-size:12px;line-height:1;">✕</span>
+          </div>
+          <!-- File list -->
+          <div style="padding:4px 8px 2px;">
+            <div style="display:flex;align-items:center;justify-content:space-between;padding:4px 5px;border-radius:4px;font-size:11px;">
+              <div style="display:flex;align-items:center;gap:5px;overflow:hidden;flex:1;min-width:0;">
+                <span style="font-size:12px;flex-shrink:0;">📄</span>
+                <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">需求文档_v3.docx</span>
+              </div>
+              <span style="color:#ccc;cursor:pointer;font-size:11px;flex-shrink:0;margin-left:6px;">✕</span>
+            </div>
+            <div style="display:flex;align-items:center;justify-content:space-between;padding:4px 5px;border-radius:4px;font-size:11px;">
+              <div style="display:flex;align-items:center;gap:5px;overflow:hidden;flex:1;min-width:0;">
+                <span style="font-size:12px;flex-shrink:0;">🖼</span>
+                <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">UI设计稿_最终版.png</span>
+              </div>
+              <span style="color:#ccc;cursor:pointer;font-size:11px;flex-shrink:0;margin-left:6px;">✕</span>
+            </div>
+            <div style="display:flex;align-items:center;justify-content:space-between;padding:4px 5px;border-radius:4px;font-size:11px;">
+              <div style="display:flex;align-items:center;gap:5px;overflow:hidden;flex:1;min-width:0;">
+                <span style="font-size:12px;flex-shrink:0;">📊</span>
+                <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">Q2数据报表.xlsx</span>
+              </div>
+              <span style="color:#ccc;cursor:pointer;font-size:11px;flex-shrink:0;margin-left:6px;">✕</span>
+            </div>
+          </div>
+          <!-- Add button -->
+          <div style="border-top:1px solid rgba(38,57,54,0.07);padding:5px 8px;">
+            <button style="width:100%;border:0;border-radius:5px;padding:5px;background:rgba(47,125,120,0.08);color:#2f7d78;font-size:11px;cursor:pointer;">+ 添加附件</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Card 3: No attachments -->
+      <div style="background:rgba(255,255,255,0.88);border:1px solid rgba(38,57,54,0.12);border-radius:8px;padding:10px;font-size:12px;opacity:0.6;">
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">
+          <div style="width:18px;height:18px;border:2px solid #2f7d78;border-radius:50%;flex-shrink:0;"></div>
+          <strong style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;">买咖啡豆</strong>
+          <span style="color:#999;font-size:11px;">16:00</span>
+        </div>
+        <p style="color:#999;font-size:11px;margin:2px 0 6px 24px;line-height:1.4;">蓝山拼配，500g</p>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-left:24px;">
+          <span style="background:rgba(47,125,120,0.12);color:#2f7d78;padding:2px 7px;border-radius:4px;font-size:10px;">生活</span>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Right -->
+  <div style="display:flex;flex-direction:column;gap:12px;">
+    <div class="mockup">
+      <div class="mockup-header">视觉逻辑</div>
+      <div class="mockup-body" style="padding:12px;font-size:13px;line-height:1.7;">
+        <strong>点击前</strong><br>
+        <span style="color:#64736f;">卡片底部: [工作] &nbsp;&nbsp; 📎 3 个附件 ▸</span><br><br>
+        <strong>点击后</strong><br>
+        <span style="color:#64736f;">卡片主体内容收束（附件行消失）<br>
+        Popover 从卡片底部无缝延伸<br>
+        附件行文字 → Popover 顶栏标题</span><br><br>
+        <strong>动效</strong><br>
+        <span style="color:#64736f;">卡片下沿 → Popover 上沿，同一圆角共享边框</span>
+      </div>
+    </div>
+
+    <div class="mockup">
+      <div class="mockup-header">DOM 示意</div>
+      <div class="mockup-body" style="padding:12px;font-size:11px;line-height:1.8;font-family:monospace;">
+&lt;!-- 卡片 --&gt;<br>
+&lt;article class="note-card"&gt;<br>
+&nbsp;&nbsp;... 标题 + 内容 ...<br>
+&nbsp;&nbsp;&lt;span class="category"&gt;工作&lt;/span&gt;<br>
+<span style="background:rgba(47,125,120,0.08);">&nbsp;&nbsp;&lt;span class="attach-badge"&gt;📎 3 附件&lt;/span&gt;</span><br>
+&lt;/article&gt;<br><br>
+&lt;!-- Teleport 到顶层 — 紧贴卡片下方 --&gt;<br>
+&lt;Teleport to="body"&gt;<br>
+&nbsp;&nbsp;<span style="background:rgba(47,125,120,0.12);">&lt;div class="popover" &gt;</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#2f7d78;">&lt;!-- 顶栏 = 原卡片附件行 --&gt;</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;&lt;div class="popover-header"&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;📎 附件 (3) &nbsp;&nbsp; ✕<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&lt;/div&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;... 文件列表 ...<br>
+&nbsp;&nbsp;&nbsp;&nbsp;+ 添加附件<br>
+&nbsp;&nbsp;<span style="background:rgba(47,125,120,0.12);">&lt;/div&gt;</span><br>
+&lt;/Teleport&gt;
+      </div>
+    </div>
+  </div>
+</div>

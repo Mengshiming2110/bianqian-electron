@@ -1,4 +1,6 @@
-import { dialog, globalShortcut, ipcMain, shell } from 'electron'
+import { app, dialog, globalShortcut, ipcMain, shell } from 'electron'
+import { copyFileSync, existsSync, mkdirSync } from 'node:fs'
+import { basename, join } from 'node:path'
 import {
   createNote,
   deleteNote,
@@ -26,7 +28,18 @@ export function registerIpc(windowManager, trayController) {
       properties: ['openFile', 'multiSelections']
     })
 
-    return result.canceled ? [] : result.filePaths
+    if (result.canceled || !result.filePaths.length) return []
+
+  const destDir = join(app.getPath('userData'), 'attachments')
+  if (!existsSync(destDir)) {
+    mkdirSync(destDir, { recursive: true })
+  }
+
+  return result.filePaths.map((srcPath) => {
+    const destPath = join(destDir, `${Date.now()}_${basename(srcPath)}`)
+    copyFileSync(srcPath, destPath)
+    return destPath
+  })
   })
 
   ipcMain.handle('shell:open-path', (_event, path) => {

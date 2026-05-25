@@ -1,0 +1,132 @@
+<h2>附件 Popover v3 — 对齐 + 无裁剪</h2>
+<p class="subtitle">Popover 从附件文字正下方弹出 · Teleport 到顶层不被裁剪</p>
+
+<div class="split">
+  <!-- Main window mockup -->
+  <div class="mockup">
+    <div class="mockup-header">便签列表窗口 (280px)</div>
+    <div class="mockup-body" style="padding:12px;display:flex;flex-direction:column;gap:8px;font-family:sans-serif;position:relative;">
+
+      <!-- Card 1 -->
+      <div style="background:rgba(255,255,255,0.88);border:1px solid rgba(38,57,54,0.12);border-radius:8px;padding:10px;font-size:12px;">
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">
+          <div style="width:18px;height:18px;border:2px solid #2f7d78;border-radius:50%;flex-shrink:0;"></div>
+          <strong style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;">周报提交</strong>
+          <span style="color:#999;font-size:11px;">09:00</span>
+        </div>
+        <p style="color:#999;font-size:11px;margin:2px 0 6px 24px;line-height:1.4;">本周工作总结及下周计划安排</p>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-left:24px;">
+          <span style="background:rgba(47,125,120,0.12);color:#2f7d78;padding:2px 7px;border-radius:4px;font-size:10px;">工作</span>
+          <span style="color:#c58a25;font-size:11px;display:flex;align-items:center;gap:3px;">📎 1 个附件</span>
+        </div>
+      </div>
+
+      <!-- Card 2: Active -->
+      <div style="background:rgba(255,255,255,0.96);border:1px solid rgba(47,125,120,0.5);border-radius:8px;padding:10px;font-size:12px;box-shadow:0 0 0 3px rgba(47,125,120,0.12);">
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">
+          <div style="width:18px;height:18px;border:2px solid #2f7d78;border-radius:50%;flex-shrink:0;"></div>
+          <strong style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;">项目资料整理</strong>
+          <span style="color:#999;font-size:11px;">14:30</span>
+        </div>
+        <p style="color:#999;font-size:11px;margin:2px 0 6px 24px;line-height:1.4;">需求文档、设计稿、会议纪要</p>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-left:24px;">
+          <span style="background:rgba(47,125,120,0.12);color:#2f7d78;padding:2px 7px;border-radius:4px;font-size:10px;">工作</span>
+          <span style="background:rgba(47,125,120,0.08);color:#2f7d78;padding:2px 7px;border-radius:4px;font-size:11px;font-weight:600;">📎 3 个附件 ▾</span>
+        </div>
+      </div>
+
+      <!-- Card 3 -->
+      <div style="background:rgba(255,255,255,0.88);border:1px solid rgba(38,57,54,0.12);border-radius:8px;padding:10px;font-size:12px;opacity:0.6;">
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">
+          <div style="width:18px;height:18px;border:2px solid #2f7d78;border-radius:50%;flex-shrink:0;"></div>
+          <strong style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;">买咖啡豆</strong>
+          <span style="color:#999;font-size:11px;">16:00</span>
+        </div>
+        <p style="color:#999;font-size:11px;margin:2px 0 6px 24px;line-height:1.4;">蓝山拼配，500g</p>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-left:24px;">
+          <span style="background:rgba(47,125,120,0.12);color:#2f7d78;padding:2px 7px;border-radius:4px;font-size:10px;">生活</span>
+          <span></span>
+        </div>
+      </div>
+
+      <!-- POPOVER — rendered ABOVE the card via Teleport (fixed pos here for demo) -->
+      <!-- In real code: positioned via JS based on card's attachment element rect -->
+      <div style="
+        position:absolute;
+        left:182px; top:138px;
+        width:228px;
+        background:rgba(255,255,255,0.98);
+        border:1px solid rgba(47,125,120,0.22);
+        border-radius:10px;
+        box-shadow:0 10px 32px rgba(32,44,42,0.2);
+        backdrop-filter:blur(14px);
+        z-index:999;
+      ">
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:7px 9px 5px;">
+          <span style="font-size:10px;color:#999;">附件 (3)</span>
+          <span style="cursor:pointer;color:#bbb;font-size:12px;line-height:1;">✕</span>
+        </div>
+        <div style="padding:0 6px 2px;">
+          <div style="display:flex;align-items:center;justify-content:space-between;padding:4px 5px;border-radius:4px;font-size:11px;">
+            <div style="display:flex;align-items:center;gap:5px;overflow:hidden;flex:1;min-width:0;">
+              <span style="font-size:12px;flex-shrink:0;">📄</span>
+              <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">需求文档_v3.docx</span>
+            </div>
+            <span style="color:#ccc;cursor:pointer;font-size:11px;flex-shrink:0;margin-left:4px;">✕</span>
+          </div>
+          <div style="display:flex;align-items:center;justify-content:space-between;padding:4px 5px;border-radius:4px;font-size:11px;">
+            <div style="display:flex;align-items:center;gap:5px;overflow:hidden;flex:1;min-width:0;">
+              <span style="font-size:12px;flex-shrink:0;">🖼</span>
+              <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">UI设计稿_最终版.png</span>
+            </div>
+            <span style="color:#ccc;cursor:pointer;font-size:11px;flex-shrink:0;margin-left:4px;">✕</span>
+          </div>
+          <div style="display:flex;align-items:center;justify-content:space-between;padding:4px 5px;border-radius:4px;font-size:11px;">
+            <div style="display:flex;align-items:center;gap:5px;overflow:hidden;flex:1;min-width:0;">
+              <span style="font-size:12px;flex-shrink:0;">📊</span>
+              <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">Q2数据报表.xlsx</span>
+            </div>
+            <span style="color:#ccc;cursor:pointer;font-size:11px;flex-shrink:0;margin-left:4px;">✕</span>
+          </div>
+        </div>
+        <div style="border-top:1px solid rgba(38,57,54,0.07);padding:5px 8px;">
+          <button style="width:100%;border:0;border-radius:5px;padding:5px;background:rgba(47,125,120,0.08);color:#2f7d78;font-size:11px;cursor:pointer;">+ 添加附件</button>
+        </div>
+        <!-- Connection line -->
+        <div style="position:absolute;top:-6px;right:40px;width:12px;height:6px;background:rgba(255,255,255,0.98);border-left:1px solid rgba(47,125,120,0.22);border-top:1px solid rgba(47,125,120,0.22);transform:rotate(45deg);"></div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Right -->
+  <div style="display:flex;flex-direction:column;gap:12px;">
+    <div class="mockup">
+      <div class="mockup-header">关键改动</div>
+      <div class="mockup-body" style="padding:12px;font-size:13px;line-height:1.7;">
+        <strong>对齐</strong> — popover 右边缘与 "📎 3 个附件" 右对齐，有小三角指示关联<br>
+        <strong>破层级</strong> — 不放在卡片 DOM 内，渲染到主窗口顶层（Vue Teleport），不受 overflow 裁剪<br>
+        <strong>自适应方向</strong> — 下方空间不够自动翻到上方<br>
+        <strong>实现方式</strong> — 卡片内计算附件元素的 getBoundingClientRect()，popover 在顶层用 fixed/absolute 定位
+      </div>
+    </div>
+
+    <div class="mockup">
+      <div class="mockup-header">DOM 结构</div>
+      <div class="mockup-body" style="padding:12px;font-size:11px;line-height:1.8;font-family:monospace;">
+        &lt;div class="app-shell"&gt;<br>
+        &nbsp;&nbsp;&lt;header&gt;...&lt;/header&gt;<br>
+        &nbsp;&nbsp;&lt;section class="note-list"&gt;<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&lt;article class="note-card"&gt;<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#2f7d78;">← 附件badge，点击计算rect</span><br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&lt;/article&gt;<br>
+        &nbsp;&nbsp;&lt;/section&gt;<br>
+        &nbsp;&nbsp;<span style="background:rgba(47,125,120,0.12);">&lt;Teleport to="body"&gt;</span><br>
+        &nbsp;&nbsp;&nbsp;&nbsp;<span style="background:rgba(47,125,120,0.12);">&lt;AttachmentPopover :anchorRect /&gt;</span><br>
+        &nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#64736f;">← 渲染到 body，z-index 全窗口最高</span><br>
+        &nbsp;&nbsp;<span style="background:rgba(47,125,120,0.12);">&lt;/Teleport&gt;</span><br>
+        &lt;/div&gt;
+      </div>
+    </div>
+  </div>
+</div>

@@ -70,6 +70,7 @@
         class="note-card"
         :class="{ completed: note.completed }"
         @click="openEditor(note)"
+        @contextmenu.prevent="openContextMenu(note, $event)"
       >
         <div class="card-row card-top">
           <button class="check-button" title="切换完成状态" type="button" @click.stop="notes.toggleCompleted(note.id)">
@@ -203,6 +204,21 @@
       @remove="handleAttachRemove"
       @open="handleAttachOpen"
     />
+
+    <Teleport to="body">
+      <div
+        v-if="contextMenu.visible"
+        class="context-menu"
+        :style="{ left: contextMenu.x + 'px', top: contextMenu.y + 'px' }"
+        @click.stop
+      >
+        <button type="button" @click="ctxEdit">编辑</button>
+        <button type="button" @click="ctxToggleComplete">
+          {{ contextMenu.note?.completed ? '取消完成' : '标记完成' }}
+        </button>
+        <button type="button" @click="ctxDelete">删除</button>
+      </div>
+    </Teleport>
   </main>
 </template>
 
@@ -249,6 +265,13 @@ const attachPopover = reactive({
   anchorTop: 0
 })
 
+const contextMenu = reactive({
+  visible: false,
+  x: 0,
+  y: 0,
+  note: null
+})
+
 function openAttachPopover(note, event) {
   if (attachPopover.visible && attachPopover.note?.id === note.id) {
     closeAttachPopover()
@@ -265,6 +288,34 @@ function openAttachPopover(note, event) {
 function closeAttachPopover() {
   attachPopover.visible = false
   attachPopover.note = null
+}
+
+function openContextMenu(note, event) {
+  contextMenu.note = note
+  contextMenu.x = event.clientX
+  contextMenu.y = event.clientY
+  contextMenu.visible = true
+  setTimeout(() => document.addEventListener('click', closeContextMenu, { once: true }), 0)
+}
+
+function closeContextMenu() {
+  contextMenu.visible = false
+  contextMenu.note = null
+}
+
+function ctxEdit() {
+  if (contextMenu.note) openEditor(contextMenu.note)
+  closeContextMenu()
+}
+
+async function ctxToggleComplete() {
+  if (contextMenu.note) await notes.toggleCompleted(contextMenu.note.id)
+  closeContextMenu()
+}
+
+async function ctxDelete() {
+  if (contextMenu.note?.id) await notes.delete(contextMenu.note.id)
+  closeContextMenu()
 }
 
 async function handleAttachAdd(paths) {
@@ -900,5 +951,42 @@ onBeforeUnmount(() => {
   position: fixed;
   inset: 0;
   z-index: 9998;
+}
+
+.context-menu {
+  position: fixed;
+  z-index: 10000;
+  display: flex;
+  flex-direction: column;
+  min-width: 140px;
+  padding: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 10px;
+  background: rgba(30, 35, 34, 0.94);
+  backdrop-filter: blur(24px) saturate(180%);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+}
+
+.context-menu button {
+  padding: 8px 12px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.85);
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.context-menu button:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.context-menu button:last-child {
+  color: #ff6b6b;
+}
+
+.context-menu button:last-child:hover {
+  background: rgba(255, 107, 107, 0.12);
 }
 </style>

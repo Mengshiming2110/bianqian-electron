@@ -1,0 +1,162 @@
+<h2>快捷键设置面板 — 独立窗口预览</h2>
+<p class="subtitle">托盘菜单 → "快捷键设置" → 弹出配置窗口，可点击录制新快捷键</p>
+
+<div class="split">
+  <!-- Shortcut Editor Window -->
+  <div class="mockup">
+    <div class="mockup-header">快捷键设置 (340×420px)</div>
+    <div class="mockup-body" style="padding:0;font-family:sans-serif;overflow:hidden;">
+
+      <!-- Window header bar -->
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 14px;background:var(--accent-soft);border-bottom:1px solid rgba(47,125,120,0.12);">
+        <span style="font-size:13px;font-weight:600;color:var(--accent-strong);">快捷键设置</span>
+        <span style="cursor:pointer;color:#999;font-size:14px;line-height:1;">✕</span>
+      </div>
+
+      <!-- Table -->
+      <div style="padding:8px 12px;">
+        <div style="display:grid;grid-template-columns:1fr auto auto;gap:4px 8px;align-items:center;font-size:12px;">
+
+          <!-- Header row -->
+          <div style="color:var(--text-muted);font-size:10px;font-weight:600;padding:4px 0;">功能</div>
+          <div style="color:var(--text-muted);font-size:10px;font-weight:600;padding:4px 0;text-align:center;">快捷键</div>
+          <div style="width:28px;"></div>
+
+          <!-- Row: toggle window -->
+          <div style="padding:7px 0;border-bottom:1px solid rgba(38,57,54,0.06);">切换窗口显示</div>
+          <div style="padding:4px 8px;background:rgba(47,125,120,0.06);border-radius:4px;font-size:11px;text-align:center;font-family:monospace;border-bottom:1px solid rgba(38,57,54,0.06);">F3</div>
+          <div style="text-align:center;border-bottom:1px solid rgba(38,57,54,0.06);">
+            <span style="cursor:pointer;color:var(--accent);font-size:11px;">✏</span>
+          </div>
+
+          <!-- Row: hide window -->
+          <div style="padding:7px 0;border-bottom:1px solid rgba(38,57,54,0.06);">隐藏窗口</div>
+          <div style="padding:4px 8px;background:rgba(47,125,120,0.06);border-radius:4px;font-size:11px;text-align:center;font-family:monospace;border-bottom:1px solid rgba(38,57,54,0.06);">Escape</div>
+          <div style="text-align:center;border-bottom:1px solid rgba(38,57,54,0.06);">
+            <span style="cursor:pointer;color:var(--accent);font-size:11px;">✏</span>
+          </div>
+
+          <!-- Row: passthrough (NEW) -->
+          <div style="padding:7px 0;border-bottom:1px solid rgba(47,125,120,0.06);">穿透模式</div>
+          <div style="padding:4px 8px;background:rgba(47,125,120,0.06);border-radius:4px;font-size:11px;text-align:center;font-family:monospace;border-bottom:1px solid rgba(38,57,54,0.06);">Ctrl+Shift+P</div>
+          <div style="text-align:center;border-bottom:1px solid rgba(38,57,54,0.06);">
+            <span style="cursor:pointer;color:var(--accent);font-size:11px;">✏</span>
+          </div>
+
+          <!-- Row: passthrough in recording mode -->
+          <div style="padding:7px 0;border-bottom:1px solid rgba(38,57,54,0.06);background:rgba(47,125,120,0.04);border-radius:4px;">穿透模式</div>
+          <div style="padding:4px 8px;background:rgba(47,125,120,0.16);border:1px solid var(--accent);border-radius:4px;font-size:11px;text-align:center;font-family:monospace;animation:pulse 0.8s infinite;border-bottom:1px solid rgba(38,57,54,0.06);">按下组合键...</div>
+          <div style="text-align:center;border-bottom:1px solid rgba(38,57,54,0.06);">
+            <span style="color:var(--danger);font-size:11px;cursor:pointer;">✕</span>
+          </div>
+
+          <!-- Divider -->
+          <div style="grid-column:1/-1;border-top:1px solid rgba(38,57,54,0.08);margin:4px 0;"></div>
+
+          <!-- Category shortcuts -->
+          <div style="padding:7px 0;border-bottom:1px solid rgba(38,57,54,0.06);color:var(--text-muted);">分类 — 全部</div>
+          <div style="padding:4px 8px;background:rgba(47,125,120,0.06);border-radius:4px;font-size:11px;text-align:center;font-family:monospace;border-bottom:1px solid rgba(38,57,54,0.06);">Alt+1</div>
+          <div style="text-align:center;border-bottom:1px solid rgba(38,57,54,0.06);">
+            <span style="cursor:pointer;color:var(--accent);font-size:11px;">✏</span>
+          </div>
+
+          <div style="padding:7px 0;border-bottom:1px solid rgba(38,57,54,0.06);color:var(--text-muted);">分类 — 工作</div>
+          <div style="padding:4px 8px;background:rgba(47,125,120,0.06);border-radius:4px;font-size:11px;text-align:center;font-family:monospace;border-bottom:1px solid rgba(38,57,54,0.06);">Alt+2</div>
+          <div style="text-align:center;border-bottom:1px solid rgba(38,57,54,0.06);">
+            <span style="cursor:pointer;color:var(--accent);font-size:11px;">✏</span>
+          </div>
+
+          <div style="padding:7px 0;border-bottom:1px solid rgba(38,57,54,0.06);color:var(--text-muted);">分类 — 生活</div>
+          <div style="padding:4px 8px;background:rgba(47,125,120,0.06);border-radius:4px;font-size:11px;text-align:center;font-family:monospace;border-bottom:1px solid rgba(38,57,54,0.06);">Alt+3</div>
+          <div style="text-align:center;border-bottom:1px solid rgba(38,57,54,0.06);">
+            <span style="cursor:pointer;color:var(--accent);font-size:11px;">✏</span>
+          </div>
+
+          <div style="padding:7px 0;border-bottom:1px solid rgba(38,57,54,0.06);color:var(--text-muted);">分类 — 学习</div>
+          <div style="padding:4px 8px;background:rgba(47,125,120,0.06);border-radius:4px;font-size:11px;text-align:center;font-family:monospace;border-bottom:1px solid rgba(38,57,54,0.06);">Alt+4</div>
+          <div style="text-align:center;border-bottom:1px solid rgba(38,57,54,0.06);">
+            <span style="cursor:pointer;color:var(--accent);font-size:11px;">✏</span>
+          </div>
+
+          <div style="padding:7px 0;border-bottom:1px solid rgba(38,57,54,0.06);color:var(--text-muted);">分类 — 会议</div>
+          <div style="padding:4px 8px;background:rgba(47,125,120,0.06);border-radius:4px;font-size:11px;text-align:center;font-family:monospace;border-bottom:1px solid rgba(38,57,54,0.06);">Alt+5</div>
+          <div style="text-align:center;border-bottom:1px solid rgba(38,57,54,0.06);">
+            <span style="cursor:pointer;color:var(--accent);font-size:11px;">✏</span>
+          </div>
+
+          <div style="padding:7px 0;color:var(--text-muted);">分类 — 其他</div>
+          <div style="padding:4px 8px;background:rgba(47,125,120,0.06);border-radius:4px;font-size:11px;text-align:center;font-family:monospace;">Alt+6</div>
+          <div style="text-align:center;">
+            <span style="cursor:pointer;color:var(--accent);font-size:11px;">✏</span>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- Footer -->
+      <div style="border-top:1px solid rgba(38,57,54,0.08);padding:8px 12px;text-align:right;">
+        <button style="border:1px solid rgba(38,57,54,0.12);border-radius:6px;padding:5px 14px;background:#fff;color:var(--text-muted);font-size:11px;cursor:pointer;">恢复默认</button>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Right: Interaction Notes -->
+  <div style="display:flex;flex-direction:column;gap:12px;">
+    <div class="mockup">
+      <div class="mockup-header">交互流程</div>
+      <div class="mockup-body" style="padding:12px;font-size:13px;line-height:1.7;">
+        <strong>打开</strong><br>
+        <span style="color:#64736f;">托盘右键 → "快捷键设置" → 弹出独立窗口</span><br><br>
+
+        <strong>修改快捷键</strong><br>
+        <span style="color:#64736f;">点击 ✏ → 该行进入录制模式（闪烁"按下组合键..."）→ 按下新组合 → 自动保存</span><br><br>
+
+        <strong>冲突检测</strong><br>
+        <span style="color:#64736f;">如果新组合已被占用 → 弹出确认提示 → 用户确认后替换，旧功能快捷键清空</span><br><br>
+
+        <strong>取消录制</strong><br>
+        <span style="color:#64736f;">录制模式下点 ✕ / 按 Esc → 取消，保持原快捷键</span><br><br>
+
+        <strong>恢复默认</strong><br>
+        <span style="color:#64736f;">点击底部"恢复默认" → 所有快捷键回到初始值</span>
+      </div>
+    </div>
+
+    <div class="mockup">
+      <div class="mockup-header">默认快捷键</div>
+      <div class="mockup-body" style="padding:12px;font-size:12px;line-height:1.8;font-family:monospace;">
+        切换窗口显示 &nbsp; → F3<br>
+        隐藏窗口 &nbsp;&nbsp;&nbsp;&nbsp; → Escape<br>
+        <span style="color:var(--accent);font-weight:600;">穿透模式 &nbsp;&nbsp;&nbsp;&nbsp; → Ctrl+Shift+P</span><br>
+        分类-全部 &nbsp;&nbsp;&nbsp;&nbsp; → Alt+1<br>
+        分类-工作 &nbsp;&nbsp;&nbsp;&nbsp; → Alt+2<br>
+        分类-生活 &nbsp;&nbsp;&nbsp;&nbsp; → Alt+3<br>
+        分类-学习 &nbsp;&nbsp;&nbsp;&nbsp; → Alt+4<br>
+        分类-会议 &nbsp;&nbsp;&nbsp;&nbsp; → Alt+5<br>
+        分类-其他 &nbsp;&nbsp;&nbsp;&nbsp; → Alt+6
+      </div>
+    </div>
+
+    <div class="mockup">
+      <div class="mockup-header">托盘菜单</div>
+      <div class="mockup-body" style="padding:12px;font-size:12px;line-height:1.8;">
+        全部便签<br>
+        分类 ▸<br>
+        ─────────<br>
+        新建便签<br>
+        鼠标穿透 ✓<br>
+        <span style="color:var(--accent);font-weight:600;">快捷键设置 &nbsp; ← 新增</span><br>
+        ─────────<br>
+        退出
+      </div>
+    </div>
+  </div>
+</div>
+
+<style>
+@keyframes pulse {
+  0%,100% { border-color: var(--accent); }
+  50%     { border-color: transparent; }
+}
+</style>
