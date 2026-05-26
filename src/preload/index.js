@@ -34,6 +34,7 @@ contextBridge.exposeInMainWorld('api', {
     setOpacity: (opacity) => ipcRenderer.invoke('window:set-opacity', opacity),
     setMode: (mode) => ipcRenderer.invoke('window:set-mode', mode),
     setEdgeAutoHide: (enabled) => ipcRenderer.invoke('window:set-edge-auto-hide', enabled),
+    resizeToContent: (height) => ipcRenderer.send('window:resize-to-content', height),
     mouseLeave: () => ipcRenderer.send('window:mouse-leave'),
     mouseEnter: () => ipcRenderer.send('window:mouse-enter'),
     setEditing: (editing) => ipcRenderer.send('window:set-editing', editing),

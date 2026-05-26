@@ -41,7 +41,7 @@ export class WindowManager {
 
     this.window = new BrowserWindow({
       width: this.windowMode === 'mini' ? 220 : 280,
-      height: this.windowMode === 'mini' ? 180 : 500,
+      height: this.windowMode === 'mini' ? 180 : 360,
       minWidth: this.windowMode === 'mini' ? 210 : 260,
       minHeight: this.windowMode === 'mini' ? 150 : 360,
       x: workArea.x + workArea.width - 300,
@@ -272,15 +272,30 @@ export class WindowManager {
       this.window.setMinimumSize(210, 150)
       this.window.setBounds({ ...this.window.getBounds(), width: 220, height: 180 })
     } else {
-      this.window.setMinimumSize(260, 360)
+      this.window.setMinimumSize(260, 200)
       const bounds = this.window.getBounds()
       this.window.setBounds({
         ...bounds,
-        width: Math.max(bounds.width, 280),
-        height: Math.max(bounds.height, 500)
+        width: Math.max(bounds.width, 280)
       })
     }
 
+    this.edge.onWindowMoved()
+  }
+
+  resizeToContent(contentHeight) {
+    if (!this.window || this.window.isDestroyed()) return
+    if (this.edge._animating) return
+
+    const bounds = this.window.getBounds()
+    const workArea = screen.getDisplayMatching(bounds).workArea
+    const minHeight = this.windowMode === 'mini' ? 150 : 200
+    const maxHeight = workArea.height - 40
+    const targetHeight = Math.max(minHeight, Math.min(maxHeight, Math.ceil(contentHeight)))
+
+    if (Math.abs(bounds.height - targetHeight) < 4) return
+
+    this.window.setBounds({ ...bounds, height: targetHeight })
     this.edge.onWindowMoved()
   }
 

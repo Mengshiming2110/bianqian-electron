@@ -1,21 +1,12 @@
 <template>
   <ShortcutEditor v-if="isShortcutEditor" />
-  <main v-else-if="!hasError" class="app-shell" :class="{ 'pass-through-mode': passThroughMode, 'mini-mode': isMiniMode }">
+  <main v-else-if="!hasError" ref="appShellRef" class="app-shell" :class="{ 'pass-through-mode': passThroughMode, 'mini-mode': isMiniMode }">
     <header class="app-header">
       <div>
         <p class="eyebrow">{{ notes.activeCategory }}</p>
         <h1>便签</h1>
       </div>
       <div class="header-actions">
-        <button
-          class="icon-button"
-          :class="{ active: passThroughMode }"
-          :title="passThroughMode ? '' : '开启鼠标穿透'"
-          type="button"
-          @click="togglePassThrough"
-        >
-          <MousePointer2 :size="18" />
-        </button>
         <button
           class="icon-button"
           :class="{ active: settingsOpen }"
@@ -73,7 +64,7 @@
           <strong>{{ note.title }}</strong>
           <time>{{ note.time }}</time>
         </div>
-        <p class="note-preview">{{ note.content || ' ' }}</p>
+        <p v-if="note.content" class="note-preview">{{ note.content }}</p>
         <div class="card-row card-meta">
           <span class="category-pill">{{ note.category }}</span>
           <span
@@ -303,7 +294,6 @@ import {
   CheckCircle,
   Circle,
   Minus,
-  MousePointer2,
   Paperclip,
   Pin,
   Plus,
@@ -334,8 +324,11 @@ const windowOpacity = ref(0.92)
 const windowMode = ref('normal')
 const edgeAutoHide = ref(false)
 const hasError = ref(false)
+const appShellRef = ref(null)
 const unsubscribeHandlers = []
 let reminderTimer = null
+let resizeObserver = null
+let resizeDebounce = null
 
 const draft = reactive(defaultDraft())
 
@@ -679,6 +672,26 @@ onErrorCaptured((err) => {
   return false
 })
 
+function syncContentHeight() {
+  const el = appShellRef.value
+  if (!el) return
+  const height = el.scrollHeight
+  window.api?.window.resizeToContent(height)
+
+  const noteList = el.querySelector('.note-list')
+  if (noteList) {
+    const header = el.querySelector('.app-header')
+    const toolbar = el.querySelector('.toolbar')
+    const footer = el.querySelector('.app-footer')
+    const usedHeight =
+      (header?.offsetHeight || 0) +
+      (toolbar?.offsetHeight || 0) +
+      (footer?.offsetHeight || 0)
+    const available = window.innerHeight - usedHeight
+    noteList.style.maxHeight = Math.max(available, 60) + 'px'
+  }
+}
+
 onMounted(async () => {
   await loadCategories()
   await notes.load()
@@ -707,11 +720,24 @@ onMounted(async () => {
   document.addEventListener('keydown', onKeyDown)
   document.addEventListener('mouseout', onMouseOut)
   document.addEventListener('mouseover', onMouseOver)
+
+  resizeObserver = new ResizeObserver(() => {
+    clearTimeout(resizeDebounce)
+    resizeDebounce = setTimeout(syncContentHeight, 80)
+  })
+  if (appShellRef.value) {
+    resizeObserver.observe(appShellRef.value)
+  }
 })
 
 onBeforeUnmount(() => {
   unsubscribeHandlers.forEach((unsubscribe) => unsubscribe())
   clearInterval(reminderTimer)
+  clearTimeout(resizeDebounce)
+  if (resizeObserver) {
+    resizeObserver.disconnect()
+    resizeObserver = null
+  }
   document.removeEventListener('keydown', onKeyDown)
   document.removeEventListener('mouseout', onMouseOut)
   document.removeEventListener('mouseover', onMouseOver)
@@ -722,8 +748,7 @@ onBeforeUnmount(() => {
 .app-shell {
   display: grid;
   width: 100%;
-  height: 100%;
-  grid-template-rows: auto auto 1fr auto;
+  grid-template-rows: auto auto auto auto;
   overflow: hidden;
   border: 1px solid var(--border);
   border-radius: var(--radius-window);
@@ -918,7 +943,6 @@ onBeforeUnmount(() => {
 
 .note-preview {
   display: -webkit-box;
-  min-height: 34px;
   margin: 6px 0 8px 29px;
   overflow: hidden;
   color: var(--text-muted);
@@ -1157,7 +1181,7 @@ onBeforeUnmount(() => {
 }
 
 .mini-mode {
-  grid-template-rows: auto 1fr;
+  grid-template-rows: auto auto;
 }
 
 .mini-mode .app-header {

@@ -1,11 +1,18 @@
 import { Menu, Tray, app, nativeImage } from 'electron'
 import { ALL_CATEGORY, CATEGORIES } from './categories.js'
 
-const traySvg = encodeURIComponent(`
+const baseSvg = (dotColor) => encodeURIComponent(`
 <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
-  <rect x="6" y="5" width="20" height="22" rx="4" fill="#f2ca52"/>
-  <path d="M10 11h12M10 16h12M10 21h8" stroke="#31413f" stroke-width="2" stroke-linecap="round"/>
+  <rect x="4" y="6" width="18" height="20" rx="3" fill="#f2ca52"/>
+  <path d="M8 11h10M8 15h10M8 19h7" stroke="#31413f" stroke-width="1.8" stroke-linecap="round"/>
+  ${dotColor ? `<circle cx="25" cy="8" r="6.5" fill="#fff"/><circle cx="25" cy="8" r="5" fill="${dotColor}"/>` : ''}
 </svg>`)
+
+function createTrayImage(passThrough) {
+  const dotColor = passThrough ? '#4a90d9' : ''
+  const image = nativeImage.createFromDataURL(`data:image/svg+xml;charset=UTF-8,${baseSvg(dotColor)}`)
+  return image.resize({ width: 16, height: 16 })
+}
 
 export class TrayController {
   constructor(windowManager) {
@@ -19,12 +26,20 @@ export class TrayController {
       return this.tray
     }
 
-    const image = nativeImage.createFromDataURL(`data:image/svg+xml;charset=UTF-8,${traySvg}`)
+    const passThrough = this.windowManager.getInteractionState().passThrough
+    const image = createTrayImage(passThrough)
     this.tray = new Tray(image)
     this.tray.setToolTip('便签')
     this.tray.on('click', () => this.windowManager.toggle())
     this.rebuildMenu(this.counts)
     return this.tray
+  }
+
+  updateIcon() {
+    if (!this.tray) return
+    const passThrough = this.windowManager.getInteractionState().passThrough
+    this.tray.setImage(createTrayImage(passThrough))
+    this.tray.setToolTip(passThrough ? '便签 - 鼠标穿透中' : '便签')
   }
 
   rebuildMenu(counts = this.counts) {
@@ -35,6 +50,8 @@ export class TrayController {
     }
 
     const interactionState = this.windowManager.getInteractionState()
+
+    this.updateIcon()
 
     const categoryItems = CATEGORIES.map((category) => ({
       label: `${category}${counts[category] ? ` (${counts[category]})` : ''}`,

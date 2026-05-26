@@ -132,6 +132,7 @@ export function registerIpc(windowManager, trayController) {
   ipcMain.on('window:mouse-enter', () => windowManager.onMouseEnter())
   ipcMain.on('window:set-editing', (_event, editing) => windowManager.setEditing(editing))
   ipcMain.on('window:set-pinned', (_event, pinned) => windowManager.setPinned(pinned))
+  ipcMain.on('window:resize-to-content', (_event, height) => windowManager.resizeToContent(height))
 
   ipcMain.on('tray:update-counts', (_event, counts) => {
     trayController.rebuildMenu(counts)
