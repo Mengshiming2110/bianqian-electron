@@ -1,6 +1,12 @@
 <template>
   <ShortcutEditor v-if="isShortcutEditor" />
-  <main v-else-if="!hasError" ref="appShellRef" class="app-shell" :class="{ 'pass-through-mode': passThroughMode, 'mini-mode': isMiniMode }">
+  <main v-else-if="!hasError" ref="appShellRef" class="app-shell" :class="{
+    'pass-through-mode': passThroughMode,
+    'mini-mode': isMiniMode,
+    'mode-transitioning': modeTransition !== 'idle',
+    'transition-to-mini': modeTransition === 'to-mini',
+    'transition-to-normal': modeTransition === 'to-normal'
+  }">
     <header class="app-header">
       <div>
         <p class="eyebrow">{{ notes.activeCategory }}</p>
@@ -26,9 +32,9 @@
       </div>
     </header>
 
-    <div v-if="isMiniMode" class="mini-drag-bar"></div>
+    <div v-show="isMiniMode || modeTransition !== 'idle'" class="mini-drag-bar"></div>
 
-    <section v-if="!isMiniMode" class="toolbar">
+    <section v-show="!isMiniMode || modeTransition !== 'idle'" class="toolbar">
       <div class="search-box">
         <Search :size="15" />
         <input
@@ -49,8 +55,11 @@
         class="note-card"
         :class="{
           completed: note.completed,
+          'animating-completing': animatingCardIds.get(note.id) === 'completing',
+          'animating-incompleting': animatingCardIds.get(note.id) === 'incompleting',
           'drag-over': dragTargetNoteId === note.id,
-          'sort-dragging': sortDrag.active && sortDrag.noteId === note.id
+          'sort-dragging': sortDrag.active && sortDrag.noteId === note.id,
+          'sort-pulsed': sortDrag.pulsed[note.id]
         }"
         :style="getSortDragStyle(note.id)"
         @mousedown="onSortMouseDown(note, $event)"
@@ -61,7 +70,7 @@
         @drop.prevent.stop="onNoteDrop(note, $event)"
       >
         <div class="card-row card-top">
-          <button class="check-button" title="切换完成状态" type="button" @click.stop="notes.toggleCompleted(note.id)">
+          <button class="check-button" title="切换完成状态" type="button" @click.stop="handleToggleCompleted(note.id)">
             <CheckCircle v-if="note.completed" :size="18" />
             <Circle v-else :size="18" />
           </button>
@@ -77,7 +86,7 @@
           <strong>{{ note.title }}</strong>
           <time>{{ note.time }}</time>
         </div>
-        <p v-if="note.content" class="note-preview">{{ note.content }}</p>
+        <MarkdownPreview v-if="note.content" :content="note.content" :is-mini="isMiniMode" />
         <div class="card-row card-meta">
           <span class="category-pill">{{ note.category }}</span>
           <span
@@ -97,7 +106,7 @@
       </div>
     </section>
 
-    <footer v-if="!isMiniMode" class="app-footer">
+    <footer v-show="!isMiniMode || modeTransition !== 'idle'" class="app-footer">
       <span>{{ notes.filteredNotes.length }} 条</span>
       <span>{{ todayLabel }}</span>
     </footer>
@@ -209,6 +218,24 @@
         <button type="button" @click="ctxToggleComplete">
           {{ contextMenu.note?.completed ? '取消完成' : '标记完成' }}
         </button>
+        <div class="submenu-wrapper">
+          <button type="button" class="submenu-trigger-btn">
+            快速改分类
+            <ChevronRight :size="12" />
+          </button>
+          <div class="submenu">
+            <button
+              v-for="cat in categories"
+              :key="cat"
+              type="button"
+              @click="ctxChangeCategory(cat)"
+            >
+              {{ cat }}
+              <Check v-if="contextMenu.note?.category === cat" :size="12" />
+            </button>
+          </div>
+        </div>
+        <button type="button" @click="ctxCopyContent">复制内容</button>
         <button type="button" @click="ctxDelete">删除</button>
       </div>
     </Teleport>
@@ -243,6 +270,11 @@
               <small>{{ isMiniMode ? '迷你' : '列表' }}</small>
               <ChevronRight :size="15" />
             </button>
+            <button class="settings-menu-row" type="button" @click="settingsView = 'themes'">
+              <span>主题</span>
+              <small>{{ themeLabel }}</small>
+              <ChevronRight :size="15" />
+            </button>
             <div class="settings-status-list">
               <div class="settings-status-row">
                 <span>鼠标穿透</span>
@@ -272,6 +304,42 @@
             >
               <span>{{ category }}</span>
               <small>{{ categoryCount(category) }}</small>
+            </button>
+          </template>
+
+          <template v-else-if="settingsView === 'themes'">
+            <div class="settings-card-header">
+              <button class="settings-back-button" type="button" @click="settingsView = 'main'">
+                <ArrowLeft :size="15" />
+              </button>
+              <span>主题</span>
+            </div>
+            <button
+              class="settings-list-row"
+              :class="{ active: themePreference === 'system' }"
+              type="button"
+              @click="setTheme('system')"
+            >
+              <span>跟随系统</span>
+              <small>自动切换</small>
+            </button>
+            <button
+              class="settings-list-row"
+              :class="{ active: themePreference === 'light' }"
+              type="button"
+              @click="setTheme('light')"
+            >
+              <span>浅色</span>
+              <Sun :size="15" />
+            </button>
+            <button
+              class="settings-list-row"
+              :class="{ active: themePreference === 'dark' }"
+              type="button"
+              @click="setTheme('dark')"
+            >
+              <span>深色</span>
+              <Moon :size="15" />
             </button>
           </template>
 
@@ -324,15 +392,17 @@
 </template>
 
 <script setup>
-import { computed, onErrorCaptured, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
+import { computed, onErrorCaptured, onBeforeUnmount, onMounted, reactive, ref, watch, nextTick } from 'vue'
 import {
   Bell,
   BellOff,
   ArrowLeft,
+  Check,
   ChevronRight,
   CheckCircle,
   Circle,
   Minus,
+  Moon,
   Paperclip,
   Pin,
   Plus,
@@ -341,10 +411,12 @@ import {
   Settings,
   SlidersHorizontal,
   StickyNote,
+  Sun,
   Trash2,
   X
 } from 'lucide-vue-next'
 import AttachmentPopover from './components/AttachmentPopover.vue'
+import MarkdownPreview from './components/MarkdownPreview.vue'
 import ShortcutEditor from './components/ShortcutEditor.vue'
 import { ALL_CATEGORY, CATEGORIES, MAX_ATTACHMENTS_PER_NOTE, loadCategories, useNotesStore } from './stores/notes'
 
@@ -365,6 +437,27 @@ const passThroughMode = ref(false)
 const windowOpacity = ref(0.92)
 const windowMode = ref('normal')
 const edgeAutoHide = ref(false)
+const themePreference = ref('system')
+const systemDark = ref(false)
+let darkModeMq = null
+
+const resolvedTheme = computed(() => {
+  if (themePreference.value === 'system') return systemDark.value ? 'dark' : 'light'
+  return themePreference.value
+})
+
+watch(resolvedTheme, (theme) => {
+  document.documentElement.setAttribute('data-theme', theme)
+}, { immediate: true })
+
+const themeLabel = computed(() => {
+  const map = { system: '跟随系统', light: '浅色', dark: '深色' }
+  return map[themePreference.value] || '跟随系统'
+})
+
+const modeTransition = ref('idle')
+const resizePaused = ref(false)
+const animatingCardIds = reactive(new Map())
 const hasError = ref(false)
 const appShellRef = ref(null)
 const dragTargetNoteId = ref('')
@@ -376,12 +469,15 @@ const sortDrag = reactive({
   cardHeight: 0,
   cardGap: 0,
   shifts: {},
-  settling: false
+  settling: false,
+  pulsed: {}
 })
 const sortDragJustEnded = ref(false)
 let sortDragStarted = false
 let sortDragStartX = 0
 let sortDragStartY = 0
+let lastShiftCount = 0
+let pulseCleanupTimers = {}
 const unsubscribeHandlers = []
 let reminderTimer = null
 let resizeObserver = null
@@ -509,7 +605,7 @@ function getSortDragStyle(noteId) {
 function onSortMouseDown(note, event) {
   if (isMiniMode.value) return
   if (event.button !== 0) return
-  if (event.target.closest('button')) return
+  if (event.target.closest('button, a, input, select, textarea')) return
 
   sortDragStarted = false
   sortDragStartX = event.clientX
@@ -544,6 +640,9 @@ function onSortMouseMove(event) {
     sortDrag.startY = sortDragStartY
     sortDrag.deltaY = 0
     sortDrag.shifts = {}
+    sortDrag.pulsed = {}
+    lastShiftCount = 0
+    pulseCleanupTimers = {}
   }
 
   sortDrag.deltaY = event.clientY - sortDrag.startY
@@ -556,6 +655,29 @@ function onSortMouseMove(event) {
 
   const step = sortDrag.cardHeight + sortDrag.cardGap
   const shiftCount = Math.round(sortDrag.deltaY / step)
+
+  if (shiftCount > lastShiftCount) {
+    for (let s = lastShiftCount + 1; s <= shiftCount; s++) {
+      const idx = dragIndex + s
+      if (idx >= 0 && idx < cards.length) {
+        const pid = cards[idx].dataset.noteId
+        sortDrag.pulsed[pid] = true
+        clearTimeout(pulseCleanupTimers[pid])
+        pulseCleanupTimers[pid] = setTimeout(() => { delete sortDrag.pulsed[pid] }, 220)
+      }
+    }
+  } else if (shiftCount < lastShiftCount) {
+    for (let s = lastShiftCount - 1; s >= shiftCount; s--) {
+      const idx = dragIndex + s
+      if (idx >= 0 && idx < cards.length) {
+        const pid = cards[idx].dataset.noteId
+        sortDrag.pulsed[pid] = true
+        clearTimeout(pulseCleanupTimers[pid])
+        pulseCleanupTimers[pid] = setTimeout(() => { delete sortDrag.pulsed[pid] }, 220)
+      }
+    }
+  }
+  lastShiftCount = shiftCount
 
   const newShifts = {}
   newShifts[sortDrag.noteId] = sortDrag.deltaY
@@ -598,6 +720,9 @@ async function onSortMouseUp() {
 
     sortDrag.settling = true
     sortDrag.shifts = {}
+    sortDrag.pulsed = {}
+    Object.values(pulseCleanupTimers).forEach(clearTimeout)
+    pulseCleanupTimers = {}
     setTimeout(() => {
       sortDrag.active = false
       sortDrag.settling = false
@@ -707,8 +832,8 @@ function ctxEdit() {
   closeContextMenu()
 }
 
-async function ctxToggleComplete() {
-  if (contextMenu.note) await notes.toggleCompleted(contextMenu.note.id)
+function ctxToggleComplete() {
+  if (contextMenu.note) handleToggleCompleted(contextMenu.note.id)
   closeContextMenu()
 }
 
@@ -720,6 +845,75 @@ async function ctxTogglePin() {
 async function ctxDelete() {
   if (contextMenu.note?.id) await notes.delete(contextMenu.note.id)
   closeContextMenu()
+}
+
+async function ctxChangeCategory(category) {
+  if (contextMenu.note) await notes.update(contextMenu.note.id, { category })
+  closeContextMenu()
+}
+
+async function ctxCopyContent() {
+  if (!contextMenu.note) { closeContextMenu(); return }
+  const text = `${contextMenu.note.title}\n${contextMenu.note.content}`.trim()
+  try {
+    await navigator.clipboard.writeText(text)
+  } catch {
+    const ta = document.createElement('textarea')
+    ta.value = text
+    ta.style.cssText = 'position:fixed;opacity:0;pointer-events:none'
+    document.body.appendChild(ta)
+    ta.select()
+    document.execCommand('copy')
+    document.body.removeChild(ta)
+  }
+  closeContextMenu()
+}
+
+function delay(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms))
+}
+
+function cancelSortDrag() {
+  document.removeEventListener('mousemove', onSortMouseMove)
+  document.removeEventListener('mouseup', onSortMouseUp)
+  sortDrag.active = false
+  sortDrag.settling = false
+  sortDrag.noteId = ''
+  sortDrag.shifts = {}
+  sortDrag.pulsed = {}
+  sortDrag.deltaY = 0
+  sortDragStarted = false
+  lastShiftCount = 0
+  Object.values(pulseCleanupTimers).forEach(clearTimeout)
+  pulseCleanupTimers = {}
+}
+
+async function handleToggleCompleted(noteId) {
+  const note = notes.notes.find(n => n.id === noteId)
+  if (!note) return
+  const wasCompleted = note.completed
+  const animKey = wasCompleted ? 'incompleting' : 'completing'
+  animatingCardIds.set(noteId, animKey)
+  await notes.toggleCompleted(noteId)
+  await nextTick()
+  setTimeout(() => {
+    if (animatingCardIds.get(noteId) === animKey) animatingCardIds.delete(noteId)
+  }, 500)
+}
+
+async function setTheme(value) {
+  themePreference.value = value
+  if (!window.api) {
+    try { localStorage.setItem('bianqian-theme', value) } catch {}
+    return
+  }
+  await window.api.window.setTheme(value)
+}
+
+function setupSystemThemeListener() {
+  darkModeMq = window.matchMedia('(prefers-color-scheme: dark)')
+  systemDark.value = darkModeMq.matches
+  darkModeMq.addEventListener('change', (e) => { systemDark.value = e.matches })
 }
 
 async function handleAttachAdd(paths) {
@@ -886,6 +1080,7 @@ async function refreshInteractionState() {
   windowOpacity.value = Number(state?.opacity || 0.92)
   windowMode.value = state?.windowMode || 'normal'
   edgeAutoHide.value = Boolean(state?.edgeAutoHide)
+  if (state?.theme) themePreference.value = state.theme
 }
 
 async function togglePassThrough() {
@@ -910,10 +1105,36 @@ async function setWindowOpacity(value) {
 
 async function setMode(mode) {
   if (mode === 'mini' && settingsOpen.value) closeSettings()
-  const state = await window.api?.window.setMode?.(mode)
-  windowMode.value = state?.windowMode || windowMode.value
-  edgeAutoHide.value = Boolean(state?.edgeAutoHide)
-  setTimeout(syncContentHeight, 80)
+  const targetIsMini = mode === 'mini'
+  if (targetIsMini === isMiniMode.value) return
+
+  if (sortDrag.active || sortDrag.settling) cancelSortDrag()
+  resizePaused.value = true
+
+  if (targetIsMini) {
+    modeTransition.value = 'to-mini'
+    const state = await window.api?.window.setMode?.('mini')
+    await delay(280)
+    windowMode.value = state?.windowMode || mode
+    edgeAutoHide.value = Boolean(state?.edgeAutoHide)
+    await nextTick()
+  } else {
+    const state = await window.api?.window.setMode?.('normal')
+    windowMode.value = state?.windowMode || mode
+    edgeAutoHide.value = Boolean(state?.edgeAutoHide)
+    await nextTick()
+    modeTransition.value = 'to-normal'
+    await nextTick()
+    requestAnimationFrame(() => {
+      if (appShellRef.value) appShellRef.value.classList.add('fade-in')
+    })
+    await delay(300)
+    if (appShellRef.value) appShellRef.value.classList.remove('fade-in')
+  }
+
+  modeTransition.value = 'idle'
+  resizePaused.value = false
+  syncContentHeight()
 }
 
 async function toggleEdgeAutoHide() {
@@ -1063,6 +1284,7 @@ onErrorCaptured((err) => {
 })
 
 function syncContentHeight() {
+  if (modeTransition.value !== 'idle') return
   const el = appShellRef.value
   if (!el) return
 
@@ -1117,6 +1339,7 @@ function onVisibilityChange() {
 }
 
 onMounted(async () => {
+  setupSystemThemeListener()
   await loadCategories()
   await notes.load()
   await refreshInteractionState()
@@ -1139,6 +1362,7 @@ onMounted(async () => {
         windowOpacity.value = Number(state?.opacity || windowOpacity.value)
         windowMode.value = state?.windowMode || windowMode.value
         edgeAutoHide.value = Boolean(state?.edgeAutoHide)
+        if (state?.theme) themePreference.value = state.theme
         if (settingsOpen.value) {
           const nowMini = windowMode.value === 'mini'
           const nowPassThrough = passThroughMode.value
@@ -1159,6 +1383,7 @@ onMounted(async () => {
   window.addEventListener('resize', updateSettingsPosition)
 
   resizeObserver = new ResizeObserver(() => {
+    if (resizePaused.value) return
     clearTimeout(resizeDebounce)
     resizeDebounce = setTimeout(syncContentHeight, 80)
   })
@@ -1170,6 +1395,7 @@ onMounted(async () => {
 onBeforeUnmount(() => {
   unsubscribeHandlers.forEach((unsubscribe) => unsubscribe())
   clearInterval(reminderTimer)
+  if (darkModeMq) darkModeMq.removeEventListener('change', () => {})
   clearTimeout(resizeDebounce)
   if (resizeObserver) {
     resizeObserver.disconnect()
@@ -1257,7 +1483,7 @@ onBeforeUnmount(() => {
   place-items: center;
   border-radius: var(--radius-control);
   color: var(--text);
-  background: rgba(255, 255, 255, 0.62);
+  background: var(--bg-card);
 }
 
 .icon-button:hover {
@@ -1272,7 +1498,7 @@ onBeforeUnmount(() => {
 
 .pass-through-mode .icon-button:not(.active):hover {
   color: var(--text);
-  background: rgba(255, 255, 255, 0.62);
+  background: var(--bg-card);
 }
 
 .toolbar {
@@ -1286,7 +1512,7 @@ onBeforeUnmount(() => {
   border: 1px solid var(--border);
   border-radius: var(--radius-control);
   color: var(--text-muted);
-  background: rgba(255, 255, 255, 0.78);
+  background: var(--bg-card);
 }
 
 .search-box input {
@@ -1331,7 +1557,7 @@ onBeforeUnmount(() => {
 
 .note-card.sort-dragging {
   z-index: 100;
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.18), 0 4px 12px rgba(0, 0, 0, 0.1);
+  box-shadow: var(--shadow-drag);
   cursor: grabbing;
 }
 
@@ -1346,10 +1572,6 @@ onBeforeUnmount(() => {
 
 .note-card.completed {
   opacity: 0.56;
-}
-
-.note-card.completed strong {
-  text-decoration: line-through;
 }
 
 .card-top {
@@ -1478,7 +1700,7 @@ onBeforeUnmount(() => {
   display: grid;
   place-items: center;
   padding: 12px;
-  background: rgba(20, 28, 27, 0.32);
+  background: var(--bg-overlay);
 }
 
 .editor-panel {
@@ -1489,7 +1711,7 @@ onBeforeUnmount(() => {
   overflow-y: auto;
   padding: 14px;
   border-radius: var(--radius-panel);
-  background: rgba(255, 255, 255, 0.96);
+  background: var(--bg-elevated);
   box-shadow: var(--shadow);
 }
 
@@ -1530,7 +1752,7 @@ onBeforeUnmount(() => {
   border: 1px solid var(--border);
   border-radius: var(--radius-control);
   outline: 0;
-  background: #fff;
+  background: var(--bg-input);
   font-size: 13px;
 }
 
@@ -1560,7 +1782,7 @@ onBeforeUnmount(() => {
   padding: 0 10px;
   border: 1px solid var(--border);
   border-radius: var(--radius-control);
-  background: #fff;
+  background: var(--bg-input);
 }
 
 .remind-toggle input {
@@ -1587,7 +1809,7 @@ onBeforeUnmount(() => {
   border: 1px solid var(--border);
   border-radius: var(--radius-small);
   color: var(--text-muted);
-  background: #fff;
+  background: var(--bg-input);
   font-size: 12px;
 }
 
@@ -1617,7 +1839,7 @@ onBeforeUnmount(() => {
 .secondary-button {
   border: 1px solid var(--border);
   color: var(--text);
-  background: #fff;
+  background: var(--bg-input);
 }
 
 .primary-button {
@@ -1692,14 +1914,6 @@ onBeforeUnmount(() => {
   background: rgba(255, 255, 255, 0.08);
 }
 
-.context-menu button:last-child {
-  color: #ff6b6b;
-}
-
-.context-menu button:last-child:hover {
-  background: rgba(255, 107, 107, 0.12);
-}
-
 .settings-popover-layer {
   position: fixed;
   inset: 0;
@@ -1715,7 +1929,7 @@ onBeforeUnmount(() => {
   padding: 8px;
   border: 1px solid rgba(38, 57, 54, 0.1);
   border-radius: 14px;
-  background: rgba(255, 255, 255, 0.98);
+  background: var(--bg-elevated);
   box-shadow: 0 12px 36px rgba(32, 44, 42, 0.22);
   color: var(--text);
 }
@@ -1899,5 +2113,202 @@ onBeforeUnmount(() => {
   color: var(--accent-strong);
   background: var(--accent-soft);
   font-size: 13px;
+}
+
+/* ===== 暗色模式适配 ===== */
+
+.note-card.drag-over {
+  background: var(--accent-soft);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+
+.mode-switch button {
+  background: var(--bg-input);
+}
+
+.edge-toggle {
+  background: var(--bg-input);
+}
+
+/* ===== 拖拽排序脉冲 ===== */
+
+@keyframes sort-pulse {
+  0%   { scale: 1; }
+  18%  { scale: 0.94; }
+  50%  { scale: 1.03; }
+  100% { scale: 1; }
+}
+
+.note-card.sort-pulsed {
+  animation: sort-pulse 0.2s ease-out;
+}
+
+/* ===== 卡片完成动画 ===== */
+
+.note-card.completed strong,
+.note-card.animating-completing strong,
+.note-card.animating-incompleting strong {
+  position: relative;
+}
+
+.note-card.completed strong::after,
+.note-card.animating-completing strong::after,
+.note-card.animating-incompleting strong::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: calc(50% - 0.75px);
+  width: 100%;
+  height: 1.5px;
+  background: currentColor;
+  transform-origin: left center;
+  pointer-events: none;
+}
+
+.note-card.completed strong::after {
+  transform: scaleX(1);
+}
+
+.note-card.animating-completing {
+  animation: cardFadeOut 0.45s ease-out forwards;
+}
+.note-card.animating-completing strong::after {
+  animation: lineGrowIn 0.45s ease-out forwards;
+}
+
+.note-card.animating-incompleting {
+  animation: cardFadeIn 0.45s ease-out forwards;
+}
+.note-card.animating-incompleting strong::after {
+  animation: lineShrinkOut 0.45s ease-out forwards;
+}
+
+@keyframes cardFadeOut {
+  from { opacity: 1; }
+  to   { opacity: 0.56; }
+}
+@keyframes cardFadeIn {
+  from { opacity: 0.56; }
+  to   { opacity: 1; }
+}
+@keyframes lineGrowIn {
+  from { transform: scaleX(0); }
+  to   { transform: scaleX(1); }
+}
+@keyframes lineShrinkOut {
+  from { transform: scaleX(1); }
+  to   { transform: scaleX(0); }
+}
+
+/* 移除旧的 text-decoration 完成样式，改用 ::after */
+.note-card.completed strong {
+  text-decoration: none;
+}
+
+/* ===== 模式切换动画 ===== */
+
+.app-shell.mode-transitioning {
+  pointer-events: none;
+}
+
+.app-shell.transition-to-mini .app-header,
+.app-shell.transition-to-mini .toolbar,
+.app-shell.transition-to-mini .app-footer {
+  opacity: 0;
+  transition: opacity 0.26s ease-out;
+}
+
+.app-shell.transition-to-mini .mini-drag-bar {
+  opacity: 1;
+  transition: opacity 0.26s ease-out 0.06s;
+}
+
+.app-shell.transition-to-normal .app-header,
+.app-shell.transition-to-normal .toolbar,
+.app-shell.transition-to-normal .app-footer {
+  opacity: 0;
+}
+
+.app-shell.transition-to-normal.fade-in .app-header,
+.app-shell.transition-to-normal.fade-in .toolbar,
+.app-shell.transition-to-normal.fade-in .app-footer {
+  opacity: 1;
+  transition: opacity 0.26s ease-out;
+}
+
+.app-shell.transition-to-normal .mini-drag-bar {
+  opacity: 0;
+  transition: opacity 0.2s ease-out;
+}
+
+.mini-mode.mode-transitioning .app-header {
+  display: flex;
+}
+
+.mini-mode.mode-transitioning .toolbar,
+.mini-mode.mode-transitioning .app-footer {
+  display: block;
+}
+
+/* ===== 右键菜单增强 ===== */
+
+.context-menu > button:last-child {
+  color: #ff6b6b;
+}
+.context-menu > button:last-child:hover {
+  background: rgba(255, 107, 107, 0.12);
+}
+
+.submenu-wrapper {
+  position: relative;
+}
+
+.submenu-trigger-btn {
+  display: flex !important;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  gap: 40px;
+}
+
+.submenu {
+  position: absolute;
+  left: 100%;
+  top: 0;
+  z-index: 10001;
+  display: none;
+  flex-direction: column;
+  min-width: 110px;
+  padding: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 10px;
+  background: rgba(30, 35, 34, 0.94);
+  backdrop-filter: blur(24px) saturate(180%);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+}
+
+.submenu-wrapper:hover .submenu,
+.submenu-wrapper:focus-within .submenu {
+  display: flex;
+}
+
+.submenu button {
+  padding: 8px 12px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.85);
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.submenu button:hover {
+  background: rgba(255, 255, 255, 0.08);
 }
 </style>

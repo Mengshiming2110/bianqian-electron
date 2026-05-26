@@ -15,6 +15,7 @@ function createStore() {
         opacity: 0.92,
         windowMode: 'normal',
         edgeAutoHide: false,
+        theme: 'system',
         shortcuts: {
           'toggle-window': 'F3',
           'hide-window': 'Escape',
@@ -174,6 +175,7 @@ export function getSettings() {
     opacity: clampOpacity(settings.opacity),
     windowMode: settings.windowMode === 'mini' ? 'mini' : 'normal',
     edgeAutoHide: Boolean(settings.edgeAutoHide),
+    theme: settings.theme === 'light' || settings.theme === 'dark' ? settings.theme : 'system',
     shortcuts: {
       ...DEFAULT_SHORTCUTS,
       ...(settings.shortcuts || {})

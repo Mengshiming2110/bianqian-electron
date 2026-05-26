@@ -227,10 +227,10 @@ async function onDrop(e) {
 }
 
 .attach-popover {
-  background: rgba(255, 255, 255, 0.98);
-  border: 1px solid rgba(47, 125, 120, 0.22);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
   border-radius: 10px;
-  box-shadow: 0 8px 28px rgba(32, 44, 42, 0.18);
+  box-shadow: var(--shadow);
   overflow: hidden;
   display: flex;
   flex-direction: column;
@@ -261,11 +261,11 @@ async function onDrop(e) {
   font-size: 11px;
   color: var(--accent-strong);
   background: var(--accent-soft);
-  border-bottom: 1px solid rgba(47, 125, 120, 0.1);
+  border-bottom: 1px solid var(--border);
 }
 
 .popover-close {
-  color: #bbb;
+  color: var(--text-muted);
   background: none;
   border: 0;
   cursor: pointer;
@@ -290,7 +290,7 @@ async function onDrop(e) {
   gap: 5px;
 }
 
-.popover-file-row:hover { background: rgba(0, 0, 0, 0.03); }
+.popover-file-row:hover { background: var(--accent-soft); }
 
 .file-emoji { font-size: 12px; flex-shrink: 0; }
 
@@ -307,7 +307,7 @@ async function onDrop(e) {
 .file-name:hover { color: var(--accent); }
 
 .file-remove {
-  color: #ccc;
+  color: var(--text-muted);
   background: none;
   border: 0;
   cursor: pointer;
@@ -320,7 +320,7 @@ async function onDrop(e) {
 .file-remove:hover { color: var(--danger); }
 
 .popover-footer {
-  border-top: 1px solid rgba(47, 125, 120, 0.07);
+  border-top: 1px solid var(--border);
   padding: 5px 7px;
 }
 
@@ -329,12 +329,12 @@ async function onDrop(e) {
   border: 0;
   border-radius: 5px;
   padding: 5px;
-  background: rgba(47, 125, 120, 0.08);
+  background: var(--accent-soft);
   color: var(--accent);
   font-size: 11px;
   cursor: pointer;
   font-weight: 600;
 }
 
-.popover-add-btn:hover { background: rgba(47, 125, 120, 0.15); }
+.popover-add-btn:hover { filter: brightness(0.92); }
 </style>

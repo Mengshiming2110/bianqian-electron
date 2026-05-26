@@ -167,6 +167,7 @@ export class WindowManager {
   }
 
   getInteractionState() {
+    const settings = getSettings()
     return {
       alwaysOnTop: this.alwaysOnTop,
       passThrough: this.passThroughMode,
@@ -174,7 +175,8 @@ export class WindowManager {
       opacity: this.opacity,
       windowMode: this.windowMode,
       edgeAutoHide: this.edge.autoHide,
-      edgeState: this.edge.state
+      edgeState: this.edge.state,
+      theme: settings.theme
     }
   }
 

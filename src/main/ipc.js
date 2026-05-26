@@ -186,6 +186,12 @@ export function registerIpc(windowManager, trayController) {
     trayController.rebuildMenu(trayController.counts)
     return state
   })
+  ipcMain.handle('window:set-theme', (_event, theme) => {
+    updateSettings({ theme })
+    const state = windowManager.getInteractionState()
+    state.theme = theme
+    return state
+  })
 
   ipcMain.on('window:mouse-leave', () => windowManager.onMouseLeave())
   ipcMain.on('window:mouse-enter', () => windowManager.onMouseEnter())
