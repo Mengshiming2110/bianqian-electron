@@ -192,6 +192,8 @@ export class EdgeDockController {
         this._animating = false
         this._animFrame = null
         this._visibleX = this.isDocked() ? targetX : this._visibleX
+        this.onInteractionChange()
+        this.onStateChange()
       }
     }
 

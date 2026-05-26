@@ -1,10 +1,50 @@
-import { contextBridge, ipcRenderer } from 'electron'
+import { contextBridge, ipcRenderer, webUtils } from 'electron'
 
 function on(channel, callback) {
   const listener = (_event, payload) => callback(payload)
   ipcRenderer.on(channel, listener)
   return () => ipcRenderer.removeListener(channel, listener)
 }
+
+function pathsFromFiles(files) {
+  return Array.from(files || [])
+    .map((file) => {
+      try {
+        return webUtils.getPathForFile(file)
+      } catch {
+        return file?.path || ''
+      }
+    })
+    .filter(Boolean)
+}
+
+function isFileDrag(event) {
+  return Array.from(event.dataTransfer?.types || [])
+    .some((type) => String(type).toLowerCase() === 'files')
+}
+
+window.addEventListener('dragover', (event) => {
+  if (!isFileDrag(event)) return
+  event.preventDefault()
+  event.dataTransfer.dropEffect = 'copy'
+}, true)
+
+window.addEventListener('drop', (event) => {
+  if (!isFileDrag(event)) return
+  event.preventDefault()
+
+  const paths = pathsFromFiles(event.dataTransfer?.files)
+  console.info('[preload] file drop', { count: paths.length, paths })
+  if (!paths.length) return
+
+  window.postMessage({
+    source: 'bianqian-preload',
+    type: 'file-drop',
+    paths,
+    clientX: event.clientX,
+    clientY: event.clientY
+  }, '*')
+}, true)
 
 contextBridge.exposeInMainWorld('api', {
   categories: {
@@ -19,7 +59,11 @@ contextBridge.exposeInMainWorld('api', {
     saveAll: (notes) => ipcRenderer.invoke('notes:save-all', notes)
   },
   files: {
-    selectAttachments: () => ipcRenderer.invoke('dialog:select-attachments'),
+    selectAttachments: (limit) => ipcRenderer.invoke('dialog:select-attachments', limit),
+    importAttachments: (paths, limit) => ipcRenderer.invoke('files:import-attachments', paths, limit),
+    cleanupAttachments: (paths) => ipcRenderer.invoke('files:cleanup-attachments', paths),
+    maxAttachmentsPerNote: () => ipcRenderer.invoke('files:max-attachments-per-note'),
+    pathsFromFiles,
     openPath: (path) => ipcRenderer.invoke('shell:open-path', path)
   },
   tray: {

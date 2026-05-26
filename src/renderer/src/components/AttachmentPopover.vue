@@ -44,7 +44,8 @@ import { ref, watch, onMounted, onUnmounted, nextTick } from 'vue'
 const props = defineProps({
   attachments: { type: Array, default: () => [] },
   anchorEl:    { type: Object, default: null },
-  visible:     { type: Boolean, default: false }
+  visible:     { type: Boolean, default: false },
+  maxAttachments: { type: Number, default: 10 }
 })
 
 const emit = defineEmits(['close', 'add', 'remove', 'open'])
@@ -187,8 +188,15 @@ function closePanel() {
 }
 
 async function pickFiles() {
-  const files = await window.api?.files.selectAttachments()
+  const remaining = remainingSlots()
+  if (remaining <= 0) return
+
+  const files = await window.api?.files.selectAttachments(remaining)
   if (files?.length) emit('add', files)
+}
+
+function remainingSlots() {
+  return Math.max(0, props.maxAttachments - props.attachments.length)
 }
 
 function onDragOver() { dragOver.value = true }
@@ -199,13 +207,17 @@ function onDragLeave(e) {
   }
 }
 
-function onDrop(e) {
+async function onDrop(e) {
   dragOver.value = false
   const files = e.dataTransfer?.files
   if (!files?.length) return
-  const paths = []
-  for (const f of files) { if (f.path) paths.push(f.path) }
-  if (paths.length) emit('add', paths)
+  const paths = window.api?.files.pathsFromFiles(files) || []
+  if (!paths.length) return
+
+  const remaining = remainingSlots()
+  if (remaining <= 0) return
+
+  emit('add', paths.slice(0, remaining))
 }
 </script>
 

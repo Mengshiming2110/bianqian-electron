@@ -19,6 +19,9 @@ if (!gotLock) {
   app.whenReady().then(async () => {
     windowManager = new WindowManager()
     trayController = new TrayController(windowManager)
+    windowManager.setInteractionStateListener(() => {
+      trayController?.rebuildMenu(trayController.counts)
+    })
 
     registerIpc(windowManager, trayController)
     await windowManager.createFloatingWindow()

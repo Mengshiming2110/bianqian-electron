@@ -2,11 +2,12 @@ import { defineStore } from 'pinia'
 
 const api = window.api
 const localStorageKey = 'bianqian-notes'
+const MAX_ATTACHMENTS_PER_NOTE = 10
 
 let CATEGORIES = ['工作', '生活', '学习', '会议', '其他']
 let ALL_CATEGORY = '全部'
 
-export { CATEGORIES, ALL_CATEGORY }
+export { CATEGORIES, ALL_CATEGORY, MAX_ATTACHMENTS_PER_NOTE }
 
 export async function loadCategories() {
   if (!api?.categories) return
@@ -40,8 +41,11 @@ function normalizeNote(input = {}) {
     completed: Boolean(input.completed),
     pinned: Boolean(input.pinned),
     remind: input.remind !== false,
-    attachments: Array.isArray(input.attachments) ? input.attachments.map(String) : [],
-    createdAt: input.createdAt || new Date().toISOString()
+    attachments: Array.isArray(input.attachments)
+      ? [...new Set(input.attachments.map(String))].slice(0, MAX_ATTACHMENTS_PER_NOTE)
+      : [],
+    createdAt: input.createdAt || new Date().toISOString(),
+    order: typeof input.order === 'number' ? input.order : Date.now()
   }
 }
 
@@ -86,7 +90,7 @@ export const useNotesStore = defineStore('notes', {
           if (a.pinned !== b.pinned) {
             return a.pinned ? -1 : 1
           }
-          return `${a.date} ${a.time}`.localeCompare(`${b.date} ${b.time}`)
+          return a.order - b.order
         })
     }
   },
@@ -155,8 +159,44 @@ export const useNotesStore = defineStore('notes', {
 
       await this.update(id, { pinned: !note.pinned })
     },
-    async chooseAttachments() {
-      return api ? api.files.selectAttachments() : []
+    async reorderNote(fromId, toId, position = 'before') {
+      const fromIndex = this.notes.findIndex((n) => n.id === String(fromId))
+      let toIndex = this.notes.findIndex((n) => n.id === String(toId))
+      if (fromIndex === -1 || toIndex === -1 || fromIndex === toIndex) return
+
+      const [moved] = this.notes.splice(fromIndex, 1)
+      toIndex = this.notes.findIndex((n) => n.id === String(toId))
+      if (position === 'after') toIndex += 1
+      this.notes.splice(toIndex, 0, moved)
+
+      const start = Math.min(fromIndex, toIndex)
+      const end = Math.max(fromIndex, toIndex)
+      const updates = []
+      for (let i = start; i <= end; i++) {
+        this.notes[i].order = i
+        updates.push({ id: this.notes[i].id, order: i })
+      }
+
+      if (api) {
+        for (const u of updates) {
+          await api.notes.update(u.id, { order: u.order })
+        }
+      }
+      this.persistFallback()
+    },
+    async chooseAttachments(limit = MAX_ATTACHMENTS_PER_NOTE) {
+      return api ? api.files.selectAttachments(limit) : []
+    },
+    async importAttachments(paths, limit = MAX_ATTACHMENTS_PER_NOTE) {
+      return api ? api.files.importAttachments(paths, limit) : []
+    },
+    filePathsFromDrop(files) {
+      return api ? api.files.pathsFromFiles(files) : []
+    },
+    async cleanupAttachments(paths) {
+      if (api) {
+        await api.files.cleanupAttachments(paths)
+      }
     },
     async openAttachment(path) {
       if (api) {
@@ -184,7 +224,7 @@ export const useNotesStore = defineStore('notes', {
           const diff = dueAt - now
           const key = `${note.id}:${note.date}:${note.time}`
 
-          if (diff <= 0 && diff >= -120000 && !this.reminderHistory.has(key)) {
+          if (diff <= 0 && !this.reminderHistory.has(key)) {
             this.reminderHistory.add(key)
             new Notification(note.title, {
               body: note.content || `${note.category} · ${note.time}`

@@ -8,6 +8,7 @@
       </div>
       <div class="header-actions">
         <button
+          ref="settingsButtonRef"
           class="icon-button"
           :class="{ active: settingsOpen }"
           title="设置"
@@ -25,6 +26,8 @@
       </div>
     </header>
 
+    <div v-if="isMiniMode" class="mini-drag-bar"></div>
+
     <section v-if="!isMiniMode" class="toolbar">
       <div class="search-box">
         <Search :size="15" />
@@ -38,14 +41,24 @@
       </div>
     </section>
 
-    <section class="note-list" aria-label="便签列表">
+    <section class="note-list" :class="{ 'sort-active': sortDrag.active, 'sort-settling': sortDrag.settling }" aria-label="便签列表">
       <article
         v-for="note in displayedNotes"
         :key="note.id"
+        :data-note-id="note.id"
         class="note-card"
-        :class="{ completed: note.completed }"
-        @click="openEditor(note)"
+        :class="{
+          completed: note.completed,
+          'drag-over': dragTargetNoteId === note.id,
+          'sort-dragging': sortDrag.active && sortDrag.noteId === note.id
+        }"
+        :style="getSortDragStyle(note.id)"
+        @mousedown="onSortMouseDown(note, $event)"
+        @click="onCardClick(note)"
         @contextmenu.prevent="openContextMenu(note, $event)"
+        @dragover.prevent="onNoteDragOver(note, $event)"
+        @dragleave="onNoteDragLeave(note, $event)"
+        @drop.prevent.stop="onNoteDrop(note, $event)"
       >
         <div class="card-row card-top">
           <button class="check-button" title="切换完成状态" type="button" @click.stop="notes.toggleCompleted(note.id)">
@@ -174,6 +187,7 @@
     <AttachmentPopover
       :attachments="attachPopover.note?.attachments || []"
       :anchor-el="attachPopover.anchorEl"
+      :max-attachments="MAX_ATTACHMENTS_PER_NOTE"
       :visible="attachPopover.visible"
       @close="closeAttachPopover"
       @add="handleAttachAdd"
@@ -200,26 +214,15 @@
     </Teleport>
 
     <Teleport to="#popover-root">
-      <div v-if="settingsOpen" class="settings-panel-overlay" @click.self="settingsOpen = false">
-        <div class="settings-panel" @click.stop>
-          <div class="settings-section">
-            <h3>模式预设</h3>
-            <div class="preset-grid">
-              <button
-                v-for="preset in modePresets"
-                :key="preset.id"
-                type="button"
-                @click="applyPreset(preset)"
-              >
-                {{ preset.label }}
-              </button>
+      <div v-if="settingsOpen" class="settings-popover-layer" @click.self="closeSettings">
+        <section class="settings-card" :style="settingsPanelStyle" @click.stop>
+          <template v-if="settingsView === 'main'">
+            <div class="settings-card-header">
+              <Settings :size="16" />
+              <span>设置</span>
             </div>
-          </div>
-
-          <div class="settings-section">
-            <h3>透明度</h3>
-            <div class="opacity-control" title="透明度">
-              <SlidersHorizontal :size="14" />
+            <div class="settings-slider-row">
+              <SlidersHorizontal :size="15" />
               <input
                 :value="Math.round(windowOpacity * 100)"
                 type="range"
@@ -228,54 +231,88 @@
                 step="5"
                 @input="setWindowOpacity($event.target.value)"
               />
-              <span>{{ Math.round(windowOpacity * 100) }}%</span>
+              <strong>{{ Math.round(windowOpacity * 100) }}%</strong>
             </div>
-          </div>
+            <button class="settings-menu-row" type="button" @click="settingsView = 'categories'">
+              <span>分类筛选</span>
+              <small>{{ notes.activeCategory }}</small>
+              <ChevronRight :size="15" />
+            </button>
+            <button class="settings-menu-row" type="button" @click="settingsView = 'modes'">
+              <span>窗口模式</span>
+              <small>{{ isMiniMode ? '迷你' : '列表' }}</small>
+              <ChevronRight :size="15" />
+            </button>
+            <div class="settings-status-list">
+              <div class="settings-status-row">
+                <span>鼠标穿透</span>
+                <small>{{ passThroughMode ? '已开启' : '托盘/快捷键' }}</small>
+              </div>
+              <div class="settings-status-row">
+                <span>贴边收纳</span>
+                <small>{{ edgeAutoHide ? '已开启' : '托盘控制' }}</small>
+              </div>
+            </div>
+          </template>
 
-          <div class="settings-section">
-            <h3>分类筛选</h3>
-            <div class="category-grid">
-              <button
-                v-for="category in visibleCategories"
-                :key="category"
-                type="button"
-                :class="{ active: notes.activeCategory === category }"
-                @click="notes.setFilter(category)"
-              >
-                <span>{{ category }}</span>
-                <small>{{ categoryCount(category) }}</small>
+          <template v-else-if="settingsView === 'categories'">
+            <div class="settings-card-header">
+              <button class="settings-back-button" type="button" @click="settingsView = 'main'">
+                <ArrowLeft :size="15" />
               </button>
+              <span>分类筛选</span>
             </div>
-          </div>
+            <button
+              v-for="category in visibleCategories"
+              :key="category"
+              class="settings-list-row"
+              :class="{ active: notes.activeCategory === category }"
+              type="button"
+              @click="selectCategory(category)"
+            >
+              <span>{{ category }}</span>
+              <small>{{ categoryCount(category) }}</small>
+            </button>
+          </template>
 
-          <div class="settings-section">
-            <h3>窗口模式</h3>
-            <div class="mode-switch">
-              <button
-                :class="{ active: !isMiniMode }"
-                type="button"
-                @click="setMode('normal')"
-              >
-                列表模式
+          <template v-else>
+            <div class="settings-card-header">
+              <button class="settings-back-button" type="button" @click="settingsView = 'main'">
+                <ArrowLeft :size="15" />
               </button>
-              <button
-                :class="{ active: isMiniMode }"
-                type="button"
-                @click="setMode('mini')"
-              >
-                迷你模式
-              </button>
+              <span>窗口模式</span>
             </div>
-            <label class="edge-toggle" title="窗口贴边时自动隐藏">
-              <input
-                :checked="edgeAutoHide"
-                type="checkbox"
-                @change="toggleEdgeAutoHide"
-              />
-              <span>贴边收纳</span>
-            </label>
-          </div>
-        </div>
+            <button
+              class="settings-list-row"
+              :class="{ active: !isMiniMode }"
+              type="button"
+              @click="selectMode('normal')"
+            >
+              <span>列表模式</span>
+              <small>完整列表</small>
+            </button>
+            <button
+              class="settings-list-row"
+              :class="{ active: isMiniMode }"
+              type="button"
+              @click="selectMode('mini')"
+            >
+              <span>迷你模式</span>
+              <small>最多 3 条</small>
+            </button>
+            <div class="settings-divider"></div>
+            <button
+              v-for="preset in modePresets"
+              :key="preset.id"
+              class="settings-list-row"
+              type="button"
+              @click="selectPreset(preset)"
+            >
+              <span>{{ preset.label }}</span>
+              <small>{{ Math.round(preset.opacity * 100) }}%</small>
+            </button>
+          </template>
+        </section>
       </div>
     </Teleport>
   </main>
@@ -291,6 +328,8 @@ import { computed, onErrorCaptured, onBeforeUnmount, onMounted, reactive, ref, w
 import {
   Bell,
   BellOff,
+  ArrowLeft,
+  ChevronRight,
   CheckCircle,
   Circle,
   Minus,
@@ -307,7 +346,7 @@ import {
 } from 'lucide-vue-next'
 import AttachmentPopover from './components/AttachmentPopover.vue'
 import ShortcutEditor from './components/ShortcutEditor.vue'
-import { ALL_CATEGORY, CATEGORIES, loadCategories, useNotesStore } from './stores/notes'
+import { ALL_CATEGORY, CATEGORIES, MAX_ATTACHMENTS_PER_NOTE, loadCategories, useNotesStore } from './stores/notes'
 
 const isShortcutEditor = window.location.hash === '#shortcut-editor'
 
@@ -316,6 +355,9 @@ const categories = CATEGORIES
 const visibleCategories = [ALL_CATEGORY, ...CATEGORIES]
 const editorOpen = ref(false)
 const settingsOpen = ref(false)
+const settingsView = ref('main')
+const settingsButtonRef = ref(null)
+const settingsPanelStyle = ref({})
 watch(editorOpen, (val) => {
   window.api?.window.setEditing(val)
 })
@@ -325,10 +367,28 @@ const windowMode = ref('normal')
 const edgeAutoHide = ref(false)
 const hasError = ref(false)
 const appShellRef = ref(null)
+const dragTargetNoteId = ref('')
+const sortDrag = reactive({
+  active: false,
+  noteId: '',
+  startY: 0,
+  deltaY: 0,
+  cardHeight: 0,
+  cardGap: 0,
+  shifts: {},
+  settling: false
+})
+const sortDragJustEnded = ref(false)
+let sortDragStarted = false
+let sortDragStartX = 0
+let sortDragStartY = 0
 const unsubscribeHandlers = []
 let reminderTimer = null
 let resizeObserver = null
 let resizeDebounce = null
+let lastFileDropKey = ''
+let lastFileDropAt = 0
+let originalDraftAttachments = []
 
 const draft = reactive(defaultDraft())
 
@@ -351,11 +411,60 @@ const modePresets = [
   { id: 'default', label: '常规', opacity: 0.92, passThrough: false, mode: 'normal' },
   { id: 'focus', label: '专注', opacity: 1, passThrough: false, mode: 'normal' },
   { id: 'meeting', label: '会议', opacity: 0.72, passThrough: true, mode: 'normal' },
-  { id: 'minimal', label: '极简', opacity: 0.48, passThrough: true, mode: 'mini' }
+  { id: 'minimal', label: '极简', opacity: 0.48, passThrough: false, mode: 'mini' }
 ]
 
+let skipNextResize = false
+
+watch(
+  () => notes.filteredNotes.map((note) => `${note.id}:${note.title}:${note.content}:${note.attachments.length}:${note.completed}:${note.pinned}`).join('|'),
+  () => {
+    clearTimeout(resizeDebounce)
+    if (skipNextResize) {
+      skipNextResize = false
+      return
+    }
+    resizeDebounce = setTimeout(syncContentHeight, 80)
+  }
+)
+
 function toggleSettings() {
-  settingsOpen.value = !settingsOpen.value
+  if (isMiniMode.value) return
+
+  if (settingsOpen.value) {
+    closeSettings()
+    return
+  }
+
+  settingsView.value = 'main'
+  settingsOpen.value = true
+  updateSettingsPosition()
+}
+
+function closeSettings() {
+  settingsOpen.value = false
+  settingsView.value = 'main'
+}
+
+function updateSettingsPosition() {
+  const button = settingsButtonRef.value
+  if (!button) {
+    settingsPanelStyle.value = {}
+    return
+  }
+
+  requestAnimationFrame(() => {
+    const rect = button.getBoundingClientRect()
+    const width = 252
+    const safe = 10
+    const left = Math.max(safe, Math.min(rect.right - width, window.innerWidth - width - safe))
+    const top = Math.max(safe, Math.min(rect.bottom + 8, window.innerHeight - safe))
+    settingsPanelStyle.value = {
+      left: `${Math.round(left)}px`,
+      top: `${Math.round(top)}px`,
+      width: `${width}px`
+    }
+  })
 }
 
 function openAttachPopover(note, event) {
@@ -371,6 +480,213 @@ function openAttachPopover(note, event) {
 function closeAttachPopover() {
   attachPopover.visible = false
   attachPopover.note = null
+}
+
+function hasDroppedFiles(event) {
+  return Array.from(event.dataTransfer?.types || []).some((type) => String(type).toLowerCase() === 'files')
+}
+
+function onCardClick(note) {
+  if (sortDrag.active || sortDrag.settling || sortDragJustEnded.value) return
+  openEditor(note)
+}
+
+function getSortDragStyle(noteId) {
+  const offset = sortDrag.shifts[noteId]
+  if (offset == null) return
+
+  const isDragged = sortDrag.active && noteId === sortDrag.noteId
+  if (isDragged) {
+    return {
+      transform: `translateY(${offset}px) scale(1.02)`,
+      zIndex: 100,
+      transition: 'none'
+    }
+  }
+  return { transform: `translateY(${offset}px)` }
+}
+
+function onSortMouseDown(note, event) {
+  if (isMiniMode.value) return
+  if (event.button !== 0) return
+  if (event.target.closest('button')) return
+
+  sortDragStarted = false
+  sortDragStartX = event.clientX
+  sortDragStartY = event.clientY
+  sortDrag.noteId = note.id
+
+  const card = event.currentTarget
+  sortDrag.cardHeight = card.offsetHeight
+  const list = card.parentElement
+  const cards = list.querySelectorAll('.note-card')
+  if (cards.length >= 2) {
+    const r0 = cards[0].getBoundingClientRect()
+    const r1 = cards[1].getBoundingClientRect()
+    sortDrag.cardGap = r1.top - r0.bottom
+  } else {
+    sortDrag.cardGap = 8
+  }
+
+  document.addEventListener('mousemove', onSortMouseMove)
+  document.addEventListener('mouseup', onSortMouseUp)
+  event.preventDefault()
+}
+
+function onSortMouseMove(event) {
+  const dx = event.clientX - sortDragStartX
+  const dy = event.clientY - sortDragStartY
+
+  if (!sortDragStarted) {
+    if (Math.abs(dx) < 5 && Math.abs(dy) < 5) return
+    sortDragStarted = true
+    sortDrag.active = true
+    sortDrag.startY = sortDragStartY
+    sortDrag.deltaY = 0
+    sortDrag.shifts = {}
+  }
+
+  sortDrag.deltaY = event.clientY - sortDrag.startY
+
+  const list = document.querySelector('.note-list')
+  if (!list) return
+  const cards = list.querySelectorAll('.note-card')
+  const dragIndex = Array.from(cards).findIndex((c) => c.dataset.noteId === sortDrag.noteId)
+  if (dragIndex === -1) return
+
+  const step = sortDrag.cardHeight + sortDrag.cardGap
+  const shiftCount = Math.round(sortDrag.deltaY / step)
+
+  const newShifts = {}
+  newShifts[sortDrag.noteId] = sortDrag.deltaY
+
+  for (let i = 0; i < cards.length; i++) {
+    if (i === dragIndex) continue
+    if (shiftCount > 0 && i > dragIndex && i <= dragIndex + shiftCount) {
+      newShifts[cards[i].dataset.noteId] = -step
+    } else if (shiftCount < 0 && i < dragIndex && i >= dragIndex + shiftCount) {
+      newShifts[cards[i].dataset.noteId] = step
+    }
+  }
+
+  sortDrag.shifts = newShifts
+}
+
+async function onSortMouseUp() {
+  document.removeEventListener('mousemove', onSortMouseMove)
+  document.removeEventListener('mouseup', onSortMouseUp)
+
+  if (sortDragStarted) {
+    const list = document.querySelector('.note-list')
+    const cards = list ? list.querySelectorAll('.note-card') : []
+    const dragIndex = Array.from(cards).findIndex((c) => c.dataset.noteId === sortDrag.noteId)
+    const step = sortDrag.cardHeight + sortDrag.cardGap
+    const shiftCount = Math.round(sortDrag.deltaY / step)
+
+    if (dragIndex !== -1 && shiftCount !== 0) {
+      const targetIndex = dragIndex + shiftCount
+      if (targetIndex >= 0 && targetIndex < cards.length) {
+        const targetId = cards[targetIndex].dataset.noteId
+        const position = shiftCount > 0 ? 'after' : 'before'
+        skipNextResize = true
+        await notes.reorderNote(sortDrag.noteId, targetId, position)
+      }
+    }
+
+    sortDragJustEnded.value = true
+    setTimeout(() => { sortDragJustEnded.value = false }, 100)
+
+    sortDrag.settling = true
+    sortDrag.shifts = {}
+    setTimeout(() => {
+      sortDrag.active = false
+      sortDrag.settling = false
+      sortDrag.noteId = ''
+      sortDrag.shifts = {}
+      sortDrag.deltaY = 0
+      sortDragStarted = false
+    }, 280)
+    return
+  }
+
+  sortDrag.active = false
+  sortDrag.noteId = ''
+  sortDrag.shifts = {}
+  sortDrag.deltaY = 0
+  sortDragStarted = false
+}
+
+function onNoteDragOver(note, event) {
+  if (!hasDroppedFiles(event)) return
+  event.dataTransfer.dropEffect = 'copy'
+  dragTargetNoteId.value = note.id
+}
+
+function onNoteDragLeave(note, event) {
+  if (dragTargetNoteId.value !== note.id) return
+  if (event.currentTarget.contains(event.relatedTarget)) return
+  dragTargetNoteId.value = ''
+}
+
+async function onNoteDrop(note, event) {
+  dragTargetNoteId.value = ''
+  const files = event.dataTransfer?.files
+  console.info('[attachments] card drop', { noteId: note.id, fileCount: files?.length || 0 })
+  if (!files?.length) return
+
+  const paths = notes.filePathsFromDrop(files)
+  console.info('[attachments] card drop paths', { noteId: note.id, count: paths.length, paths })
+  if (!paths.length) return
+
+  await addDroppedPathsToNote(note, paths)
+}
+
+function findDropNote(clientX, clientY) {
+  const target = document.elementFromPoint(clientX, clientY)
+  const card = target?.closest?.('.note-card')
+  const noteId = card?.dataset?.noteId || dragTargetNoteId.value
+  if (!noteId) return null
+  return notes.notes.find((note) => note.id === noteId) || null
+}
+
+function fileDropKey(note, paths) {
+  return `${note.id}:${paths.join('\n')}`
+}
+
+function isRecentFileDrop(key) {
+  const now = Date.now()
+  if (lastFileDropKey === key && now - lastFileDropAt < 1200) return true
+  lastFileDropKey = key
+  lastFileDropAt = now
+  return false
+}
+
+async function addDroppedPathsToNote(note, paths) {
+  const incoming = Array.isArray(paths) ? paths.filter(Boolean) : []
+  if (!note || !incoming.length) return
+
+  const key = fileDropKey(note, incoming)
+  if (isRecentFileDrop(key)) return
+
+  console.info('[attachments] add dropped paths', { noteId: note.id, count: incoming.length, paths: incoming })
+  await addAttachmentsToNote(note, incoming)
+}
+
+async function onPreloadFileDrop(event) {
+  const message = event.data
+  if (message?.source !== 'bianqian-preload' || message.type !== 'file-drop') return
+
+  const note = findDropNote(message.clientX, message.clientY)
+  console.info('[attachments] preload drop message', {
+    foundNote: note?.id || '',
+    count: Array.isArray(message.paths) ? message.paths.length : 0,
+    x: message.clientX,
+    y: message.clientY
+  })
+  if (!note) return
+
+  dragTargetNoteId.value = ''
+  await addDroppedPathsToNote(note, message.paths)
 }
 
 function openContextMenu(note, event) {
@@ -408,20 +724,38 @@ async function ctxDelete() {
 
 async function handleAttachAdd(paths) {
   if (!attachPopover.note) return
-  const merged = [...new Set([...attachPopover.note.attachments, ...paths])]
-  await notes.update(attachPopover.note.id, { attachments: merged })
-  attachPopover.note.attachments = merged
+  const updated = await addAttachmentsToNote(attachPopover.note, paths)
+  attachPopover.note.attachments = updated.attachments
 }
 
 async function handleAttachRemove(path) {
   if (!attachPopover.note) return
   const next = attachPopover.note.attachments.filter(f => f !== path)
-  await notes.update(attachPopover.note.id, { attachments: next })
-  attachPopover.note.attachments = next
+  const updated = await notes.update(attachPopover.note.id, { attachments: next })
+  attachPopover.note.attachments = updated.attachments
+  await notes.cleanupAttachments([path])
 }
 
 function handleAttachOpen(path) {
   window.api?.files.openPath(path)
+}
+
+async function addAttachmentsToNote(note, paths) {
+  const incoming = Array.isArray(paths) ? paths : []
+  const remaining = remainingAttachmentSlots(note.attachments)
+  console.info('[attachments] add to note', { noteId: note.id, incoming: incoming.length, remaining })
+  if (remaining <= 0 || !incoming.length) {
+    return note
+  }
+
+  const imported = await notes.importAttachments(incoming, remaining)
+  console.info('[attachments] imported', { noteId: note.id, count: imported.length, imported })
+  const candidates = [...incoming, ...imported]
+  const merged = mergeAttachments(note.attachments, candidates)
+  const updated = await notes.update(note.id, { attachments: merged })
+  console.info('[attachments] note updated', { noteId: note.id, count: updated.attachments.length })
+  await cleanupUnusedCopies(candidates, updated.attachments)
+  return updated
 }
 
 const todayLabel = computed(() =>
@@ -446,6 +780,22 @@ function defaultDraft() {
   }
 }
 
+function mergeAttachments(existing, incoming) {
+  return [...new Set([...(existing || []), ...(incoming || [])])].slice(0, MAX_ATTACHMENTS_PER_NOTE)
+}
+
+function remainingAttachmentSlots(attachments) {
+  return Math.max(0, MAX_ATTACHMENTS_PER_NOTE - (attachments?.length || 0))
+}
+
+async function cleanupUnusedCopies(candidates, used) {
+  const usedSet = new Set(used || [])
+  const unused = [...new Set((candidates || []).filter((file) => !usedSet.has(file)))]
+  if (unused.length) {
+    await notes.cleanupAttachments(unused)
+  }
+}
+
 function localDate() {
   const date = new Date()
   const year = date.getFullYear()
@@ -456,12 +806,17 @@ function localDate() {
 
 function openEditor(note) {
   Object.assign(draft, note ? JSON.parse(JSON.stringify(note)) : defaultDraft())
+  originalDraftAttachments = [...(draft.attachments || [])]
   editorOpen.value = true
 }
 
-function closeEditor() {
+async function closeEditor(options = {}) {
+  if (options?.cleanup !== false) {
+    await cleanupUnusedCopies(draft.attachments, originalDraftAttachments)
+  }
   editorOpen.value = false
   Object.assign(draft, defaultDraft())
+  originalDraftAttachments = []
 }
 
 async function saveEditor() {
@@ -472,12 +827,14 @@ async function saveEditor() {
   const payload = JSON.parse(JSON.stringify(draft))
 
   if (draft.id) {
-    await notes.update(draft.id, payload)
+    const saved = await notes.update(draft.id, payload)
+    await cleanupUnusedCopies([...originalDraftAttachments, ...payload.attachments], saved.attachments)
   } else {
-    await notes.create(payload)
+    const saved = await notes.create(payload)
+    await cleanupUnusedCopies(payload.attachments, saved.attachments)
   }
 
-  closeEditor()
+  await closeEditor({ cleanup: false })
 }
 
 async function deleteEditorNote() {
@@ -486,17 +843,25 @@ async function deleteEditorNote() {
   }
 
   await notes.delete(draft.id)
-  closeEditor()
+  await closeEditor({ cleanup: false })
 }
 
 async function pickAttachments() {
-  const files = await notes.chooseAttachments()
-  const merged = new Set([...draft.attachments, ...files])
-  draft.attachments = [...merged]
+  const remaining = remainingAttachmentSlots(draft.attachments)
+  console.info('[attachments] editor pick click', { remaining, hasApi: Boolean(window.api?.files?.selectAttachments) })
+  if (remaining <= 0) return
+
+  const files = await notes.chooseAttachments(remaining)
+  console.info('[attachments] editor pick result', { count: files?.length || 0, files })
+  draft.attachments = mergeAttachments(draft.attachments, files)
+  await cleanupUnusedCopies(files, draft.attachments)
 }
 
-function removeAttachment(file) {
+async function removeAttachment(file) {
   draft.attachments = draft.attachments.filter((item) => item !== file)
+  if (!originalDraftAttachments.includes(file)) {
+    await notes.cleanupAttachments([file])
+  }
 }
 
 function fileName(path) {
@@ -524,6 +889,7 @@ async function refreshInteractionState() {
 }
 
 async function togglePassThrough() {
+  if (!passThroughMode.value && settingsOpen.value) closeSettings()
   const state = await window.api?.window.setPassThrough?.(!passThroughMode.value)
   passThroughMode.value = Boolean(state?.passThrough)
   windowOpacity.value = Number(state?.opacity || windowOpacity.value)
@@ -543,9 +909,11 @@ async function setWindowOpacity(value) {
 }
 
 async function setMode(mode) {
+  if (mode === 'mini' && settingsOpen.value) closeSettings()
   const state = await window.api?.window.setMode?.(mode)
   windowMode.value = state?.windowMode || windowMode.value
   edgeAutoHide.value = Boolean(state?.edgeAutoHide)
+  setTimeout(syncContentHeight, 80)
 }
 
 async function toggleEdgeAutoHide() {
@@ -554,6 +922,7 @@ async function toggleEdgeAutoHide() {
 }
 
 async function applyPreset(preset) {
+  if ((preset.mode === 'mini' || preset.passThrough) && settingsOpen.value) closeSettings()
   const modeState = await window.api?.window.setMode?.(preset.mode)
   const opacityState = await window.api?.window.setOpacity?.(preset.opacity)
   const passState = await window.api?.window.setPassThrough?.(preset.passThrough)
@@ -562,6 +931,27 @@ async function applyPreset(preset) {
   windowOpacity.value = Number(state?.opacity || preset.opacity)
   windowMode.value = state?.windowMode || preset.mode
   edgeAutoHide.value = Boolean(state?.edgeAutoHide)
+  setTimeout(syncContentHeight, 80)
+}
+
+function selectCategory(category) {
+  notes.setFilter(category)
+  closeSettings()
+  setTimeout(syncContentHeight, 80)
+}
+
+async function selectMode(mode) {
+  await setMode(mode)
+  if (mode === 'mini') return
+  settingsView.value = 'main'
+  updateSettingsPosition()
+}
+
+async function selectPreset(preset) {
+  await applyPreset(preset)
+  if (preset.mode === 'mini' || preset.passThrough) return
+  settingsView.value = 'main'
+  updateSettingsPosition()
 }
 
 function handleSearchEnter(event) {
@@ -644,7 +1034,7 @@ function parseNaturalDate(text) {
 function onKeyDown(e) {
   if (e.key === 'Escape') {
     if (settingsOpen.value) {
-      settingsOpen.value = false
+      closeSettings()
       return
     }
     if (attachPopover.visible) {
@@ -675,20 +1065,54 @@ onErrorCaptured((err) => {
 function syncContentHeight() {
   const el = appShellRef.value
   if (!el) return
-  const height = el.scrollHeight
-  window.api?.window.resizeToContent(height)
 
   const noteList = el.querySelector('.note-list')
-  if (noteList) {
-    const header = el.querySelector('.app-header')
-    const toolbar = el.querySelector('.toolbar')
-    const footer = el.querySelector('.app-footer')
-    const usedHeight =
-      (header?.offsetHeight || 0) +
-      (toolbar?.offsetHeight || 0) +
-      (footer?.offsetHeight || 0)
-    const available = window.innerHeight - usedHeight
-    noteList.style.maxHeight = Math.max(available, 60) + 'px'
+  if (!noteList) return
+
+  if (isMiniMode.value) {
+    noteList.style.maxHeight = ''
+    const dragBar = el.querySelector('.mini-drag-bar')
+    const dragBarHeight = dragBar?.offsetHeight || 18
+    const cards = noteList.querySelectorAll('.note-card')
+    let cardsHeight = 0
+    cards.forEach((card, i) => {
+      if (i < 3) cardsHeight += card.offsetHeight
+    })
+    const gap = 6
+    const padding = 10
+    const totalHeight = dragBarHeight + cardsHeight + Math.max(0, Math.min(cards.length, 3) - 1) * gap + padding * 2
+    window.api?.window.resizeToContent(totalHeight)
+    return
+  }
+
+  const header = el.querySelector('.app-header')
+  const toolbar = el.querySelector('.toolbar')
+  const footer = el.querySelector('.app-footer')
+  const usedHeight =
+    (header?.offsetHeight || 0) +
+    (toolbar?.offsetHeight || 0) +
+    (footer?.offsetHeight || 0)
+  const minWindowHeight = 360
+  const screenMaxHeight = Math.max(minWindowHeight, (window.screen?.availHeight || window.innerHeight) - 80)
+  const listContentHeight = noteList.scrollHeight
+  const growsWithContent = notes.filteredNotes.length > 3
+  const wantedHeight = growsWithContent
+    ? Math.max(minWindowHeight, usedHeight + listContentHeight)
+    : minWindowHeight
+  const targetHeight = Math.min(screenMaxHeight, wantedHeight)
+  const listMaxHeight = Math.max(96, targetHeight - usedHeight)
+
+  noteList.style.maxHeight = `${Math.floor(listMaxHeight)}px`
+  window.api?.window.resizeToContent(targetHeight)
+}
+
+function checkRemindersOnResume() {
+  notes.checkReminders()
+}
+
+function onVisibilityChange() {
+  if (document.visibilityState === 'visible') {
+    checkRemindersOnResume()
   }
 }
 
@@ -697,8 +1121,8 @@ onMounted(async () => {
   await notes.load()
   await refreshInteractionState()
   await notes.requestNotificationPermission()
-  notes.checkReminders()
-  reminderTimer = setInterval(() => notes.checkReminders(), 60000)
+  checkRemindersOnResume()
+  reminderTimer = setInterval(checkRemindersOnResume, 60000)
 
   if (window.api?.window.onFilterCategory) {
     unsubscribeHandlers.push(window.api.window.onFilterCategory((category) => notes.setFilter(category)))
@@ -709,10 +1133,19 @@ onMounted(async () => {
   if (window.api?.window.onInteractionState) {
     unsubscribeHandlers.push(
       window.api.window.onInteractionState((state) => {
+        const wasMini = windowMode.value === 'mini'
+        const wasPassThrough = passThroughMode.value
         passThroughMode.value = Boolean(state?.passThrough)
         windowOpacity.value = Number(state?.opacity || windowOpacity.value)
         windowMode.value = state?.windowMode || windowMode.value
         edgeAutoHide.value = Boolean(state?.edgeAutoHide)
+        if (settingsOpen.value) {
+          const nowMini = windowMode.value === 'mini'
+          const nowPassThrough = passThroughMode.value
+          if ((!wasMini && nowMini) || (!wasPassThrough && nowPassThrough)) {
+            closeSettings()
+          }
+        }
       })
     )
   }
@@ -720,6 +1153,10 @@ onMounted(async () => {
   document.addEventListener('keydown', onKeyDown)
   document.addEventListener('mouseout', onMouseOut)
   document.addEventListener('mouseover', onMouseOver)
+  document.addEventListener('visibilitychange', onVisibilityChange)
+  window.addEventListener('focus', checkRemindersOnResume)
+  window.addEventListener('message', onPreloadFileDrop)
+  window.addEventListener('resize', updateSettingsPosition)
 
   resizeObserver = new ResizeObserver(() => {
     clearTimeout(resizeDebounce)
@@ -741,14 +1178,21 @@ onBeforeUnmount(() => {
   document.removeEventListener('keydown', onKeyDown)
   document.removeEventListener('mouseout', onMouseOut)
   document.removeEventListener('mouseover', onMouseOver)
+  document.removeEventListener('visibilitychange', onVisibilityChange)
+  document.removeEventListener('mousemove', onSortMouseMove)
+  document.removeEventListener('mouseup', onSortMouseUp)
+  window.removeEventListener('focus', checkRemindersOnResume)
+  window.removeEventListener('message', onPreloadFileDrop)
+  window.removeEventListener('resize', updateSettingsPosition)
 })
 </script>
 
 <style scoped>
 .app-shell {
   display: grid;
+  height: 100%;
   width: 100%;
-  grid-template-rows: auto auto auto auto;
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
   overflow: hidden;
   border: 1px solid var(--border);
   border-radius: var(--radius-window);
@@ -875,6 +1319,26 @@ onBeforeUnmount(() => {
   background: var(--bg-card-hover);
 }
 
+.note-card.drag-over {
+  border-color: rgba(47, 125, 120, 0.76);
+  background: rgba(232, 247, 244, 0.96);
+  box-shadow: inset 0 0 0 1px rgba(47, 125, 120, 0.22);
+}
+
+.sort-active .note-card {
+  transition: transform 0.15s ease-out;
+}
+
+.note-card.sort-dragging {
+  z-index: 100;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.18), 0 4px 12px rgba(0, 0, 0, 0.1);
+  cursor: grabbing;
+}
+
+.sort-settling .note-card {
+  transition: transform 0.22s ease-out;
+}
+
 .pass-through-mode .note-card:hover {
   border-color: var(--border);
   background: var(--bg-card);
@@ -988,7 +1452,7 @@ onBeforeUnmount(() => {
 
 .empty-state {
   display: grid;
-  min-height: 170px;
+  min-height: 190px;
   place-items: center;
   align-content: center;
   gap: 8px;
@@ -1185,24 +1649,13 @@ onBeforeUnmount(() => {
 }
 
 .mini-mode .app-header {
-  padding: 10px 10px 7px;
+  display: none;
 }
 
-.mini-mode .app-header h1 {
-  font-size: 17px;
-}
-
-.mini-mode .eyebrow {
-  font-size: 11px;
-}
-
-.mini-mode .header-actions {
-  gap: 4px;
-}
-
-.mini-mode .icon-button {
-  width: 28px;
-  height: 28px;
+.mini-drag-bar {
+  height: 18px;
+  -webkit-app-region: drag;
+  cursor: grab;
 }
 
 .mini-mode .note-list {
@@ -1217,7 +1670,7 @@ onBeforeUnmount(() => {
 .mini-mode .note-preview {
   min-height: 0;
   margin: 3px 0 5px 29px;
-  -webkit-line-clamp: 1;
+  -webkit-line-clamp: unset;
 }
 
 .mini-mode .card-meta {
@@ -1247,97 +1700,130 @@ onBeforeUnmount(() => {
   background: rgba(255, 107, 107, 0.12);
 }
 
-.settings-panel-overlay {
+.settings-popover-layer {
   position: fixed;
   inset: 0;
-  display: grid;
-  place-items: start end;
-  padding: 12px;
   z-index: 1000;
 }
 
-.settings-panel {
-  width: 260px;
-  background: rgba(255, 255, 255, 0.98);
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
-  padding: 12px;
+.settings-card {
+  position: absolute;
   display: grid;
-  gap: 16px;
-}
-
-.settings-section h3 {
-  margin: 0 0 8px 0;
-  font-size: 13px;
-  font-weight: 600;
+  gap: 7px;
+  max-height: calc(100vh - 20px);
+  overflow-y: auto;
+  padding: 8px;
+  border: 1px solid rgba(38, 57, 54, 0.1);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.98);
+  box-shadow: 0 12px 36px rgba(32, 44, 42, 0.22);
   color: var(--text);
 }
 
-.preset-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 6px;
+.settings-card-header {
+  display: flex;
+  min-height: 34px;
+  align-items: center;
+  gap: 9px;
+  padding: 0 9px;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 700;
 }
 
-.preset-grid button {
-  height: 30px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-control);
+.settings-back-button {
+  display: inline-grid;
+  width: 26px;
+  height: 26px;
+  place-items: center;
+  border-radius: 7px;
   color: var(--text-muted);
-  background: rgba(255, 255, 255, 0.62);
-  font-size: 12px;
+  background: transparent;
 }
 
-.preset-grid button:hover {
+.settings-back-button:hover {
   color: var(--accent-strong);
   background: var(--accent-soft);
 }
 
-.category-grid {
+.settings-slider-row,
+.settings-menu-row,
+.settings-list-row,
+.settings-status-row {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 6px;
-}
-
-.category-grid button {
-  display: flex;
-  min-width: 0;
-  height: 30px;
+  min-height: 34px;
   align-items: center;
-  justify-content: center;
-  gap: 5px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-control);
-  color: var(--text-muted);
-  background: rgba(255, 255, 255, 0.62);
+  gap: 8px;
+  border-radius: 9px;
   font-size: 12px;
 }
 
-.category-grid button.active {
-  border-color: rgba(47, 125, 120, 0.42);
+.settings-slider-row {
+  grid-template-columns: auto 1fr 40px;
+  padding: 0 9px;
+  color: var(--text-muted);
+}
+
+.settings-slider-row input {
+  width: 100%;
+  accent-color: var(--accent);
+}
+
+.settings-slider-row strong {
+  color: var(--text);
+  font-size: 12px;
+  text-align: right;
+}
+
+.settings-menu-row,
+.settings-list-row {
+  grid-template-columns: 1fr auto auto;
+  width: 100%;
+  padding: 0 9px;
+  color: var(--text);
+  background: transparent;
+  text-align: left;
+}
+
+.settings-menu-row:hover,
+.settings-list-row:hover {
+  background: rgba(38, 57, 54, 0.05);
+}
+
+.settings-menu-row small,
+.settings-list-row small,
+.settings-status-row small {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.settings-list-row.active {
   color: var(--accent-strong);
   background: var(--accent-soft);
   font-weight: 700;
 }
 
-.category-grid small {
-  min-width: 18px;
-  color: inherit;
-  opacity: 0.72;
+.settings-status-list {
+  display: grid;
+  margin-top: 2px;
+  padding-top: 7px;
+  border-top: 1px solid var(--border);
+}
+
+.settings-status-row {
+  grid-template-columns: 1fr auto;
+  padding: 0 9px;
+  color: var(--text-muted);
+}
+
+.settings-divider {
+  height: 1px;
+  margin: 3px 0;
+  background: var(--border);
 }
 
 .opacity-control {
-  display: grid;
-  grid-template-columns: auto 1fr 38px;
-  align-items: center;
-  gap: 8px;
-  height: 30px;
-  padding: 0 10px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-control);
-  color: var(--text-muted);
-  background: rgba(255, 255, 255, 0.62);
+  display: none;
 }
 
 .opacity-control input {
@@ -1350,10 +1836,10 @@ onBeforeUnmount(() => {
   text-align: right;
 }
 
+.preset-grid,
+.category-grid,
 .mode-switch {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 6px;
+  display: none;
 }
 
 .mode-switch button {

@@ -1,4 +1,5 @@
 import { Menu, Tray, app, nativeImage } from 'electron'
+import { join } from 'node:path'
 import { ALL_CATEGORY, CATEGORIES } from './categories.js'
 
 const baseSvg = (dotColor) => encodeURIComponent(`
@@ -9,6 +10,13 @@ const baseSvg = (dotColor) => encodeURIComponent(`
 </svg>`)
 
 function createTrayImage(passThrough) {
+  const iconName = passThrough ? 'tray-pass-through.png' : 'tray.png'
+  const iconPath = join(app.getAppPath(), 'resources', iconName)
+  const fileImage = nativeImage.createFromPath(iconPath)
+  if (!fileImage.isEmpty()) {
+    return fileImage.resize({ width: 16, height: 16 })
+  }
+
   const dotColor = passThrough ? '#4a90d9' : ''
   const image = nativeImage.createFromDataURL(`data:image/svg+xml;charset=UTF-8,${baseSvg(dotColor)}`)
   return image.resize({ width: 16, height: 16 })

@@ -7,6 +7,8 @@ let beforeInputWindowId = null
 let cachedShortcuts = null
 let isRecording = false
 
+const GLOBAL_SHORTCUT_IDS = new Set(['toggle-window', 'toggle-passthrough'])
+
 function loadShortcuts() {
   cachedShortcuts = getShortcuts()
   return cachedShortcuts
@@ -15,17 +17,18 @@ function loadShortcuts() {
 export function registerAllShortcuts(windowManager) {
   const shortcuts = loadShortcuts()
   const window = windowManager.getWindow()
+  const failures = []
 
   globalShortcut.unregisterAll()
   registeredBindings = {}
 
-  registerBinding(shortcuts['toggle-window'], () => {
+  registerBinding('toggle-window', shortcuts['toggle-window'], () => {
     windowManager.toggle()
-  })
+  }, failures)
 
-  registerBinding(shortcuts['toggle-passthrough'], () => {
+  registerBinding('toggle-passthrough', shortcuts['toggle-passthrough'], () => {
     windowManager.setPassThroughMode(!windowManager.passThroughMode)
-  })
+  }, failures)
 
   if (window) {
     if (beforeInputWindowId !== null && beforeInputWindowId !== window.id) {
@@ -41,6 +44,7 @@ export function registerAllShortcuts(windowManager) {
   }
 
   registeredBindings._wm = windowManager
+  return { ok: failures.length === 0, failures }
 }
 
 function handleBeforeInput(event, input) {
@@ -76,21 +80,49 @@ function inputToBinding(input) {
   return parts.join('+')
 }
 
-function registerBinding(accelerator, callback) {
-  if (!accelerator) return
+function registerBinding(id, accelerator, callback, failures = []) {
+  if (!accelerator) return true
   try {
     const ok = globalShortcut.register(accelerator, callback)
     if (!ok && !isRecording) {
       console.error('[shortcuts] registration failed:', accelerator)
     }
+    if (!ok) {
+      failures.push({ id, binding: accelerator, reason: 'registration-failed' })
+    }
+    return ok
   } catch {}
+  failures.push({ id, binding: accelerator, reason: 'invalid-accelerator' })
+  return false
 }
 
 export function reregisterShortcut(id, newBinding, windowManager) {
   loadShortcuts()
   globalShortcut.unregisterAll()
   const wm = windowManager || registeredBindings._wm
-  registerAllShortcuts(wm)
+  return registerAllShortcuts(wm)
+}
+
+export function validateShortcutUpdate(id, binding) {
+  if (!binding || typeof binding !== 'string') {
+    return { ok: false, error: '快捷键不能为空' }
+  }
+
+  if (!GLOBAL_SHORTCUT_IDS.has(id)) {
+    return { ok: true }
+  }
+
+  try {
+    const ok = globalShortcut.register(binding, () => {})
+    if (ok) {
+      globalShortcut.unregister(binding)
+      return { ok: true }
+    }
+
+    return { ok: false, error: '快捷键注册失败，可能已被系统或其他应用占用' }
+  } catch {
+    return { ok: false, error: '快捷键格式无效' }
+  }
 }
 
 export function unregisterAllShortcuts() {
@@ -108,9 +140,8 @@ export function startRecord(windowManager) {
 
 export function stopRecord(windowManager) {
   try {
-    registerAllShortcuts(windowManager)
+    return registerAllShortcuts(windowManager)
   } finally {
     isRecording = false
   }
-  return true
 }

@@ -4,6 +4,7 @@ import { dirname, join } from 'node:path'
 import { ALL_CATEGORY } from './categories.js'
 import { getSettings, updateSettings } from './store.js'
 import { EdgeDockController, EDGE_STATE } from './edge-dock.js'
+import { stopRecord } from './shortcuts.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 
@@ -21,6 +22,7 @@ export class WindowManager {
     this.opacity = settings.opacity
     this.windowMode = settings.windowMode
     this.shortcutEditor = null
+    this.interactionStateListener = null
 
     this.edge = new EdgeDockController(
       () => this.window,
@@ -41,9 +43,9 @@ export class WindowManager {
 
     this.window = new BrowserWindow({
       width: this.windowMode === 'mini' ? 220 : 280,
-      height: this.windowMode === 'mini' ? 180 : 360,
-      minWidth: this.windowMode === 'mini' ? 210 : 260,
-      minHeight: this.windowMode === 'mini' ? 150 : 360,
+      height: this.windowMode === 'mini' ? 120 : 360,
+      minWidth: this.windowMode === 'mini' ? 200 : 260,
+      minHeight: this.windowMode === 'mini' ? 80 : 360,
       x: workArea.x + workArea.width - 300,
       y: workArea.y + 20,
       frame: false,
@@ -57,10 +59,11 @@ export class WindowManager {
         preload: join(__dirname, '../preload/index.mjs'),
         contextIsolation: true,
         nodeIntegration: false,
-        sandbox: true
+        sandbox: false
       }
     })
 
+    this.window.setSkipTaskbar(true)
     this.applyAlwaysOnTop()
     this.applyOpacity()
 
@@ -82,6 +85,10 @@ export class WindowManager {
       this.applyFilter(this.pendingFilter)
     })
 
+    this.window.webContents.on('console-message', (_event, level, message, line, sourceId) => {
+      console.log(`[renderer:${level}] ${message} (${sourceId}:${line})`)
+    })
+
     if (process.env.ELECTRON_RENDERER_URL) {
       await this.window.loadURL(process.env.ELECTRON_RENDERER_URL)
     } else {
@@ -98,12 +105,17 @@ export class WindowManager {
     return this.window
   }
 
+  setInteractionStateListener(listener) {
+    this.interactionStateListener = typeof listener === 'function' ? listener : null
+  }
+
   show(category = this.pendingFilter) {
     if (!this.window || this.window.isDestroyed()) {
       return
     }
 
     this.pendingFilter = category || ALL_CATEGORY
+    this.ensureVisibleInWorkArea()
     if (this.edge.isHidden()) {
       this.edge.show()
     } else if (this.edge.isDocked()) {
@@ -114,9 +126,11 @@ export class WindowManager {
     if (this.passThroughMode) {
       this.window.showInactive()
     } else {
+      this._setClickThrough(false, false)
       this.window.show()
       this.window.focus()
     }
+    this.window.setSkipTaskbar(true)
     this.applyFilter(this.pendingFilter)
     this.applyAlwaysOnTop()
     this.applyInteractionState()
@@ -245,11 +259,6 @@ export class WindowManager {
       return
     }
 
-    if (this.edge.isDocked()) {
-      this._setClickThrough(false, false)
-      return
-    }
-
     this._setClickThrough(false, false)
   }
 
@@ -269,8 +278,8 @@ export class WindowManager {
     this.edge.restoreImmediate({ keepDock: true })
 
     if (this.windowMode === 'mini') {
-      this.window.setMinimumSize(210, 150)
-      this.window.setBounds({ ...this.window.getBounds(), width: 220, height: 180 })
+      this.window.setMinimumSize(200, 80)
+      this.window.setBounds({ ...this.window.getBounds(), width: 220 })
     } else {
       this.window.setMinimumSize(260, 200)
       const bounds = this.window.getBounds()
@@ -280,6 +289,7 @@ export class WindowManager {
       })
     }
 
+    this.ensureVisibleInWorkArea()
     this.edge.onWindowMoved()
   }
 
@@ -289,18 +299,27 @@ export class WindowManager {
 
     const bounds = this.window.getBounds()
     const workArea = screen.getDisplayMatching(bounds).workArea
-    const minHeight = this.windowMode === 'mini' ? 150 : 200
-    const maxHeight = workArea.height - 40
+    const minHeight = this.windowMode === 'mini' ? 80 : 360
+    const maxHeight = this.windowMode === 'mini'
+      ? workArea.height - 40
+      : Math.min(workArea.height - 80, workArea.y + workArea.height - bounds.y - 40)
     const targetHeight = Math.max(minHeight, Math.min(maxHeight, Math.ceil(contentHeight)))
+    const targetY = Math.max(
+      workArea.y + 12,
+      Math.min(bounds.y, workArea.y + workArea.height - targetHeight - 40)
+    )
 
-    if (Math.abs(bounds.height - targetHeight) < 4) return
+    if (Math.abs(bounds.height - targetHeight) < 4 && Math.abs(bounds.y - targetY) < 2) return
 
-    this.window.setBounds({ ...bounds, height: targetHeight })
+    this.window.setBounds({ ...bounds, y: targetY, height: targetHeight })
+    this.ensureVisibleInWorkArea()
     this.edge.onWindowMoved()
   }
 
   broadcastInteractionState() {
-    this.send('window:interaction-state', this.getInteractionState())
+    const state = this.getInteractionState()
+    this.send('window:interaction-state', state)
+    this.interactionStateListener?.(state)
   }
 
   send(channel, payload) {
@@ -308,7 +327,16 @@ export class WindowManager {
       return
     }
 
-    this.window.webContents.send(channel, payload)
+    const contents = this.window.webContents
+    if (!contents || contents.isDestroyed() || contents.isLoadingMainFrame()) {
+      return
+    }
+
+    try {
+      contents.send(channel, payload)
+    } catch (error) {
+      console.warn(`[window] skipped send:${channel}`, error?.message || error)
+    }
   }
 
   openShortcutEditor() {
@@ -331,7 +359,7 @@ export class WindowManager {
         preload: join(__dirname, '../preload/index.mjs'),
         contextIsolation: true,
         nodeIntegration: false,
-        sandbox: true
+        sandbox: false
       }
     })
 
@@ -351,10 +379,16 @@ export class WindowManager {
     })
 
     this.shortcutEditor.on('close', (event) => {
+      stopRecord(this)
       if (!app.isQuitting) {
         event.preventDefault()
         this.shortcutEditor.hide()
       }
+    })
+
+    this.shortcutEditor.on('closed', () => {
+      stopRecord(this)
+      this.shortcutEditor = null
     })
 
     if (process.env.ELECTRON_RENDERER_URL) {
@@ -374,20 +408,45 @@ export class WindowManager {
       return
     }
 
+    this.ensureVisibleInWorkArea()
+  }
+
+  ensureVisibleInWorkArea() {
+    if (!this.window || this.window.isDestroyed()) {
+      return
+    }
+
     const bounds = this.window.getBounds()
-    const workArea = screen.getDisplayMatching(bounds).workArea
-    const x = Math.min(bounds.x, workArea.x + workArea.width - bounds.width - 12)
-    const y = Math.max(bounds.y, workArea.y + 12)
-    this.window.setBounds({ ...bounds, x, y })
+    const isOffscreenCoord = bounds.x < -10000 || bounds.y < -10000
+    const workArea = isOffscreenCoord
+      ? screen.getPrimaryDisplay().workArea
+      : screen.getDisplayMatching(bounds).workArea
+    const width = Math.min(
+      Math.max(bounds.width, this.windowMode === 'mini' ? 200 : 260),
+      workArea.width - 24
+    )
+    const height = Math.min(
+      Math.max(bounds.height, this.windowMode === 'mini' ? 80 : 200),
+      workArea.height - 24
+    )
+    const offscreen =
+      isOffscreenCoord ||
+      bounds.x + width < workArea.x + 24 ||
+      bounds.x > workArea.x + workArea.width - 24 ||
+      bounds.y + height < workArea.y + 24 ||
+      bounds.y > workArea.y + workArea.height - 24
+    const x = offscreen
+      ? workArea.x + workArea.width - width - 20
+      : Math.max(workArea.x + 12, Math.min(bounds.x, workArea.x + workArea.width - width - 12))
+    const y = offscreen
+      ? workArea.y + 20
+      : Math.max(workArea.y + 12, Math.min(bounds.y, workArea.y + workArea.height - height - 12))
+
+    this.window.setBounds({ x, y, width, height })
   }
 
   updateClickThrough() {
     if (!this.window || this.window.isDestroyed() || !this.window.isVisible()) {
-      return
-    }
-
-    if (this.edge.isHidden() || this.edge._animating) {
-      this._setClickThrough(true, false)
       return
     }
 
@@ -396,39 +455,7 @@ export class WindowManager {
       return
     }
 
-    if (this.edge.isDocked()) {
-      this._setClickThrough(false, false)
-      return
-    }
-
-    const point = screen.getCursorScreenPoint()
-    const bounds = this.window.getBounds()
-    const inside =
-      point.x >= bounds.x &&
-      point.x <= bounds.x + bounds.width &&
-      point.y >= bounds.y &&
-      point.y <= bounds.y + bounds.height
-
-    const now = Date.now()
-
-    if (inside) {
-      this.outsideStartedAt = 0
-      if (!this.hoverStartedAt) {
-        this.hoverStartedAt = now
-      }
-      if (this.clickThrough && now - this.hoverStartedAt >= 200) {
-        this._setClickThrough(false, false)
-      }
-      return
-    }
-
-    this.hoverStartedAt = 0
-    if (!this.outsideStartedAt) {
-      this.outsideStartedAt = now
-    }
-    if (!this.clickThrough && now - this.outsideStartedAt >= 1500) {
-      this._setClickThrough(true, true)
-    }
+    this._setClickThrough(false, false)
   }
 
   _setClickThrough(enabled, forward = false) {

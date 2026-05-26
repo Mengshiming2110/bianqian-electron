@@ -40,6 +40,7 @@
           @click="startRecord(item.id)"
         >&#9998;</button>
       </div>
+      <div v-if="saveError" class="se-error">{{ saveError }}</div>
     </div>
 
     <div class="se-footer">
@@ -66,6 +67,7 @@ const FALLBACK_SHORTCUTS = {
 const shortcuts = ref({})
 const recordingId = ref(null)
 const lastCapturedKey = ref('')
+const saveError = ref('')
 const rootEl = ref(null)
 let unsubscribeKeydown = null
 
@@ -102,11 +104,13 @@ async function load() {
   }
 }
 
-function close() {
+async function close() {
+  await stopActiveRecord()
   window.close()
 }
 
 async function startRecord(id) {
+  saveError.value = ''
   await window.api?.shortcuts.startRecord()
   recordingId.value = id
   lastCapturedKey.value = ''
@@ -115,6 +119,11 @@ async function startRecord(id) {
 }
 
 async function cancelRecord() {
+  await stopActiveRecord()
+}
+
+async function stopActiveRecord() {
+  if (!recordingId.value) return
   recordingId.value = null
   lastCapturedKey.value = ''
   await window.api?.shortcuts.stopRecord()
@@ -188,9 +197,12 @@ function handleDomKeydown(e) {
 
 async function saveRecording(id, binding) {
   try {
+    saveError.value = ''
     const result = await window.api?.shortcuts.update(id, binding)
     if (result?.ok) {
       shortcuts.value = result.shortcuts
+    } else {
+      saveError.value = result?.error || '快捷键保存失败'
     }
   } finally {
     lastCapturedKey.value = ''
@@ -200,9 +212,12 @@ async function saveRecording(id, binding) {
 }
 
 async function resetAll() {
+  saveError.value = ''
   const result = await window.api?.shortcuts.reset()
   if (result?.ok) {
     shortcuts.value = result.shortcuts
+  } else {
+    saveError.value = result?.error || '快捷键重置失败'
   }
 }
 
@@ -213,6 +228,7 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
+  stopActiveRecord()
   unsubscribeKeydown?.()
   window.removeEventListener('keydown', handleDomKeydown, true)
 })
@@ -268,6 +284,16 @@ onBeforeUnmount(() => {
   align-items: center;
   padding: 7px 0;
   border-bottom: 1px solid rgba(38, 57, 54, 0.06);
+}
+
+.se-error {
+  margin: 6px 0 4px;
+  padding: 6px 8px;
+  border-radius: 4px;
+  background: rgba(186, 75, 75, 0.08);
+  color: #9f3d3d;
+  font-size: 11px;
+  line-height: 1.4;
 }
 
 .se-label {
