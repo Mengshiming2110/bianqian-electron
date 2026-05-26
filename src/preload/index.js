@@ -7,6 +7,9 @@ function on(channel, callback) {
 }
 
 contextBridge.exposeInMainWorld('api', {
+  categories: {
+    list: () => ipcRenderer.invoke('categories:list')
+  },
   notes: {
     list: () => ipcRenderer.invoke('notes:list'),
     create: (note) => ipcRenderer.invoke('notes:create', note),

@@ -1,6 +1,6 @@
 <template>
   <ShortcutEditor v-if="isShortcutEditor" />
-  <main v-else class="app-shell" :class="{ 'pass-through-mode': passThroughMode, 'mini-mode': isMiniMode }">
+  <main v-else-if="!hasError" class="app-shell" :class="{ 'pass-through-mode': passThroughMode, 'mini-mode': isMiniMode }">
     <header class="app-header">
       <div>
         <p class="eyebrow">{{ notes.activeCategory }}</p>
@@ -275,15 +275,28 @@
                 迷你模式
               </button>
             </div>
+            <label class="edge-toggle" title="窗口贴边时自动隐藏">
+              <input
+                :checked="edgeAutoHide"
+                type="checkbox"
+                @change="toggleEdgeAutoHide"
+              />
+              <span>贴边收纳</span>
+            </label>
           </div>
         </div>
       </div>
     </Teleport>
   </main>
+  <div v-if="hasError" class="error-fallback">
+    <StickyNote :size="30" />
+    <p>出了点问题</p>
+    <button type="button" @click="hasError = false">重试</button>
+  </div>
 </template>
 
 <script setup>
-import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
+import { computed, onErrorCaptured, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import {
   Bell,
   BellOff,
@@ -304,7 +317,7 @@ import {
 } from 'lucide-vue-next'
 import AttachmentPopover from './components/AttachmentPopover.vue'
 import ShortcutEditor from './components/ShortcutEditor.vue'
-import { ALL_CATEGORY, CATEGORIES, useNotesStore } from './stores/notes'
+import { ALL_CATEGORY, CATEGORIES, loadCategories, useNotesStore } from './stores/notes'
 
 const isShortcutEditor = window.location.hash === '#shortcut-editor'
 
@@ -320,6 +333,7 @@ const passThroughMode = ref(false)
 const windowOpacity = ref(0.92)
 const windowMode = ref('normal')
 const edgeAutoHide = ref(false)
+const hasError = ref(false)
 const unsubscribeHandlers = []
 let reminderTimer = null
 
@@ -538,6 +552,12 @@ async function setWindowOpacity(value) {
 async function setMode(mode) {
   const state = await window.api?.window.setMode?.(mode)
   windowMode.value = state?.windowMode || windowMode.value
+  edgeAutoHide.value = Boolean(state?.edgeAutoHide)
+}
+
+async function toggleEdgeAutoHide() {
+  const state = await window.api?.window.setEdgeAutoHide?.(!edgeAutoHide.value)
+  edgeAutoHide.value = Boolean(state?.edgeAutoHide)
 }
 
 async function applyPreset(preset) {
@@ -629,12 +649,38 @@ function parseNaturalDate(text) {
 }
 
 function onKeyDown(e) {
-  if (e.key === 'Escape' && attachPopover.visible) {
-    closeAttachPopover()
+  if (e.key === 'Escape') {
+    if (settingsOpen.value) {
+      settingsOpen.value = false
+      return
+    }
+    if (attachPopover.visible) {
+      closeAttachPopover()
+      return
+    }
   }
 }
 
+function onMouseOut(e) {
+  if (!e.relatedTarget) {
+    window.api?.window.mouseLeave()
+  }
+}
+
+function onMouseOver(e) {
+  if (!e.relatedTarget) {
+    window.api?.window.mouseEnter()
+  }
+}
+
+onErrorCaptured((err) => {
+  console.error('[App] uncaught error:', err)
+  hasError.value = true
+  return false
+})
+
 onMounted(async () => {
+  await loadCategories()
   await notes.load()
   await refreshInteractionState()
   await notes.requestNotificationPermission()
@@ -659,23 +705,16 @@ onMounted(async () => {
   }
 
   document.addEventListener('keydown', onKeyDown)
-
-  document.addEventListener('mouseout', (e) => {
-    if (!e.relatedTarget) {
-      window.api?.window.mouseLeave()
-    }
-  })
-  document.addEventListener('mouseover', (e) => {
-    if (!e.relatedTarget) {
-      window.api?.window.mouseEnter()
-    }
-  })
+  document.addEventListener('mouseout', onMouseOut)
+  document.addEventListener('mouseover', onMouseOver)
 })
 
 onBeforeUnmount(() => {
   unsubscribeHandlers.forEach((unsubscribe) => unsubscribe())
   clearInterval(reminderTimer)
   document.removeEventListener('keydown', onKeyDown)
+  document.removeEventListener('mouseout', onMouseOut)
+  document.removeEventListener('mouseover', onMouseOver)
 })
 </script>
 
@@ -1307,5 +1346,48 @@ onBeforeUnmount(() => {
   color: var(--accent-strong);
   background: var(--accent-soft);
   font-weight: 700;
+}
+
+.edge-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+  height: 30px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  color: var(--text-muted);
+  background: rgba(255, 255, 255, 0.62);
+  font-size: 12px;
+}
+
+.edge-toggle input {
+  width: 15px;
+  height: 15px;
+  accent-color: var(--accent);
+}
+
+.error-fallback {
+  display: grid;
+  min-height: 100%;
+  place-items: center;
+  align-content: center;
+  gap: 8px;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.error-fallback p {
+  margin: 0;
+}
+
+.error-fallback button {
+  padding: 6px 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  color: var(--accent-strong);
+  background: var(--accent-soft);
+  font-size: 13px;
 }
 </style>

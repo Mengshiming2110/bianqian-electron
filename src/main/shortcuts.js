@@ -1,20 +1,24 @@
-import { globalShortcut } from 'electron'
+import { BrowserWindow, globalShortcut } from 'electron'
 import { getShortcuts } from './store.js'
 import { ALL_CATEGORY, CATEGORIES } from './categories.js'
 
 let registeredBindings = {}
 let beforeInputWindowId = null
+let cachedShortcuts = null
+let isRecording = false
+
+function loadShortcuts() {
+  cachedShortcuts = getShortcuts()
+  return cachedShortcuts
+}
 
 export function registerAllShortcuts(windowManager) {
-  const shortcuts = getShortcuts()
+  const shortcuts = loadShortcuts()
   const window = windowManager.getWindow()
-
-  console.log('[shortcuts] loaded:', JSON.stringify(shortcuts))
 
   globalShortcut.unregisterAll()
   registeredBindings = {}
 
-  // Global shortcuts
   registerBinding(shortcuts['toggle-window'], () => {
     windowManager.toggle()
   })
@@ -23,20 +27,26 @@ export function registerAllShortcuts(windowManager) {
     windowManager.setPassThroughMode(!windowManager.passThroughMode)
   })
 
-  // Window-level shortcuts (before-input-event)
-  if (window && beforeInputWindowId !== window.id) {
-    window.webContents.on('before-input-event', handleBeforeInput)
-    beforeInputWindowId = window.id
+  if (window) {
+    if (beforeInputWindowId !== null && beforeInputWindowId !== window.id) {
+      const oldWindow = BrowserWindow?.fromId?.(beforeInputWindowId)
+      if (oldWindow && !oldWindow.isDestroyed()) {
+        oldWindow.webContents.removeListener('before-input-event', handleBeforeInput)
+      }
+    }
+    if (beforeInputWindowId !== window.id) {
+      window.webContents.on('before-input-event', handleBeforeInput)
+      beforeInputWindowId = window.id
+    }
   }
 
-  // Store reference for reregisterShortcut
   registeredBindings._wm = windowManager
 }
 
 function handleBeforeInput(event, input) {
   if (input.type !== 'keyDown') return
 
-  const shortcuts = getShortcuts()
+  const shortcuts = cachedShortcuts || loadShortcuts()
   const pressed = inputToBinding(input)
 
   if (pressed === shortcuts['hide-window']) {
@@ -67,24 +77,18 @@ function inputToBinding(input) {
 }
 
 function registerBinding(accelerator, callback) {
-  if (!accelerator) {
-    console.error('[shortcuts] empty accelerator, skipping')
-    return
-  }
+  if (!accelerator) return
   try {
     const ok = globalShortcut.register(accelerator, callback)
-    if (!ok) {
-      console.error('[shortcuts] registration failed (possibly taken by another app):', accelerator)
+    if (!ok && !isRecording) {
+      console.error('[shortcuts] registration failed:', accelerator)
     }
-  } catch (e) {
-    console.error('[shortcuts] registration error:', accelerator, e)
-  }
+  } catch {}
 }
 
 export function reregisterShortcut(id, newBinding, windowManager) {
-  // Unregister old accelerator for this id
+  loadShortcuts()
   globalShortcut.unregisterAll()
-  // Re-register all global shortcuts
   const wm = windowManager || registeredBindings._wm
   registerAllShortcuts(wm)
 }
@@ -92,5 +96,21 @@ export function reregisterShortcut(id, newBinding, windowManager) {
 export function unregisterAllShortcuts() {
   globalShortcut.unregisterAll()
   registeredBindings = {}
+  cachedShortcuts = null
   beforeInputWindowId = null
+}
+
+export function startRecord(windowManager) {
+  isRecording = true
+  globalShortcut.unregisterAll()
+  return true
+}
+
+export function stopRecord(windowManager) {
+  try {
+    registerAllShortcuts(windowManager)
+  } finally {
+    isRecording = false
+  }
+  return true
 }

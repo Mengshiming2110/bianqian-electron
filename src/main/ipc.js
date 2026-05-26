@@ -1,6 +1,7 @@
 import { app, dialog, globalShortcut, ipcMain, shell } from 'electron'
-import { copyFileSync, existsSync, mkdirSync } from 'node:fs'
+import { copyFileSync, existsSync, mkdirSync, readdirSync, unlinkSync } from 'node:fs'
 import { basename, join } from 'node:path'
+import { randomUUID } from 'node:crypto'
 import {
   createNote,
   deleteNote,
@@ -12,15 +13,66 @@ import {
   toggleNote,
   updateNote
 } from './store.js'
-import { reregisterShortcut, registerAllShortcuts } from './shortcuts.js'
+import { reregisterShortcut, registerAllShortcuts, startRecord, stopRecord } from './shortcuts.js'
+import { ALL_CATEGORY, CATEGORIES } from './categories.js'
+
+const ATTACHMENTS_DIR = () => join(app.getPath('userData'), 'attachments')
+const MAX_ATTACHMENTS_PER_NOTE = 10
+
+let storeLock = Promise.resolve()
+
+function withLock(fn) {
+  let resolve, reject
+  const promise = new Promise((res, rej) => { resolve = res; reject = rej })
+  storeLock = storeLock.then(
+    () => { try { resolve(fn()) } catch (err) { reject(err) } },
+    (err) => reject(err)
+  )
+  return promise
+}
+
+function isAttachmentPath(filePath) {
+  if (!filePath || typeof filePath !== 'string') return false
+  const normalized = filePath.replace(/\\/g, '/')
+  const allowed = ATTACHMENTS_DIR().replace(/\\/g, '/')
+  return normalized.startsWith(allowed + '/')
+}
+
+function cleanOrphanAttachments(currentNotes) {
+  const dir = ATTACHMENTS_DIR()
+  if (!existsSync(dir)) return
+
+  const usedPaths = new Set()
+  for (const note of currentNotes) {
+    if (Array.isArray(note.attachments)) {
+      for (const p of note.attachments) usedPaths.add(p)
+    }
+  }
+
+  try {
+    const files = readdirSync(dir)
+    for (const file of files) {
+      const fullPath = join(dir, file)
+      if (!usedPaths.has(fullPath)) {
+        try { unlinkSync(fullPath) } catch {}
+      }
+    }
+  } catch {}
+}
 
 export function registerIpc(windowManager, trayController) {
-  ipcMain.handle('notes:list', () => getNotes())
-  ipcMain.handle('notes:create', (_event, note) => createNote(note))
-  ipcMain.handle('notes:update', (_event, id, patch) => updateNote(id, patch))
-  ipcMain.handle('notes:delete', (_event, id) => deleteNote(id))
-  ipcMain.handle('notes:toggle', (_event, id) => toggleNote(id))
-  ipcMain.handle('notes:save-all', (_event, notes) => saveNotes(notes))
+  ipcMain.handle('categories:list', () => ({ categories: CATEGORIES, allCategory: ALL_CATEGORY }))
+
+  ipcMain.handle('notes:list', () => withLock(() => getNotes()))
+  ipcMain.handle('notes:create', (_event, note) => withLock(() => createNote(note)))
+  ipcMain.handle('notes:update', (_event, id, patch) => withLock(() => updateNote(id, patch)))
+  ipcMain.handle('notes:delete', (_event, id) => withLock(() => {
+    const result = deleteNote(id)
+    cleanOrphanAttachments(result)
+    return result
+  }))
+  ipcMain.handle('notes:toggle', (_event, id) => withLock(() => toggleNote(id)))
+  ipcMain.handle('notes:save-all', (_event, notes) => withLock(() => saveNotes(notes)))
 
   ipcMain.handle('dialog:select-attachments', async () => {
     const result = await dialog.showOpenDialog({
@@ -30,20 +82,21 @@ export function registerIpc(windowManager, trayController) {
 
     if (result.canceled || !result.filePaths.length) return []
 
-  const destDir = join(app.getPath('userData'), 'attachments')
-  if (!existsSync(destDir)) {
-    mkdirSync(destDir, { recursive: true })
-  }
+    const destDir = ATTACHMENTS_DIR()
+    if (!existsSync(destDir)) {
+      mkdirSync(destDir, { recursive: true })
+    }
 
-  return result.filePaths.map((srcPath) => {
-    const destPath = join(destDir, `${Date.now()}_${basename(srcPath)}`)
-    copyFileSync(srcPath, destPath)
-    return destPath
-  })
+    return result.filePaths.slice(0, MAX_ATTACHMENTS_PER_NOTE).map((srcPath) => {
+      const ext = basename(srcPath).includes('.') ? '.' + basename(srcPath).split('.').pop() : ''
+      const destPath = join(destDir, `${randomUUID()}${ext}`)
+      copyFileSync(srcPath, destPath)
+      return destPath
+    })
   })
 
   ipcMain.handle('shell:open-path', (_event, path) => {
-    if (!path) {
+    if (!path || !isAttachmentPath(path)) {
       return false
     }
 
@@ -99,12 +152,10 @@ export function registerIpc(windowManager, trayController) {
   })
 
   ipcMain.handle('shortcuts:start-record', () => {
-    globalShortcut.unregisterAll()
-    return true
+    return startRecord(windowManager)
   })
 
   ipcMain.handle('shortcuts:stop-record', () => {
-    registerAllShortcuts(windowManager)
-    return true
+    return stopRecord(windowManager)
   })
 }

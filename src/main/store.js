@@ -1,4 +1,5 @@
 import Store from 'electron-store'
+import { randomUUID } from 'node:crypto'
 import { CATEGORIES, normalizeCategory } from './categories.js'
 
 let backingStore
@@ -7,6 +8,7 @@ function createStore() {
   return new Store({
     name: '便签数据',
     clearInvalidConfig: true,
+    encryptionKey: 'bianqian-electron-store-v1',
     defaults: {
       notes: [],
       settings: {
@@ -52,11 +54,15 @@ function normalizeDate(value) {
   return /^\d{4}-\d{2}-\d{2}$/.test(value || '') ? value : today()
 }
 
+export function generateId() {
+  return randomUUID()
+}
+
 export function normalizeNote(input = {}) {
   const createdAt = input.createdAt || new Date().toISOString()
 
   return {
-    id: String(input.id || Date.now()),
+    id: String(input.id || generateId()),
     title: String(input.title || '').trim(),
     content: String(input.content || ''),
     category: normalizeCategory(input.category),
@@ -84,7 +90,7 @@ export function saveNotes(notes) {
 }
 
 export function createNote(input) {
-  const note = normalizeNote({ ...input, id: Date.now().toString(), createdAt: new Date().toISOString() })
+  const note = normalizeNote({ ...input, id: generateId(), createdAt: new Date().toISOString() })
 
   if (!note.title) {
     throw new Error('标题不能为空')

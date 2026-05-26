@@ -3,8 +3,23 @@ import { defineStore } from 'pinia'
 const api = window.api
 const localStorageKey = 'bianqian-notes'
 
-export const CATEGORIES = ['工作', '生活', '学习', '会议', '其他']
-export const ALL_CATEGORY = '全部'
+let CATEGORIES = ['工作', '生活', '学习', '会议', '其他']
+let ALL_CATEGORY = '全部'
+
+export { CATEGORIES, ALL_CATEGORY }
+
+export async function loadCategories() {
+  if (!api?.categories) return
+  try {
+    const result = await api.categories.list()
+    if (result?.categories?.length) {
+      CATEGORIES.splice(0, CATEGORIES.length, ...result.categories)
+    }
+    if (result?.allCategory) {
+      ALL_CATEGORY = result.allCategory
+    }
+  } catch {}
+}
 
 function today() {
   const date = new Date()
@@ -16,7 +31,7 @@ function today() {
 
 function normalizeNote(input = {}) {
   return {
-    id: String(input.id || Date.now()),
+    id: String(input.id || ''),
     title: String(input.title || '').trim(),
     content: String(input.content || ''),
     category: CATEGORIES.includes(input.category) ? input.category : '其他',

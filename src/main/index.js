@@ -34,7 +34,7 @@ if (!gotLock) {
     trayController?.destroy()
   })
 
-  app.on('window-all-closed', (event) => {
-    event.preventDefault()
+  app.on('window-all-closed', () => {
+    // keep app running in tray
   })
 }
