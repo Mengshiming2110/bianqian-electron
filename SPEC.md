@@ -38,7 +38,7 @@
 
 | 层次 | 技术 |
 |---|---|
-| 框架 | Electron 33 + Vue 3 (Vite 构建) |
+| 框架 | Electron 28 + Vue 3 (Vite 构建) |
 | 状态管理 | Pinia |
 | 数据持久化 | electron-store (JSON, 加密) |
 | UI | 原生 CSS (CSS 变量主题系统) |

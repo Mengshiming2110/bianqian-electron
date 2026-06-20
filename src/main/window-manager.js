@@ -23,6 +23,8 @@ export class WindowManager {
     this.windowMode = settings.windowMode
     this.shortcutEditor = null
     this.interactionStateListener = null
+    this.noteWindows = new Map()
+    this.settingsWin = null
 
     this.edge = new EdgeDockController(
       () => this.window,
@@ -56,7 +58,7 @@ export class WindowManager {
       show: false,
       backgroundColor: '#00000000',
       webPreferences: {
-        preload: join(__dirname, '../preload/index.mjs'),
+        preload: join(__dirname, '../preload/index.js'),
         contextIsolation: true,
         nodeIntegration: false,
         sandbox: false
@@ -358,7 +360,7 @@ export class WindowManager {
       focusable: true,
       backgroundColor: '#ffffff',
       webPreferences: {
-        preload: join(__dirname, '../preload/index.mjs'),
+        preload: join(__dirname, '../preload/index.js'),
         contextIsolation: true,
         nodeIntegration: false,
         sandbox: false
@@ -394,9 +396,9 @@ export class WindowManager {
     })
 
     if (process.env.ELECTRON_RENDERER_URL) {
-      this.shortcutEditor.loadURL(process.env.ELECTRON_RENDERER_URL + '#shortcut-editor')
+      this.shortcutEditor.loadURL(process.env.ELECTRON_RENDERER_URL + '#/shortcut-editor')
     } else {
-      this.shortcutEditor.loadFile(join(__dirname, '../renderer/index.html'), { hash: 'shortcut-editor' })
+      this.shortcutEditor.loadFile(join(__dirname, '../renderer/index.html'), { hash: '/shortcut-editor' })
     }
 
     this.shortcutEditor.once('ready-to-show', () => {
@@ -479,5 +481,150 @@ export class WindowManager {
     }
 
     this.broadcastInteractionState()
+  }
+
+  openNoteWindow(noteId, noteData) {
+    if (this.noteWindows.has(noteId)) {
+      const existing = this.noteWindows.get(noteId)
+      if (!existing.isDestroyed()) {
+        existing.focus()
+        return
+      }
+      this.noteWindows.delete(noteId)
+    }
+
+    const workArea = screen.getPrimaryDisplay().workArea
+    const startX = noteData._screenX != null ? noteData._screenX : workArea.x + 100 + (this.noteWindows.size * 30) % 200
+    const startY = noteData._screenY != null ? noteData._screenY : workArea.y + 100 + (this.noteWindows.size * 30) % 150
+
+    const win = new BrowserWindow({
+      width: 280,
+      height: 320,
+      minWidth: 200,
+      minHeight: 150,
+      x: startX,
+      y: startY,
+      alwaysOnTop: true,
+      skipTaskbar: true,
+      resizable: true,
+      frame: false,
+      transparent: true,
+      title: noteData.title || '便签',
+      webPreferences: {
+        preload: join(__dirname, '../preload/index.js'),
+        contextIsolation: true,
+        nodeIntegration: false
+      }
+    })
+
+    const devServerUrl = process.env.ELECTRON_RENDERER_URL
+    if (devServerUrl) {
+      win.loadURL(`${devServerUrl}/#/note/${noteId}`)
+    } else {
+      win.loadFile(join(__dirname, '../renderer/index.html'), { hash: `/note/${noteId}` })
+    }
+
+    win.webContents.once('did-finish-load', () => {
+      win.webContents.send('note-window:data', noteData)
+    })
+
+    win.on('closed', () => {
+      this.noteWindows.delete(noteId)
+    })
+
+    this.noteWindows.set(noteId, win)
+    return win
+  }
+
+  closeNoteWindow(noteId) {
+    const win = this.noteWindows.get(noteId)
+    if (win && !win.isDestroyed()) {
+      win.close()
+    }
+    this.noteWindows.delete(noteId)
+  }
+
+  closeAllNoteWindows() {
+    for (const [id, win] of this.noteWindows) {
+      if (!win.isDestroyed()) win.close()
+    }
+    this.noteWindows.clear()
+  }
+
+  sendToNoteWindow(noteId, channel, data) {
+    const win = this.noteWindows.get(noteId)
+    if (win && !win.isDestroyed()) {
+      win.webContents.send(channel, data)
+    }
+  }
+
+  openSettingsWindow(screenX, screenY) {
+    if (this.settingsWin && !this.settingsWin.isDestroyed()) {
+      this.settingsWin.show()
+      this.settingsWin.focus()
+      return
+    }
+
+    const workArea = screen.getPrimaryDisplay().workArea
+    const width = 252
+    const height = 380
+    const x = Math.max(workArea.x + 8, Math.min(Math.round(screenX), workArea.x + workArea.width - width - 8))
+    const y = Math.max(workArea.y + 8, Math.min(Math.round(screenY), workArea.y + workArea.height - height - 8))
+
+    this.settingsWin = new BrowserWindow({
+      width,
+      height,
+      minWidth: 220,
+      minHeight: 200,
+      resizable: true,
+      frame: false,
+      transparent: true,
+      alwaysOnTop: true,
+      skipTaskbar: true,
+      parent: this.window,
+      x,
+      y,
+      show: false,
+      webPreferences: {
+        preload: join(__dirname, '../preload/index.js'),
+        contextIsolation: true,
+        nodeIntegration: false,
+        sandbox: false
+      }
+    })
+
+    this.settingsWin.on('closed', () => {
+      this.settingsWin = null
+      if (this.window && !this.window.isDestroyed()) {
+        this.window.webContents.send('settings-window:closed')
+      }
+    })
+
+    this.settingsWin.on('blur', () => {
+      setTimeout(() => {
+        if (this.settingsWin && !this.settingsWin.isDestroyed() && !this.settingsWin.isFocused()) {
+          this.closeSettingsWindow()
+        }
+      }, 150)
+    })
+
+    if (process.env.ELECTRON_RENDERER_URL) {
+      this.settingsWin.loadURL(process.env.ELECTRON_RENDERER_URL + '#/settings')
+    } else {
+      this.settingsWin.loadFile(join(__dirname, '../renderer/index.html'), { hash: '/settings' })
+    }
+
+    this.settingsWin.once('ready-to-show', () => {
+      if (this.settingsWin && !this.settingsWin.isDestroyed()) {
+        this.settingsWin.show()
+        this.settingsWin.focus()
+      }
+    })
+  }
+
+  closeSettingsWindow() {
+    if (this.settingsWin && !this.settingsWin.isDestroyed()) {
+      this.settingsWin.close()
+    }
   }
 }

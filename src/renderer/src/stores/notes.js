@@ -31,6 +31,7 @@ function today() {
 }
 
 function normalizeNote(input = {}) {
+  const validColors = ['', 'red', 'orange', 'yellow', 'green', 'blue', 'purple']
   return {
     id: String(input.id || ''),
     title: String(input.title || '').trim(),
@@ -41,6 +42,7 @@ function normalizeNote(input = {}) {
     completed: Boolean(input.completed),
     pinned: Boolean(input.pinned),
     remind: input.remind !== false,
+    color: validColors.includes(input.color) ? input.color : '',
     attachments: Array.isArray(input.attachments)
       ? [...new Set(input.attachments.map(String))].slice(0, MAX_ATTACHMENTS_PER_NOTE)
       : [],
@@ -204,17 +206,9 @@ export const useNotesStore = defineStore('notes', {
       }
     },
     async requestNotificationPermission() {
-      if (!('Notification' in window) || Notification.permission !== 'default') {
-        return
-      }
-
-      await Notification.requestPermission()
+      // Electron 主进程 Notification 不需要浏览器权限
     },
     checkReminders() {
-      if (!('Notification' in window) || Notification.permission !== 'granted') {
-        return
-      }
-
       const now = Date.now()
 
       this.notes
@@ -226,9 +220,12 @@ export const useNotesStore = defineStore('notes', {
 
           if (diff <= 0 && !this.reminderHistory.has(key)) {
             this.reminderHistory.add(key)
-            new Notification(note.title, {
-              body: note.content || `${note.category} · ${note.time}`
-            })
+            const body = note.content || `${note.category} · ${note.time}`
+            if (api) {
+              api.notify.trigger({ title: note.title, body, noteId: note.id })
+            } else {
+              new Notification(note.title, { body })
+            }
           }
         })
     },

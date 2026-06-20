@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron'
+import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, shell } from 'electron'
 import { copyFileSync, existsSync, mkdirSync, readdirSync, unlinkSync } from 'node:fs'
 import { basename, join } from 'node:path'
 import { randomUUID } from 'node:crypto'
@@ -22,6 +22,7 @@ import {
   validateShortcutUpdate
 } from './shortcuts.js'
 import { ALL_CATEGORY, CATEGORIES } from './categories.js'
+import { sendNotification } from './notify.js'
 
 const ATTACHMENTS_DIR = () => join(app.getPath('userData'), 'attachments')
 const MAX_ATTACHMENTS_PER_NOTE = 10
@@ -198,6 +199,87 @@ export function registerIpc(windowManager, trayController) {
   ipcMain.on('window:set-editing', (_event, editing) => windowManager.setEditing(editing))
   ipcMain.on('window:set-pinned', (_event, pinned) => windowManager.setPinned(pinned))
   ipcMain.on('window:resize-to-content', (_event, height) => windowManager.resizeToContent(height))
+
+  ipcMain.handle('note-window:open', (_event, noteId, noteData) => {
+    return windowManager.openNoteWindow(noteId, noteData)
+  })
+  ipcMain.handle('note-window:close', (_event, noteId) => {
+    windowManager.closeNoteWindow(noteId)
+  })
+  ipcMain.handle('note-window:close-all', () => {
+    windowManager.closeAllNoteWindows()
+  })
+
+  ipcMain.handle('context-menu:show', (event, noteData) => {
+    const win = BrowserWindow.fromWebContents(event.sender)
+    if (!win) return
+
+    const send = (action, extra = {}) => {
+      if (!win.isDestroyed()) {
+        win.webContents.send('context-menu:action', { action, noteId: noteData.id, ...extra })
+      }
+    }
+
+    const menu = Menu.buildFromTemplate([
+      { label: '编辑', click: () => send('edit') },
+      { label: noteData.pinned ? '取消置顶' : '置顶', click: () => send('togglePin') },
+      { label: noteData.completed ? '取消完成' : '标记完成', click: () => send('toggleComplete') },
+      {
+        label: '快速改分类',
+        submenu: CATEGORIES.map(cat => ({
+          label: cat,
+          type: 'radio',
+          checked: noteData.category === cat,
+          click: () => send('changeCategory', { value: cat })
+        }))
+      },
+      {
+        label: '改颜色',
+        submenu: [
+          { label: '默认', type: 'radio', checked: !noteData.color, click: () => send('changeColor', { value: '' }) },
+          { label: '红色', type: 'radio', checked: noteData.color === 'red', click: () => send('changeColor', { value: 'red' }) },
+          { label: '橙色', type: 'radio', checked: noteData.color === 'orange', click: () => send('changeColor', { value: 'orange' }) },
+          { label: '黄色', type: 'radio', checked: noteData.color === 'yellow', click: () => send('changeColor', { value: 'yellow' }) },
+          { label: '绿色', type: 'radio', checked: noteData.color === 'green', click: () => send('changeColor', { value: 'green' }) },
+          { label: '蓝色', type: 'radio', checked: noteData.color === 'blue', click: () => send('changeColor', { value: 'blue' }) },
+          { label: '紫色', type: 'radio', checked: noteData.color === 'purple', click: () => send('changeColor', { value: 'purple' }) }
+        ]
+      },
+      {
+        label: '复制内容',
+        click: () => {
+          clipboard.writeText(`${noteData.title || ''}\n${noteData.content || ''}`.trim())
+        }
+      },
+      {
+        label: '弹出独立窗口',
+        click: () => {
+          const allNotes = getNotes()
+          const note = allNotes.find(n => n.id === noteData.id)
+          if (note) windowManager.openNoteWindow(note.id, note)
+        }
+      },
+      { type: 'separator' },
+      { label: '删除', click: () => send('delete') }
+    ])
+
+    menu.popup({ window: win })
+  })
+
+  ipcMain.handle('settings-window:open', (event, screenX, screenY) => {
+    windowManager.openSettingsWindow(screenX, screenY)
+  })
+
+  ipcMain.handle('settings-window:close', () => {
+    windowManager.closeSettingsWindow()
+  })
+
+  ipcMain.handle('notify:trigger', (_event, { title, body, noteId, silent }) => {
+    sendNotification({ title, body, noteId, silent }, (id) => {
+      windowManager.show()
+      windowManager.send('notify:clicked', { noteId: id || '' })
+    })
+  })
 
   ipcMain.on('tray:update-counts', (_event, counts) => {
     trayController.rebuildMenu(counts)

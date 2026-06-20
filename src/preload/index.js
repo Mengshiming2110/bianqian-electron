@@ -88,6 +88,22 @@ contextBridge.exposeInMainWorld('api', {
     onCreateNote: (callback) => on('editor:new', callback),
     onInteractionState: (callback) => on('window:interaction-state', callback)
   },
+  noteWindow: {
+    open: (noteId, noteData) => ipcRenderer.invoke('note-window:open', noteId, noteData),
+    close: (noteId) => ipcRenderer.invoke('note-window:close', noteId),
+    closeAll: () => ipcRenderer.invoke('note-window:close-all'),
+    onUpdate: (callback) => on('note-window:update', callback),
+    onData: (callback) => on('note-window:data', callback)
+  },
+  contextMenu: {
+    show: (noteData) => ipcRenderer.invoke('context-menu:show', noteData),
+    onAction: (callback) => on('context-menu:action', callback)
+  },
+  settingsWindow: {
+    open: (screenX, screenY) => ipcRenderer.invoke('settings-window:open', screenX, screenY),
+    close: () => ipcRenderer.invoke('settings-window:close'),
+    onClosed: (callback) => on('settings-window:closed', callback)
+  },
   shortcuts: {
     list: () => ipcRenderer.invoke('shortcuts:list'),
     update: (id, binding) => ipcRenderer.invoke('shortcuts:update', id, binding),
@@ -95,5 +111,9 @@ contextBridge.exposeInMainWorld('api', {
     startRecord: () => ipcRenderer.invoke('shortcuts:start-record'),
     stopRecord: () => ipcRenderer.invoke('shortcuts:stop-record'),
     onKeydown: (callback) => on('shortcut-editor:keydown', callback)
+  },
+  notify: {
+    trigger: (opts) => ipcRenderer.invoke('notify:trigger', opts),
+    onClick: (callback) => on('notify:clicked', callback)
   }
 })

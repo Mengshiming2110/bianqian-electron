@@ -59,7 +59,8 @@
           'animating-incompleting': animatingCardIds.get(note.id) === 'incompleting',
           'drag-over': dragTargetNoteId === note.id,
           'sort-dragging': sortDrag.active && sortDrag.noteId === note.id,
-          'sort-pulsed': sortDrag.pulsed[note.id]
+          'sort-pulsed': sortDrag.pulsed[note.id],
+          ['color-' + note.color]: note.color
         }"
         :style="getSortDragStyle(note.id)"
         @mousedown="onSortMouseDown(note, $event)"
@@ -127,6 +128,30 @@
 
         <div class="field-grid">
           <label class="field">
+            <span>分类</span>
+            <select v-model="draft.category">
+              <option v-for="category in categories" :key="category" :value="category">
+                {{ category }}
+              </option>
+            </select>
+          </label>
+          <label class="field">
+            <span>颜色</span>
+            <div class="color-picker-row">
+              <button
+                v-for="c in noteColors"
+                :key="c.value"
+                type="button"
+                class="color-picker-dot"
+                :class="[c.value ? 'dot-' + c.value : 'dot-default', { active: draft.color === c.value }]"
+                :title="c.label"
+                @click="draft.color = c.value"
+              ></button>
+            </div>
+          </label>
+        </div>
+        <div class="field-grid">
+          <label class="field">
             <span>日期</span>
             <input v-model="draft.date" type="date" />
           </label>
@@ -137,14 +162,6 @@
         </div>
 
         <div class="field-grid">
-          <label class="field">
-            <span>分类</span>
-            <select v-model="draft.category">
-              <option v-for="category in categories" :key="category" :value="category">
-                {{ category }}
-              </option>
-            </select>
-          </label>
           <label class="remind-toggle">
             <input v-model="draft.remind" type="checkbox" />
             <Bell v-if="draft.remind" :size="16" />
@@ -155,7 +172,10 @@
 
         <label class="field full">
           <span>备注</span>
-          <textarea v-model="draft.content" rows="5"></textarea>
+          <div class="md-editor-row">
+            <textarea v-model="draft.content" rows="8" class="md-textarea"></textarea>
+            <MarkdownPreview v-if="draft.content" :content="draft.content" :is-mini="false" class="md-editor-preview" />
+          </div>
         </label>
 
         <section class="attachments">
@@ -204,185 +224,6 @@
       @open="handleAttachOpen"
     />
 
-    <Teleport to="#popover-root">
-      <div
-        v-if="contextMenu.visible"
-        class="context-menu"
-        :style="{ left: contextMenu.x + 'px', top: contextMenu.y + 'px' }"
-        @click.stop
-      >
-        <button type="button" @click="ctxEdit">编辑</button>
-        <button type="button" @click="ctxTogglePin">
-          {{ contextMenu.note?.pinned ? '取消置顶' : '置顶' }}
-        </button>
-        <button type="button" @click="ctxToggleComplete">
-          {{ contextMenu.note?.completed ? '取消完成' : '标记完成' }}
-        </button>
-        <div class="submenu-wrapper">
-          <button type="button" class="submenu-trigger-btn">
-            快速改分类
-            <ChevronRight :size="12" />
-          </button>
-          <div class="submenu">
-            <button
-              v-for="cat in categories"
-              :key="cat"
-              type="button"
-              @click="ctxChangeCategory(cat)"
-            >
-              {{ cat }}
-              <Check v-if="contextMenu.note?.category === cat" :size="12" />
-            </button>
-          </div>
-        </div>
-        <button type="button" @click="ctxCopyContent">复制内容</button>
-        <button type="button" @click="ctxDelete">删除</button>
-      </div>
-    </Teleport>
-
-    <Teleport to="#popover-root">
-      <div v-if="settingsOpen" class="settings-popover-layer" @click.self="closeSettings">
-        <section class="settings-card" :style="settingsPanelStyle" @click.stop>
-          <template v-if="settingsView === 'main'">
-            <div class="settings-card-header">
-              <Settings :size="16" />
-              <span>设置</span>
-            </div>
-            <div class="settings-slider-row">
-              <SlidersHorizontal :size="15" />
-              <input
-                :value="Math.round(windowOpacity * 100)"
-                type="range"
-                min="35"
-                max="100"
-                step="5"
-                @input="setWindowOpacity($event.target.value)"
-              />
-              <strong>{{ Math.round(windowOpacity * 100) }}%</strong>
-            </div>
-            <button class="settings-menu-row" type="button" @click="settingsView = 'categories'">
-              <span>分类筛选</span>
-              <small>{{ notes.activeCategory }}</small>
-              <ChevronRight :size="15" />
-            </button>
-            <button class="settings-menu-row" type="button" @click="settingsView = 'modes'">
-              <span>窗口模式</span>
-              <small>{{ isMiniMode ? '迷你' : '列表' }}</small>
-              <ChevronRight :size="15" />
-            </button>
-            <button class="settings-menu-row" type="button" @click="settingsView = 'themes'">
-              <span>主题</span>
-              <small>{{ themeLabel }}</small>
-              <ChevronRight :size="15" />
-            </button>
-            <div class="settings-status-list">
-              <div class="settings-status-row">
-                <span>鼠标穿透</span>
-                <small>{{ passThroughMode ? '已开启' : '托盘/快捷键' }}</small>
-              </div>
-              <div class="settings-status-row">
-                <span>贴边收纳</span>
-                <small>{{ edgeAutoHide ? '已开启' : '托盘控制' }}</small>
-              </div>
-            </div>
-          </template>
-
-          <template v-else-if="settingsView === 'categories'">
-            <div class="settings-card-header">
-              <button class="settings-back-button" type="button" @click="settingsView = 'main'">
-                <ArrowLeft :size="15" />
-              </button>
-              <span>分类筛选</span>
-            </div>
-            <button
-              v-for="category in visibleCategories"
-              :key="category"
-              class="settings-list-row"
-              :class="{ active: notes.activeCategory === category }"
-              type="button"
-              @click="selectCategory(category)"
-            >
-              <span>{{ category }}</span>
-              <small>{{ categoryCount(category) }}</small>
-            </button>
-          </template>
-
-          <template v-else-if="settingsView === 'themes'">
-            <div class="settings-card-header">
-              <button class="settings-back-button" type="button" @click="settingsView = 'main'">
-                <ArrowLeft :size="15" />
-              </button>
-              <span>主题</span>
-            </div>
-            <button
-              class="settings-list-row"
-              :class="{ active: themePreference === 'system' }"
-              type="button"
-              @click="setTheme('system')"
-            >
-              <span>跟随系统</span>
-              <small>自动切换</small>
-            </button>
-            <button
-              class="settings-list-row"
-              :class="{ active: themePreference === 'light' }"
-              type="button"
-              @click="setTheme('light')"
-            >
-              <span>浅色</span>
-              <Sun :size="15" />
-            </button>
-            <button
-              class="settings-list-row"
-              :class="{ active: themePreference === 'dark' }"
-              type="button"
-              @click="setTheme('dark')"
-            >
-              <span>深色</span>
-              <Moon :size="15" />
-            </button>
-          </template>
-
-          <template v-else>
-            <div class="settings-card-header">
-              <button class="settings-back-button" type="button" @click="settingsView = 'main'">
-                <ArrowLeft :size="15" />
-              </button>
-              <span>窗口模式</span>
-            </div>
-            <button
-              class="settings-list-row"
-              :class="{ active: !isMiniMode }"
-              type="button"
-              @click="selectMode('normal')"
-            >
-              <span>列表模式</span>
-              <small>完整列表</small>
-            </button>
-            <button
-              class="settings-list-row"
-              :class="{ active: isMiniMode }"
-              type="button"
-              @click="selectMode('mini')"
-            >
-              <span>迷你模式</span>
-              <small>最多 3 条</small>
-            </button>
-            <div class="settings-divider"></div>
-            <button
-              v-for="preset in modePresets"
-              :key="preset.id"
-              class="settings-list-row"
-              type="button"
-              @click="selectPreset(preset)"
-            >
-              <span>{{ preset.label }}</span>
-              <small>{{ Math.round(preset.opacity * 100) }}%</small>
-            </button>
-          </template>
-        </section>
-      </div>
-    </Teleport>
   </main>
   <div v-if="hasError" class="error-fallback">
     <StickyNote :size="30" />
@@ -396,9 +237,7 @@ import { computed, onErrorCaptured, onBeforeUnmount, onMounted, reactive, ref, w
 import {
   Bell,
   BellOff,
-  ArrowLeft,
   Check,
-  ChevronRight,
   CheckCircle,
   Circle,
   Minus,
@@ -409,7 +248,6 @@ import {
   Save,
   Search,
   Settings,
-  SlidersHorizontal,
   StickyNote,
   Sun,
   Trash2,
@@ -424,12 +262,19 @@ const isShortcutEditor = window.location.hash === '#shortcut-editor'
 
 const notes = useNotesStore()
 const categories = CATEGORIES
+const noteColors = [
+  { value: '', label: '默认' },
+  { value: 'red', label: '红色' },
+  { value: 'orange', label: '橙色' },
+  { value: 'yellow', label: '黄色' },
+  { value: 'green', label: '绿色' },
+  { value: 'blue', label: '蓝色' },
+  { value: 'purple', label: '紫色' }
+]
 const visibleCategories = [ALL_CATEGORY, ...CATEGORIES]
 const editorOpen = ref(false)
 const settingsOpen = ref(false)
-const settingsView = ref('main')
 const settingsButtonRef = ref(null)
-const settingsPanelStyle = ref({})
 watch(editorOpen, (val) => {
   window.api?.window.setEditing(val)
 })
@@ -494,13 +339,6 @@ const attachPopover = reactive({
   anchorEl: null
 })
 
-const contextMenu = reactive({
-  visible: false,
-  x: 0,
-  y: 0,
-  note: null
-})
-
 const isMiniMode = computed(() => windowMode.value === 'mini')
 const displayedNotes = computed(() => (isMiniMode.value ? notes.filteredNotes.slice(0, 3) : notes.filteredNotes))
 const modePresets = [
@@ -528,39 +366,24 @@ function toggleSettings() {
   if (isMiniMode.value) return
 
   if (settingsOpen.value) {
-    closeSettings()
+    window.api?.settingsWindow?.close()
     return
   }
 
-  settingsView.value = 'main'
+  const button = settingsButtonRef.value
+  if (!button) return
+
+  const rect = button.getBoundingClientRect()
+  const screenX = window.screenX + rect.right - 252
+  const screenY = window.screenY + rect.bottom + 8
+
   settingsOpen.value = true
-  updateSettingsPosition()
+  window.api?.settingsWindow?.open(screenX, screenY)
 }
 
 function closeSettings() {
   settingsOpen.value = false
-  settingsView.value = 'main'
-}
-
-function updateSettingsPosition() {
-  const button = settingsButtonRef.value
-  if (!button) {
-    settingsPanelStyle.value = {}
-    return
-  }
-
-  requestAnimationFrame(() => {
-    const rect = button.getBoundingClientRect()
-    const width = 252
-    const safe = 10
-    const left = Math.max(safe, Math.min(rect.right - width, window.innerWidth - width - safe))
-    const top = Math.max(safe, Math.min(rect.bottom + 8, window.innerHeight - safe))
-    settingsPanelStyle.value = {
-      left: `${Math.round(left)}px`,
-      top: `${Math.round(top)}px`,
-      width: `${width}px`
-    }
-  })
+  window.api?.settingsWindow?.close()
 }
 
 function openAttachPopover(note, event) {
@@ -585,6 +408,17 @@ function hasDroppedFiles(event) {
 function onCardClick(note) {
   if (sortDrag.active || sortDrag.settling || sortDragJustEnded.value) return
   openEditor(note)
+}
+
+async function popOutNote(note) {
+  if (!window.api?.noteWindow) return
+  await window.api.noteWindow.open(note.id, {
+    id: note.id,
+    title: note.title,
+    content: note.content,
+    category: note.category,
+    color: note.color
+  })
 }
 
 function getSortDragStyle(noteId) {
@@ -815,58 +649,37 @@ async function onPreloadFileDrop(event) {
 }
 
 function openContextMenu(note, event) {
-  contextMenu.note = note
-  contextMenu.x = event.clientX
-  contextMenu.y = event.clientY
-  contextMenu.visible = true
-  setTimeout(() => document.addEventListener('click', closeContextMenu, { once: true }), 0)
+  window.api?.contextMenu?.show({
+    id: note.id,
+    title: note.title,
+    content: note.content,
+    category: note.category,
+    color: note.color,
+    pinned: note.pinned,
+    completed: note.completed
+  })
 }
 
-function closeContextMenu() {
-  contextMenu.visible = false
-  contextMenu.note = null
-}
-
-function ctxEdit() {
-  if (contextMenu.note) openEditor(contextMenu.note)
-  closeContextMenu()
-}
-
-function ctxToggleComplete() {
-  if (contextMenu.note) handleToggleCompleted(contextMenu.note.id)
-  closeContextMenu()
-}
-
-async function ctxTogglePin() {
-  if (contextMenu.note) await notes.togglePinned(contextMenu.note.id)
-  closeContextMenu()
-}
-
-async function ctxDelete() {
-  if (contextMenu.note?.id) await notes.delete(contextMenu.note.id)
-  closeContextMenu()
-}
-
-async function ctxChangeCategory(category) {
-  if (contextMenu.note) await notes.update(contextMenu.note.id, { category })
-  closeContextMenu()
-}
-
-async function ctxCopyContent() {
-  if (!contextMenu.note) { closeContextMenu(); return }
-  const text = `${contextMenu.note.title}\n${contextMenu.note.content}`.trim()
-  try {
-    await navigator.clipboard.writeText(text)
-  } catch {
-    const ta = document.createElement('textarea')
-    ta.value = text
-    ta.style.cssText = 'position:fixed;opacity:0;pointer-events:none'
-    document.body.appendChild(ta)
-    ta.select()
-    document.execCommand('copy')
-    document.body.removeChild(ta)
+function handleContextMenuAction({ action, noteId, value }) {
+  switch (action) {
+    case 'edit': {
+      const note = notes.notes.find(n => n.id === noteId)
+      if (note) openEditor(note)
+      break
+    }
+    case 'togglePin': notes.togglePinned(noteId); break
+    case 'toggleComplete': handleToggleCompleted(noteId); break
+    case 'changeCategory': notes.update(noteId, { category: value }); break
+    case 'changeColor': notes.update(noteId, { color: value }); break
+    case 'popOut': {
+      const note = notes.notes.find(n => n.id === noteId)
+      if (note) popOutNote(note)
+      break
+    }
+    case 'delete':
+      notes.delete(noteId)
+      break
   }
-  closeContextMenu()
 }
 
 function delay(ms) {
@@ -970,6 +783,7 @@ function defaultDraft() {
     time: '09:00',
     completed: false,
     remind: true,
+    color: '',
     attachments: []
   }
 }
@@ -1153,26 +967,6 @@ async function applyPreset(preset) {
   windowMode.value = state?.windowMode || preset.mode
   edgeAutoHide.value = Boolean(state?.edgeAutoHide)
   setTimeout(syncContentHeight, 80)
-}
-
-function selectCategory(category) {
-  notes.setFilter(category)
-  closeSettings()
-  setTimeout(syncContentHeight, 80)
-}
-
-async function selectMode(mode) {
-  await setMode(mode)
-  if (mode === 'mini') return
-  settingsView.value = 'main'
-  updateSettingsPosition()
-}
-
-async function selectPreset(preset) {
-  await applyPreset(preset)
-  if (preset.mode === 'mini' || preset.passThrough) return
-  settingsView.value = 'main'
-  updateSettingsPosition()
 }
 
 function handleSearchEnter(event) {
@@ -1367,11 +1161,29 @@ onMounted(async () => {
           const nowMini = windowMode.value === 'mini'
           const nowPassThrough = passThroughMode.value
           if ((!wasMini && nowMini) || (!wasPassThrough && nowPassThrough)) {
-            closeSettings()
+            window.api?.settingsWindow?.close()
           }
         }
       })
     )
+  }
+
+  if (window.api?.contextMenu?.onAction) {
+    unsubscribeHandlers.push(window.api.contextMenu.onAction(handleContextMenuAction))
+  }
+
+  if (window.api?.settingsWindow?.onClosed) {
+    unsubscribeHandlers.push(window.api.settingsWindow.onClosed(() => {
+      settingsOpen.value = false
+    }))
+  }
+
+  if (window.api?.notify?.onClick) {
+    unsubscribeHandlers.push(window.api.notify.onClick(({ noteId }) => {
+      if (!noteId) return
+      const note = notes.notes.find(n => n.id === noteId)
+      if (note) openEditor(note)
+    }))
   }
 
   document.addEventListener('keydown', onKeyDown)
@@ -1380,7 +1192,7 @@ onMounted(async () => {
   document.addEventListener('visibilitychange', onVisibilityChange)
   window.addEventListener('focus', checkRemindersOnResume)
   window.addEventListener('message', onPreloadFileDrop)
-  window.addEventListener('resize', updateSettingsPosition)
+  window.addEventListener('resize', syncContentHeight)
 
   resizeObserver = new ResizeObserver(() => {
     if (resizePaused.value) return
@@ -1409,7 +1221,7 @@ onBeforeUnmount(() => {
   document.removeEventListener('mouseup', onSortMouseUp)
   window.removeEventListener('focus', checkRemindersOnResume)
   window.removeEventListener('message', onPreloadFileDrop)
-  window.removeEventListener('resize', updateSettingsPosition)
+  window.removeEventListener('resize', syncContentHeight)
 })
 </script>
 
@@ -1560,6 +1372,58 @@ onBeforeUnmount(() => {
   box-shadow: var(--shadow-drag);
   cursor: grabbing;
 }
+
+.note-card.color-red { border-left: 3px solid #ef4444; }
+.note-card.color-orange { border-left: 3px solid #f97316; }
+.note-card.color-yellow { border-left: 3px solid #eab308; }
+.note-card.color-green { border-left: 3px solid #22c55e; }
+.note-card.color-blue { border-left: 3px solid #3b82f6; }
+.note-card.color-purple { border-left: 3px solid #a855f7; }
+
+.color-dot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.color-dot.dot-default { background: var(--border); }
+.color-dot.dot-red { background: #ef4444; }
+.color-dot.dot-orange { background: #f97316; }
+.color-dot.dot-yellow { background: #eab308; }
+.color-dot.dot-green { background: #22c55e; }
+.color-dot.dot-blue { background: #3b82f6; }
+.color-dot.dot-purple { background: #a855f7; }
+
+.color-submenu .color-option {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.color-picker-row {
+  display: flex;
+  gap: 6px;
+  padding: 4px 0;
+}
+
+.color-picker-dot {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  cursor: pointer;
+  transition: border-color 0.15s, transform 0.15s;
+}
+.color-picker-dot:hover { transform: scale(1.15); }
+.color-picker-dot.active { border-color: var(--accent); }
+.color-picker-dot.dot-default { background: var(--border); }
+.color-picker-dot.dot-red { background: #ef4444; }
+.color-picker-dot.dot-orange { background: #f97316; }
+.color-picker-dot.dot-yellow { background: #eab308; }
+.color-picker-dot.dot-green { background: #22c55e; }
+.color-picker-dot.dot-blue { background: #3b82f6; }
+.color-picker-dot.dot-purple { background: #a855f7; }
 
 .sort-settling .note-card {
   transition: transform 0.22s ease-out;
@@ -1768,6 +1632,50 @@ onBeforeUnmount(() => {
   padding: 9px 10px;
 }
 
+.md-editor-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  min-height: 160px;
+}
+
+.md-textarea {
+  min-height: 160px !important;
+  font-family: Consolas, Monaco, monospace;
+  font-size: 12px !important;
+}
+
+.md-editor-preview {
+  -webkit-line-clamp: unset !important;
+  -webkit-box-orient: unset !important;
+  display: block !important;
+  max-height: unset !important;
+  overflow-y: auto !important;
+  padding: 8px 10px !important;
+  margin: 0 !important;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  background: var(--bg-input);
+  font-size: 12px !important;
+  line-height: 1.5 !important;
+}
+
+.md-editor-preview :where(p, div, h1, h2, h3, h4, h5, h6,
+                          ul, ol, li, blockquote, pre, dl, dt, dd,
+                          table, thead, tbody, tr, th, td) {
+  display: block !important;
+  margin: 0.3em 0 !important;
+}
+
+.md-editor-preview h1 { font-size: 16px; font-weight: 700; }
+.md-editor-preview h2 { font-size: 14px; font-weight: 700; }
+.md-editor-preview h3 { font-size: 13px; font-weight: 700; }
+.md-editor-preview ul { padding-left: 1.4em; }
+.md-editor-preview ol { padding-left: 1.4em; }
+.md-editor-preview blockquote { border-left: 3px solid var(--accent); padding-left: 8px; margin-left: 0; }
+.md-editor-preview pre { background: var(--accent-soft); padding: 6px 8px; border-radius: 4px; }
+.md-editor-preview code { background: var(--accent-soft); padding: 1px 4px; border-radius: 3px; font-family: Consolas, Monaco, monospace; font-size: 11px; }
+
 .field input:focus,
 .field select:focus,
 .field textarea:focus {
@@ -1852,20 +1760,6 @@ onBeforeUnmount(() => {
   background: var(--danger);
 }
 
-.context-menu {
-  position: absolute;
-  z-index: 10000;
-  display: flex;
-  flex-direction: column;
-  min-width: 140px;
-  padding: 6px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 10px;
-  background: rgba(30, 35, 34, 0.94);
-  backdrop-filter: blur(24px) saturate(180%);
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
-}
-
 .mini-mode {
   grid-template-rows: auto auto;
 }
@@ -1899,53 +1793,7 @@ onBeforeUnmount(() => {
   display: none;
 }
 
-.context-menu button {
-  padding: 8px 12px;
-  border: 0;
-  border-radius: 6px;
-  background: transparent;
-  color: rgba(255, 255, 255, 0.85);
-  font-size: 13px;
-  text-align: left;
-  cursor: pointer;
-}
-
-.context-menu button:hover {
-  background: rgba(255, 255, 255, 0.08);
-}
-
-.settings-popover-layer {
-  position: fixed;
-  inset: 0;
-  z-index: 1000;
-}
-
-.settings-card {
-  position: absolute;
-  display: grid;
-  gap: 7px;
-  max-height: calc(100vh - 20px);
-  overflow-y: auto;
-  padding: 8px;
-  border: 1px solid rgba(38, 57, 54, 0.1);
-  border-radius: 14px;
-  background: var(--bg-elevated);
-  box-shadow: 0 12px 36px rgba(32, 44, 42, 0.22);
-  color: var(--text);
-}
-
-.settings-card-header {
-  display: flex;
-  min-height: 34px;
-  align-items: center;
-  gap: 9px;
-  padding: 0 9px;
-  color: var(--text);
-  font-size: 13px;
-  font-weight: 700;
-}
-
-.settings-back-button {
+.note-card.color-red {
   display: inline-grid;
   width: 26px;
   height: 26px;
@@ -1953,87 +1801,6 @@ onBeforeUnmount(() => {
   border-radius: 7px;
   color: var(--text-muted);
   background: transparent;
-}
-
-.settings-back-button:hover {
-  color: var(--accent-strong);
-  background: var(--accent-soft);
-}
-
-.settings-slider-row,
-.settings-menu-row,
-.settings-list-row,
-.settings-status-row {
-  display: grid;
-  min-height: 34px;
-  align-items: center;
-  gap: 8px;
-  border-radius: 9px;
-  font-size: 12px;
-}
-
-.settings-slider-row {
-  grid-template-columns: auto 1fr 40px;
-  padding: 0 9px;
-  color: var(--text-muted);
-}
-
-.settings-slider-row input {
-  width: 100%;
-  accent-color: var(--accent);
-}
-
-.settings-slider-row strong {
-  color: var(--text);
-  font-size: 12px;
-  text-align: right;
-}
-
-.settings-menu-row,
-.settings-list-row {
-  grid-template-columns: 1fr auto auto;
-  width: 100%;
-  padding: 0 9px;
-  color: var(--text);
-  background: transparent;
-  text-align: left;
-}
-
-.settings-menu-row:hover,
-.settings-list-row:hover {
-  background: rgba(38, 57, 54, 0.05);
-}
-
-.settings-menu-row small,
-.settings-list-row small,
-.settings-status-row small {
-  color: var(--text-muted);
-  font-size: 12px;
-}
-
-.settings-list-row.active {
-  color: var(--accent-strong);
-  background: var(--accent-soft);
-  font-weight: 700;
-}
-
-.settings-status-list {
-  display: grid;
-  margin-top: 2px;
-  padding-top: 7px;
-  border-top: 1px solid var(--border);
-}
-
-.settings-status-row {
-  grid-template-columns: 1fr auto;
-  padding: 0 9px;
-  color: var(--text-muted);
-}
-
-.settings-divider {
-  height: 1px;
-  margin: 3px 0;
-  background: var(--border);
 }
 
 .opacity-control {
@@ -2248,67 +2015,5 @@ onBeforeUnmount(() => {
 .mini-mode.mode-transitioning .toolbar,
 .mini-mode.mode-transitioning .app-footer {
   display: block;
-}
-
-/* ===== 右键菜单增强 ===== */
-
-.context-menu > button:last-child {
-  color: #ff6b6b;
-}
-.context-menu > button:last-child:hover {
-  background: rgba(255, 107, 107, 0.12);
-}
-
-.submenu-wrapper {
-  position: relative;
-}
-
-.submenu-trigger-btn {
-  display: flex !important;
-  align-items: center;
-  justify-content: space-between;
-  width: 100%;
-  gap: 40px;
-}
-
-.submenu {
-  position: absolute;
-  left: 100%;
-  top: 0;
-  z-index: 10001;
-  display: none;
-  flex-direction: column;
-  min-width: 110px;
-  padding: 6px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 10px;
-  background: rgba(30, 35, 34, 0.94);
-  backdrop-filter: blur(24px) saturate(180%);
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
-}
-
-.submenu-wrapper:hover .submenu,
-.submenu-wrapper:focus-within .submenu {
-  display: flex;
-}
-
-.submenu button {
-  padding: 8px 12px;
-  border: 0;
-  border-radius: 6px;
-  background: transparent;
-  color: rgba(255, 255, 255, 0.85);
-  font-size: 13px;
-  text-align: left;
-  cursor: pointer;
-  white-space: nowrap;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-}
-
-.submenu button:hover {
-  background: rgba(255, 255, 255, 0.08);
 }
 </style>

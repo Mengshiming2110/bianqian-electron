@@ -3,3 +3,11 @@ out/
 dist/
 *.log
 .DS_Store
+.codegraph/
+.cursor/
+.superpowers/
+docs/superpowers/
+*.bak
+test-*.cjs
+test-*.mjs
+electron-main-wrapper.cjs

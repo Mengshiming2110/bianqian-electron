@@ -62,6 +62,7 @@ export function generateId() {
 export function normalizeNote(input = {}) {
   const createdAt = input.createdAt || new Date().toISOString()
 
+  const validColors = ['', 'red', 'orange', 'yellow', 'green', 'blue', 'purple']
   return {
     id: String(input.id || generateId()),
     title: String(input.title || '').trim(),
@@ -72,6 +73,8 @@ export function normalizeNote(input = {}) {
     completed: Boolean(input.completed),
     pinned: Boolean(input.pinned),
     remind: input.remind !== false,
+    color: validColors.includes(input.color) ? input.color : '',
+    order: typeof input.order === 'number' ? input.order : Date.now(),
     attachments: Array.isArray(input.attachments)
       ? input.attachments.map((item) => String(item))
       : [],

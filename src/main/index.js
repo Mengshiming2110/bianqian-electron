@@ -4,6 +4,8 @@ import { TrayController } from './tray.js'
 import { registerIpc } from './ipc.js'
 import { registerAllShortcuts, unregisterAllShortcuts } from './shortcuts.js'
 
+app.setAppUserModelId('com.local.bianqian')
+
 let windowManager
 let trayController
 

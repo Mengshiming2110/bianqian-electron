@@ -15,7 +15,7 @@
 
 ## 技术栈
 
-Electron 33 · Vue 3 · Pinia · electron-vite · electron-store · lucide-vue-next · electron-builder (NSIS)
+Electron 28 · Vue 3 · Pinia · electron-vite · electron-store · lucide-vue-next · electron-builder (NSIS)
 
 ## 快速开始
 
