@@ -115,5 +115,34 @@ contextBridge.exposeInMainWorld('api', {
   notify: {
     trigger: (opts) => ipcRenderer.invoke('notify:trigger', opts),
     onClick: (callback) => on('notify:clicked', callback)
+  },
+  clipboard: {
+    list: (limit, offset) => ipcRenderer.invoke('clipboard:list', limit, offset),
+    search: (query) => ipcRenderer.invoke('clipboard:search', query),
+    delete: (id) => ipcRenderer.invoke('clipboard:delete', id),
+    togglePin: (id) => ipcRenderer.invoke('clipboard:togglePin', id),
+    clearAll: () => ipcRenderer.invoke('clipboard:clearAll'),
+    paste: (id) => ipcRenderer.invoke('clipboard:paste', id),
+    stats: () => ipcRenderer.invoke('clipboard:stats'),
+    onNewItem: (callback) => on('clipboard:newItem', callback)
+  },
+  mail: {
+    configure: (config) => ipcRenderer.invoke('mail:configure', config),
+    list: () => ipcRenderer.invoke('mail:list'),
+    fetch: () => ipcRenderer.invoke('mail:fetch'),
+    detail: (id) => ipcRenderer.invoke('mail:detail', id),
+    stop: () => ipcRenderer.invoke('mail:stop'),
+    status: () => ipcRenderer.invoke('mail:status')
+  },
+  settings: {
+    get: () => ipcRenderer.invoke('settings:get'),
+    save: (s) => ipcRenderer.invoke('settings:save', s)
+  },
+  events: {
+    on: on,
+    off: (channel, callback) => {
+      const listener = (_event, payload) => callback(payload)
+      ipcRenderer.removeListener(channel, listener)
+    }
   }
 })
