@@ -36,20 +36,39 @@ export class WindowManager {
     this.edge.autoHide = settings.edgeAutoHide
   }
 
+  getDefaultBounds() {
+    const workArea = screen.getPrimaryDisplay().workArea
+    return {
+      width: this.windowMode === 'mini' ? 220 : 280,
+      height: this.windowMode === 'mini' ? 120 : 360,
+      x: workArea.x + workArea.width - 300,
+      y: workArea.y + 20
+    }
+  }
+
+  getInitialBounds() {
+    const savedBounds = getSettings().windowBounds
+    if (savedBounds) {
+      const displays = screen.getAllDisplays()
+      const visible = displays.some(d => {
+        const { x, y, width, height } = d.workArea
+        return savedBounds.x >= x && savedBounds.y >= y &&
+               savedBounds.x < x + width && savedBounds.y < y + height
+      })
+      if (visible) return savedBounds
+    }
+    return this.getDefaultBounds()
+  }
+
   async createFloatingWindow() {
     if (this.window && !this.window.isDestroyed()) {
       return this.window
     }
 
-    const workArea = screen.getPrimaryDisplay().workArea
-
     this.window = new BrowserWindow({
-      width: this.windowMode === 'mini' ? 220 : 280,
-      height: this.windowMode === 'mini' ? 120 : 360,
+      ...this.getInitialBounds(),
       minWidth: this.windowMode === 'mini' ? 200 : 260,
       minHeight: this.windowMode === 'mini' ? 80 : 360,
-      x: workArea.x + workArea.width - 300,
-      y: workArea.y + 20,
       frame: false,
       transparent: true,
       resizable: true,
@@ -81,7 +100,19 @@ export class WindowManager {
       this.window = null
     })
 
-    this.window.on('moved', () => this.edge.onWindowMoved())
+    this.window.on('minimize', (e) => {
+      e.preventDefault()
+      this.window.hide()
+    })
+
+    this.window.on('moved', () => {
+      this.edge.onWindowMoved()
+      updateSettings({ windowBounds: this.window.getBounds() })
+    })
+
+    this.window.on('resized', () => {
+      updateSettings({ windowBounds: this.window.getBounds() })
+    })
 
     this.window.webContents.once('did-finish-load', () => {
       this.applyFilter(this.pendingFilter)
