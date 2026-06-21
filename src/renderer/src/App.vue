@@ -7,10 +7,10 @@
     'transition-to-mini': modeTransition === 'to-mini',
     'transition-to-normal': modeTransition === 'to-normal'
   }">
-    <header class="app-header">
+    <header class="app-header" v-show="activeTab === 'notes' || !isMiniMode">
       <div>
-        <p class="eyebrow">{{ notes.activeCategory }}</p>
-        <h1>便签</h1>
+        <p class="eyebrow">Ezio的百宝箱</p>
+        <h1>{{ tabTitle }}</h1>
       </div>
       <div class="header-actions">
         <button
@@ -23,8 +23,17 @@
         >
           <Settings :size="18" />
         </button>
-        <button class="icon-button" title="新建便签" type="button" @click="openEditor()">
+        <!-- 便签 Tab: 新建按钮 -->
+        <button v-if="activeTab === 'notes'" class="icon-button" title="新建便签" type="button" @click="openEditor()">
           <Plus :size="18" />
+        </button>
+        <!-- 剪切板 Tab: 清空按钮 -->
+        <button v-if="activeTab === 'clipboard'" class="icon-button" title="清空剪切板" type="button" @click="clipboardStore?.clearAll()">
+          <svg style="width:18px;height:18px"><use href="#ic-trash"/></svg>
+        </button>
+        <!-- 邮件 Tab: 手动拉取按钮 -->
+        <button v-if="activeTab === 'mail'" class="icon-button" title="拉取邮件" type="button" @click="mailStore?.fetch()">
+          <svg style="width:18px;height:18px"><use href="#ic-refresh"/></svg>
         </button>
         <button class="icon-button" title="隐藏窗口" type="button" @click="hideWindow">
           <Minus :size="18" />
@@ -34,19 +43,26 @@
 
     <div v-show="isMiniMode || modeTransition !== 'idle'" class="mini-drag-bar"></div>
 
-    <section v-show="!isMiniMode || modeTransition !== 'idle'" class="toolbar">
+    <section v-show="(activeTab === 'notes' || !isMiniMode) || modeTransition !== 'idle'" class="toolbar">
       <div class="search-box">
         <Search :size="15" />
         <input
           :value="notes.search"
           type="search"
-          placeholder="搜索，或输入：明天9点交报告 #工作"
+          :placeholder="searchPlaceholder"
           @input="notes.setSearch($event.target.value)"
           @keydown.enter="handleSearchEnter"
         />
       </div>
     </section>
+    <div class="cat-tabs" v-if="activeTab === 'notes' && !isMiniMode">
+      <span v-for="cat in visibleCategories" :key="cat" class="cat-tab"
+        :class="{ active: notes.activeCategory === cat }"
+        @click="notes.setFilter(cat)"
+      >{{ cat }}</span>
+    </div>
 
+    <template v-if="activeTab === 'notes'">
     <section class="note-list" :class="{ 'sort-active': sortDrag.active, 'sort-settling': sortDrag.settling }" aria-label="便签列表">
       <article
         v-for="note in displayedNotes"
@@ -106,11 +122,15 @@
         <p>没有便签</p>
       </div>
     </section>
+    </template>
 
     <footer v-show="!isMiniMode || modeTransition !== 'idle'" class="app-footer">
-      <span>{{ notes.filteredNotes.length }} 条</span>
-      <span>{{ todayLabel }}</span>
+      <span>{{ footerLeft }}</span>
+      <span>{{ footerRight }}</span>
     </footer>
+
+    <ClipboardPanel v-if="activeTab === 'clipboard'" style="min-height:0;overflow-y:auto;padding:0 12px" />
+    <MailPanel v-if="activeTab === 'mail'" style="min-height:0;overflow-y:auto;padding:0 12px" />
 
     <div v-if="editorOpen" class="editor-overlay" @click.self="closeEditor">
       <form class="editor-panel" @submit.prevent="saveEditor">
@@ -224,7 +244,22 @@
       @open="handleAttachOpen"
     />
 
+    <nav class="tab-bar-outer">
+      <div class="tab-bar">
+        <button v-for="tab in tabs" :key="tab.id" class="tab-btn"
+          :class="{ active: activeTab === tab.id }"
+          :disabled="isMiniMode && tab.id !== 'notes'"
+          @click="switchTab(tab.id)"
+        >
+          <svg><use :href="'#ic-' + tab.id"/></svg>
+          {{ tab.label }}
+          <span class="tab-badge" v-if="tab.id === 'mail' && mailStore.unreadCount > 0">{{ mailStore.unreadCount }}</span>
+        </button>
+      </div>
+    </nav>
   </main>
+  <WelcomeCard />
+  <AboutCard ref="aboutRef" />
   <div v-if="hasError" class="error-fallback">
     <StickyNote :size="30" />
     <p>出了点问题</p>
@@ -256,6 +291,12 @@ import {
 import AttachmentPopover from './components/AttachmentPopover.vue'
 import MarkdownPreview from './components/MarkdownPreview.vue'
 import ShortcutEditor from './components/ShortcutEditor.vue'
+import ClipboardPanel from './components/ClipboardPanel.vue'
+import MailPanel from './components/MailPanel.vue'
+import WelcomeCard from './components/WelcomeCard.vue'
+import AboutCard from './components/AboutCard.vue'
+import { useClipboardStore } from './stores/clipboard'
+import { useMailStore } from './stores/mail'
 import { ALL_CATEGORY, CATEGORIES, MAX_ATTACHMENTS_PER_NOTE, loadCategories, useNotesStore } from './stores/notes'
 
 const isShortcutEditor = window.location.hash === '#shortcut-editor'
@@ -272,6 +313,30 @@ const noteColors = [
   { value: 'purple', label: '紫色' }
 ]
 const visibleCategories = [ALL_CATEGORY, ...CATEGORIES]
+const activeTab = ref('notes')
+const tabs = [
+  { id: 'notes', label: '便签' },
+  { id: 'clipboard', label: '剪切板' },
+  { id: 'mail', label: '邮件' }
+]
+const clipboardStore = useClipboardStore()
+const mailStore = useMailStore()
+const aboutRef = ref(null)
+
+const tabTitle = computed(() => {
+  const map = { notes: '便签', clipboard: '剪切板', mail: '邮件' }
+  return map[activeTab.value] || '便签'
+})
+
+const searchPlaceholder = computed(() => {
+  const map = {
+    notes: '搜索，或输入：明天9点交报告 #工作',
+    clipboard: '搜索剪切板历史...',
+    mail: '搜索邮件...'
+  }
+  return map[activeTab.value] || '搜索...'
+})
+
 const editorOpen = ref(false)
 const settingsOpen = ref(false)
 const settingsButtonRef = ref(null)
@@ -341,6 +406,26 @@ const attachPopover = reactive({
 
 const isMiniMode = computed(() => windowMode.value === 'mini')
 const displayedNotes = computed(() => (isMiniMode.value ? notes.filteredNotes.slice(0, 3) : notes.filteredNotes))
+
+const footerLeft = computed(() => {
+  if (activeTab.value === 'clipboard') return `${clipboardStore.items.length} 条记录`
+  if (activeTab.value === 'mail') {
+    if (mailStore.lastSync) return `${mailStore.mails.length} 封 · 上次 ${new Date(mailStore.lastSync).toLocaleTimeString('zh-CN', {hour:'2-digit',minute:'2-digit'})}`
+    return `${mailStore.mails.length} 封`
+  }
+  return `${notes.filteredNotes.length} 条`
+})
+
+const footerRight = computed(() => {
+  if (activeTab.value === 'clipboard') return '监听中'
+  if (activeTab.value === 'mail') {
+    if (mailStore.isRunning) return '已连接'
+    if (mailStore.configured) return '连接断开'
+    return '未配置'
+  }
+  return todayLabel.value
+})
+
 const modePresets = [
   { id: 'default', label: '常规', opacity: 0.92, passThrough: false, mode: 'normal' },
   { id: 'focus', label: '专注', opacity: 1, passThrough: false, mode: 'normal' },
@@ -361,6 +446,19 @@ watch(
     resizeDebounce = setTimeout(syncContentHeight, 80)
   }
 )
+
+function switchTab(id) {
+  if (isMiniMode.value && id !== 'notes') return
+  activeTab.value = id
+}
+
+function onNavigateTab(tab) {
+  activeTab.value = tab
+}
+
+function onShowAbout() {
+  aboutRef.value?.show()
+}
 
 function toggleSettings() {
   if (isMiniMode.value) return
@@ -1201,6 +1299,12 @@ onMounted(async () => {
   })
   if (appShellRef.value) {
     resizeObserver.observe(appShellRef.value)
+  }
+
+  // Tab navigation events
+  if (window.api?.events?.on) {
+    unsubscribeHandlers.push(window.api.events.on('navigate-tab', onNavigateTab))
+    unsubscribeHandlers.push(window.api.events.on('show-about', onShowAbout))
   }
 })
 
