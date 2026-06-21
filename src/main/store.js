@@ -13,6 +13,11 @@ function createStore() {
       notes: [],
       settings: {
         opacity: 0.92,
+        defaultCat: '',
+        clipboardLimit: 50,
+        autoStart: false,
+        mailInterval: 5,
+        mailConfig: { server: '', email: '', password: '' },
         windowMode: 'normal',
         edgeAutoHide: false,
         theme: 'system',
@@ -176,6 +181,13 @@ export function getSettings() {
 
   return {
     opacity: clampOpacity(settings.opacity),
+    defaultCat: settings.defaultCat || '',
+    clipboardLimit: typeof settings.clipboardLimit === 'number' ? settings.clipboardLimit : 50,
+    autoStart: Boolean(settings.autoStart),
+    mailInterval: typeof settings.mailInterval === 'number' ? settings.mailInterval : 5,
+    mailConfig: settings.mailConfig && typeof settings.mailConfig === 'object'
+      ? { server: '', email: '', password: '', ...settings.mailConfig }
+      : { server: '', email: '', password: '' },
     windowMode: settings.windowMode === 'mini' ? 'mini' : 'normal',
     edgeAutoHide: Boolean(settings.edgeAutoHide),
     theme: settings.theme === 'light' || settings.theme === 'dark' ? settings.theme : 'system',

@@ -6,6 +6,7 @@ import {
   createNote,
   deleteNote,
   getNotes,
+  getSettings,
   getShortcuts,
   saveNotes,
   setShortcut,
@@ -327,5 +328,20 @@ export function registerIpc(windowManager, trayController) {
 
   ipcMain.handle('shortcuts:stop-record', () => {
     return stopRecord(windowManager)
+  })
+
+  ipcMain.handle('settings:get', () => {
+    try { return getSettings() }
+    catch (err) { console.error('[ipc] settings:get 失败:', err.message); return {} }
+  })
+
+  ipcMain.handle('settings:save', (_, s) => {
+    try {
+      updateSettings(s)
+      return true
+    } catch (err) {
+      console.error('[ipc] settings:save 失败:', err.message)
+      return false
+    }
   })
 }
