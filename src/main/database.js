@@ -1,59 +1,78 @@
-import Database from 'better-sqlite3'
+/**
+ * SQLite 数据库 — sql.js (纯 JS WebAssembly, 免编译)
+ */
+import initSqlJs from 'sql.js'
 import { app } from 'electron'
-import { join } from 'node:path'
+import { join, dirname } from 'node:path'
+import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs'
 
 let db = null
+let dbPath = ''
 
-export function initDatabase() {
-  const dbPath = join(app.getPath('userData'), 'clipboard.db')
-  db = new Database(dbPath)
+async function ensureDir(p) {
+  const d = dirname(p)
+  if (!existsSync(d)) mkdirSync(d, { recursive: true })
+}
 
-  db.pragma('journal_mode = WAL')
-  db.pragma('synchronous = NORMAL')
+export async function initDatabase() {
+  const SQL = await initSqlJs()
+  dbPath = join(app.getPath('userData'), 'clipboard.db')
+  ensureDir(dbPath)
 
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS clipboard_items (
-      id TEXT PRIMARY KEY,
-      type TEXT NOT NULL DEFAULT 'text',
-      content TEXT,
-      preview TEXT,
-      source_app TEXT DEFAULT '',
-      hash TEXT NOT NULL,
-      pinned INTEGER DEFAULT 0,
-      copy_count INTEGER DEFAULT 1,
-      created_at TEXT NOT NULL,
-      last_copied_at TEXT NOT NULL
-    );
+  if (existsSync(dbPath)) {
+    const buf = readFileSync(dbPath)
+    db = new SQL.Database(buf)
+  } else {
+    db = new SQL.Database()
+  }
 
-    CREATE INDEX IF NOT EXISTS idx_clipboard_hash
-      ON clipboard_items(hash);
-    CREATE INDEX IF NOT EXISTS idx_clipboard_created
-      ON clipboard_items(created_at DESC);
+  db.run('PRAGMA journal_mode = WAL')
+  db.run('PRAGMA synchronous = NORMAL')
 
-    CREATE TABLE IF NOT EXISTS mail_items (
-      id TEXT PRIMARY KEY,
-      subject TEXT NOT NULL DEFAULT '',
-      sender TEXT NOT NULL DEFAULT '',
-      body TEXT DEFAULT '',
-      received_at TEXT NOT NULL DEFAULT '',
-      is_read INTEGER DEFAULT 0,
-      extracted_fields TEXT DEFAULT '{}'
-    );
+  db.run(`CREATE TABLE IF NOT EXISTS clipboard_items (id TEXT PRIMARY KEY, type TEXT NOT NULL DEFAULT 'text', content TEXT, preview TEXT, source_app TEXT DEFAULT '', hash TEXT NOT NULL, pinned INTEGER DEFAULT 0, copy_count INTEGER DEFAULT 1, created_at TEXT NOT NULL, last_copied_at TEXT NOT NULL)`)
+  db.run('CREATE INDEX IF NOT EXISTS idx_clipboard_hash ON clipboard_items(hash)')
+  db.run('CREATE INDEX IF NOT EXISTS idx_clipboard_created ON clipboard_items(created_at)')
+  db.run(`CREATE TABLE IF NOT EXISTS mail_items (id TEXT PRIMARY KEY, subject TEXT NOT NULL DEFAULT '', sender TEXT NOT NULL DEFAULT '', body TEXT DEFAULT '', received_at TEXT NOT NULL DEFAULT '', is_read INTEGER DEFAULT 0, extracted_fields TEXT DEFAULT '{}')`)
+  db.run('CREATE INDEX IF NOT EXISTS idx_mail_received ON mail_items(received_at)')
 
-    CREATE INDEX IF NOT EXISTS idx_mail_received
-      ON mail_items(received_at DESC);
-  `)
-
+  persist()
   console.log('[database] 初始化, 路径:', dbPath)
 }
 
-export function getDatabase() {
-  return db
+function persist() {
+  if (!db || !dbPath) return
+  const data = db.export()
+  writeFileSync(dbPath, Buffer.from(data))
+}
+
+export function getDatabase() { return db }
+
+export function queryAll(sql, params = []) {
+  if (!db) return []
+  try {
+    const stmt = db.prepare(sql)
+    if (params.length) stmt.bind(params)
+    const rows = []
+    while (stmt.step()) rows.push(stmt.getAsObject())
+    stmt.free()
+    return rows
+  } catch (err) { console.error('[db] queryAll:', err.message); return [] }
+}
+
+export function queryOne(sql, params = []) {
+  const rows = queryAll(sql, params)
+  return rows[0] || null
+}
+
+export function execute(sql, params = []) {
+  if (!db) return { changes: 0 }
+  try {
+    db.run(sql, params)
+    persist()
+    return { changes: db.getRowsModified() }
+  } catch (err) { console.error('[db] execute:', err.message); return { changes: 0 } }
 }
 
 export function closeDatabase() {
-  if (db) {
-    db.close()
-    db = null
-  }
+  if (db) { persist(); db.close(); db = null }
 }

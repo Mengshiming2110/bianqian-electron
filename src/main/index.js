@@ -31,7 +31,7 @@ if (!gotLock) {
     })
 
     // 初始化 SQLite
-    initDatabase()
+    await initDatabase()
 
     // 加载设置，应用剪切板上限
     const settings = getSettings()
