@@ -26,7 +26,6 @@ export class TrayController {
   constructor(windowManager) {
     this.windowManager = windowManager
     this.tray = null
-    this.counts = {}
   }
 
   create() {
@@ -37,9 +36,9 @@ export class TrayController {
     const passThrough = this.windowManager.getInteractionState().passThrough
     const image = createTrayImage(passThrough)
     this.tray = new Tray(image)
-    this.tray.setToolTip('便签')
+    this.tray.setToolTip('Ezio的百宝箱')
     this.tray.on('click', () => this.windowManager.toggle())
-    this.rebuildMenu(this.counts)
+    this.rebuildMenu()
     return this.tray
   }
 
@@ -47,85 +46,119 @@ export class TrayController {
     if (!this.tray) return
     const passThrough = this.windowManager.getInteractionState().passThrough
     this.tray.setImage(createTrayImage(passThrough))
-    this.tray.setToolTip(passThrough ? '便签 - 鼠标穿透中' : '便签')
+    this.tray.setToolTip('Ezio的百宝箱')
   }
 
-  rebuildMenu(counts = this.counts) {
-    this.counts = counts
-
-    if (!this.tray) {
-      return
-    }
-
-    const interactionState = this.windowManager.getInteractionState()
+  rebuildMenu() {
+    if (!this.tray) return
 
     this.updateIcon()
 
-    const categoryItems = CATEGORIES.map((category) => ({
-      label: `${category}${counts[category] ? ` (${counts[category]})` : ''}`,
-      click: () => this.windowManager.show(category)
-    }))
+    const interactionState = this.windowManager.getInteractionState()
 
-    const contextMenu = Menu.buildFromTemplate([
+    const getWin = () => this.windowManager.getWindow()
+
+    const template = [
       {
-        label: `全部便签${this.totalCount() ? ` (${this.totalCount()})` : ''}`,
-        click: () => this.windowManager.show(ALL_CATEGORY)
+        label: '📋 便签',
+        click: () => {
+          const win = getWin()
+          if (win) {
+            win.show()
+            win.focus()
+            win.webContents.send('navigate-tab', 'notes')
+          }
+        }
       },
       {
-        label: '分类',
-        submenu: categoryItems
+        label: '📎 剪切板',
+        click: () => {
+          const win = getWin()
+          if (win) {
+            win.show()
+            win.focus()
+            win.webContents.send('navigate-tab', 'clipboard')
+          }
+        }
+      },
+      {
+        label: '📧 邮件',
+        click: () => {
+          const win = getWin()
+          if (win) {
+            win.show()
+            win.focus()
+            win.webContents.send('navigate-tab', 'mail')
+          }
+        }
       },
       { type: 'separator' },
       {
-        label: '新建便签',
-        click: () => this.windowManager.openNewNote()
+        label: '📂 分类',
+        submenu: CATEGORIES.filter(c => c !== '全部').map(cat => ({
+          label: `  ${cat}`,
+          click: () => {
+            const win = getWin()
+            if (win) {
+              win.show()
+              win.focus()
+              win.webContents.send('filter-category', cat)
+              win.webContents.send('navigate-tab', 'notes')
+            }
+          }
+        }))
       },
+      { type: 'separator' },
       {
-        label: '鼠标穿透',
+        label: '➕ 新建便签',
+        click: () => {
+          const win = getWin()
+          if (win) {
+            win.show()
+            win.focus()
+            win.webContents.send('new-note')
+            win.webContents.send('navigate-tab', 'notes')
+          }
+        }
+      },
+      { type: 'separator' },
+      {
+        label: '👁 穿透开关',
         type: 'checkbox',
         checked: interactionState.passThrough,
-        click: (menuItem) => {
-          this.windowManager.setPassThroughMode(menuItem.checked)
-          this.rebuildMenu(this.counts)
+        click: () => {
+          const win = getWin()
+          if (win) win.webContents.send('toggle-pass-through')
         }
       },
       {
-        label: '迷你卡片',
+        label: '⏸ 暂停剪切板监听',
         type: 'checkbox',
-        checked: interactionState.windowMode === 'mini',
-        click: (menuItem) => {
-          this.windowManager.setWindowMode(menuItem.checked ? 'mini' : 'normal')
-          this.rebuildMenu(this.counts)
+        checked: false,
+        click: () => {
+          const win = getWin()
+          if (win) win.webContents.send('toggle-clipboard-monitor')
         }
-      },
-      {
-        label: '贴边收纳',
-        type: 'checkbox',
-        checked: interactionState.edgeAutoHide,
-        click: (menuItem) => {
-          this.windowManager.setEdgeAutoHide(menuItem.checked)
-          this.rebuildMenu(this.counts)
-        }
-      },
-      {
-        label: '快捷键设置',
-        click: () => this.windowManager.openShortcutEditor()
       },
       { type: 'separator' },
       {
-        label: '退出',
+        label: 'ℹ 关于',
         click: () => {
-          app.isQuitting = true
-          app.exit(0)
+          const win = getWin()
+          if (win) {
+            win.show()
+            win.focus()
+            win.webContents.send('show-about')
+          }
         }
+      },
+      {
+        label: '✕ 退出',
+        click: () => { app.exit(0) }
       }
-    ])
+    ]
 
-    this.tray.setContextMenu(contextMenu)
-  }
-
-  totalCount() {
-    return Object.values(this.counts).reduce((sum, count) => sum + Number(count || 0), 0)
+    this.tray.setContextMenu(Menu.buildFromTemplate(template))
   }
 
   destroy() {
