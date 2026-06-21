@@ -46,6 +46,42 @@
             <small>{{ state.edgeAutoHide ? '已开启' : '托盘控制' }}</small>
           </div>
         </div>
+
+        <!-- 剪切板设置 -->
+        <div class="setting-group">
+          <h4>剪切板</h4>
+          <div class="setting-row">
+            <span>历史记录上限</span>
+            <select v-model="clipboardLimit" @change="saveClipboardLimit">
+              <option :value="20">20 条</option>
+              <option :value="50">50 条</option>
+              <option :value="100">100 条</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- 系统设置 -->
+        <div class="setting-group">
+          <h4>系统</h4>
+          <div class="setting-row">
+            <span>开机自启动</span>
+            <input type="checkbox" v-model="autoStart" @change="saveAutoStart" />
+          </div>
+          <div class="setting-row">
+            <span>邮件拉取间隔</span>
+            <select v-model="mailInterval" @change="saveMailInterval">
+              <option :value="1">1 分钟</option>
+              <option :value="5">5 分钟</option>
+              <option :value="15">15 分钟</option>
+              <option :value="30">30 分钟</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- 版本号 -->
+        <div style="text-align:center;color:var(--text-tertiary);font-size:10px;margin-top:12px;padding-top:10px;border-top:1px solid var(--border)">
+          v1.0.0
+        </div>
       </template>
 
       <template v-else-if="view === 'categories'">
@@ -145,7 +181,7 @@
 </template>
 
 <script setup>
-import { reactive, computed, onMounted, onBeforeUnmount } from 'vue'
+import { reactive, ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import {
   ArrowLeft,
   ChevronRight,
@@ -165,6 +201,10 @@ const state = reactive({
   edgeAutoHide: false,
   activeCategory: '全部'
 })
+
+const clipboardLimit = ref(50)
+const autoStart = ref(false)
+const mailInterval = ref(5)
 
 const allCategories = ['全部', '工作', '生活', '学习', '会议', '其他']
 
@@ -187,9 +227,32 @@ const themeLabel = computed(() => {
   return map[state.theme] || '跟随系统'
 })
 
+async function loadSettings() {
+  const settings = await window.api?.settings?.get()
+  if (settings) {
+    clipboardLimit.value = settings.clipboardLimit || 50
+    autoStart.value = settings.autoStart || false
+    mailInterval.value = settings.mailInterval || 5
+  }
+}
+
+async function saveClipboardLimit() {
+  await window.api?.settings?.save({ clipboardLimit: clipboardLimit.value })
+}
+
+async function saveAutoStart() {
+  await window.api?.settings?.save({ autoStart: autoStart.value })
+}
+
+async function saveMailInterval() {
+  await window.api?.settings?.save({ mailInterval: mailInterval.value })
+}
+
 let unsubInteraction = null
 
 onMounted(async () => {
+  await loadSettings()
+
   if (window.api?.window?.getInteractionState) {
     const s = await window.api.window.getInteractionState()
     if (s) {
@@ -469,5 +532,44 @@ async function applyPreset(preset) {
   height: 1px;
   margin: 4px 9px;
   background: var(--border);
+}
+
+.setting-group {
+  padding: 6px 9px 2px;
+}
+
+.setting-group h4 {
+  margin: 0 0 6px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.setting-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 0;
+  font-size: 12px;
+  color: var(--text);
+}
+
+.setting-row select {
+  font-size: 11px;
+  padding: 2px 6px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-small);
+  background: var(--bg);
+  color: var(--text);
+  outline: none;
+}
+
+.setting-row input[type="checkbox"] {
+  accent-color: var(--accent);
+  width: 15px;
+  height: 15px;
+  cursor: pointer;
 }
 </style>
