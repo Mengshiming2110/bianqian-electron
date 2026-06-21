@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Header 操作按钮 — 三种方案对比</title>
+<style>
+:root {
+  --bg-root: #050508; --bg-window: rgba(12,13,16,0.94);
+  --bg-card: rgba(22,24,30,0.88); --text: #e8eaef;
+  --text-secondary: #8b8f9a; --text-tertiary: #5c606d;
+  --border: rgba(255,255,255,0.06); --accent: #5ebf9e;
+  --accent-dim: rgba(94,191,158,0.08); --accent-glow: rgba(94,191,158,0.18);
+  --radius-window: 20px; --radius-sm: 8px; --radius-xs: 6px;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: -apple-system, 'SF Pro Text', 'Noto Sans CJK SC', sans-serif;
+  font-size: 13px; min-height: 100vh;
+  display: flex; align-items: flex-start; justify-content: center; gap: 32px; padding: 40px; flex-wrap: wrap;
+  background: var(--bg-root);
+}
+body::before { content: ''; position: fixed; inset: 0; z-index: 0; pointer-events: none; background: radial-gradient(ellipse 80% 60% at 50% 30%, rgba(94,191,158,0.04) 0%, transparent 60%); }
+
+.scene { display: flex; flex-direction: column; align-items: center; gap: 10px; position: relative; z-index: 1; }
+.scene-label {
+  font-size: 11px; font-weight: 600; letter-spacing: 0.04em;
+  color: var(--text-tertiary); text-transform: uppercase;
+}
+
+.app-outer {
+  position: relative; z-index: 1; padding: 2px;
+  border-radius: calc(var(--radius-window) + 2px);
+  background: linear-gradient(135deg, rgba(255,255,255,0.06), rgba(255,255,255,0.02), rgba(255,255,255,0.06));
+  box-shadow: 0 0 0 1px rgba(255,255,255,0.04), 0 24px 64px rgba(0,0,0,0.48);
+}
+.app-inner {
+  width: 280px; border-radius: var(--radius-window);
+  background: var(--bg-window); backdrop-filter: blur(40px) saturate(140%);
+  -webkit-backdrop-filter: blur(40px) saturate(140%);
+  overflow: hidden; box-shadow: inset 0 1px 0 rgba(255,255,255,0.06);
+}
+.app-shell { display: grid; grid-template-rows: auto 1fr auto; min-height: 360px; }
+
+/* Header */
+.app-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 16px 16px 8px;
+}
+.header-left .eyebrow {
+  font-size: 10px; font-weight: 600; letter-spacing: 0.06em;
+  text-transform: uppercase; color: var(--accent); margin-bottom: 1px;
+}
+.header-left h1 { font-size: 22px; font-weight: 700; letter-spacing: -0.02em; line-height: 1.1; color: var(--text); }
+.header-actions { display: flex; gap: 4px; }
+.icon-btn {
+  display: grid; width: 30px; height: 30px; place-items: center;
+  border-radius: var(--radius-sm); border: none; background: var(--bg-card);
+  color: var(--text-secondary); cursor: pointer; transition: all 0.15s;
+}
+.icon-btn svg { width: 15px; height: 15px; opacity: 0.7; }
+.icon-btn:hover { background: var(--bg-card); color: var(--text); }
+.icon-btn:hover svg { opacity: 1; }
+.icon-btn.highlight { color: var(--accent); }
+
+/* Content */
+.tab-content { flex: 1; overflow-y: auto; padding: 0 12px; display: flex; flex-direction: column; gap: 6px; min-height: 0; }
+.card { padding: 10px 11px; border-radius: 10px; background: var(--bg-card); border: 1px solid var(--border); }
+.card-top { display: flex; justify-content: space-between; font-size: 12px; color: var(--text); }
+.card-top time { font-size: 10px; color: var(--text-tertiary); }
+.card-snippet { font-size: 10px; color: var(--text-secondary); margin-top: 4px; }
+
+/* Tab bar */
+.tab-bar-outer { padding: 4px 12px 10px; }
+.tab-bar {
+  display: flex; gap: 2px; padding: 3px;
+  border-radius: 9999px; background: var(--bg-card); border: 1px solid var(--border);
+}
+.tab-btn {
+  flex: 1; position: relative; display: flex; align-items: center; justify-content: center; gap: 6px;
+  height: 34px; padding: 0 8px; border: none; border-radius: 9999px;
+  background: transparent; color: var(--text-tertiary);
+  font-size: 11px; font-weight: 500; font-family: inherit; cursor: pointer;
+}
+.tab-btn.active { color: var(--text); font-weight: 600; }
+.tab-btn.active::before {
+  content: ''; position: absolute; inset: 2px; border-radius: 9999px;
+  background: var(--accent-glow); border: 1px solid rgba(94,191,158,0.12);
+}
+.tab-toggle { display: flex; gap: 4px; justify-content: center; margin-top: 8px; }
+.tab-toggle button {
+  padding: 4px 10px; border: 1px solid var(--border); border-radius: var(--radius-xs);
+  background: var(--bg-card); color: var(--text-secondary);
+  font-size: 10px; font-family: inherit; cursor: pointer;
+}
+.tab-toggle button.on { border-color: var(--accent); color: var(--accent); background: var(--accent-dim); font-weight: 600; }
+</style>
+</head>
+<body>
+
+<svg style="display:none" xmlns="http://www.w3.org/2000/svg">
+  <symbol id="ic-settings" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="3"/><path d="M12 1v2m0 18v2M4.22 4.22l1.42 1.42m12.72 12.72 1.42 1.42M1 12h2m18 0h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></symbol>
+  <symbol id="ic-plus" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 5v14M5 12h14"/></symbol>
+  <symbol id="ic-minus" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M5 12h14"/></symbol>
+  <symbol id="ic-trash" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 6h18M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></symbol>
+  <symbol id="ic-refresh" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 3v6h-6"/></symbol>
+  <symbol id="ic-notes" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect width="8" height="4" x="8" y="2" rx="2"/></symbol>
+  <symbol id="ic-clipboard" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect width="8" height="4" x="8" y="2" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/></symbol>
+  <symbol id="ic-mail" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></symbol>
+</svg>
+
+<!-- A -->
+<div class="scene">
+  <span class="scene-label">方案 A — 始终显示新建便签</span>
+  <div class="app-outer"><div class="app-inner"><div class="app-shell" id="appA">
+    <header class="app-header"><div class="header-left"><p class="eyebrow">Ezio的百宝箱</p><h1>剪切板</h1></div><div class="header-actions"><button class="icon-btn"><svg><use href="#ic-settings"/></svg></button><button class="icon-btn highlight" title="新建便签"><svg><use href="#ic-plus"/></svg></button><button class="icon-btn"><svg><use href="#ic-minus"/></svg></button></div></header>
+    <div class="tab-content">
+      <div class="card"><div class="card-top"><span>github.com/Mengshiming</span><time>刚刚</time></div><div class="card-snippet">URL</div></div>
+      <div class="card"><div class="card-top"><span>Q2 营收报告</span><time>2分前</time></div><div class="card-snippet">HTML</div></div>
+    </div>
+    <div class="tab-bar-outer"><div class="tab-bar">
+      <button class="tab-btn"><svg><use href="#ic-notes"/></svg>便签</button>
+      <button class="tab-btn active"><svg><use href="#ic-clipboard"/></svg>剪切板</button>
+      <button class="tab-btn"><svg><use href="#ic-mail"/></svg>邮件</button>
+    </div></div>
+  </div></div></div>
+  <div style="font-size:11px;color:var(--text-secondary);text-align:center;max-width:260px;line-height:1.5">剪切板/邮件 Tab 下也显示 + 按钮<br>点击后切回便签 Tab 并打开编辑器<br><span style="color:var(--accent)">统一感，不会丢失</span></div>
+</div>
+
+<!-- B -->
+<div class="scene">
+  <span class="scene-label">方案 B — 按钮随 Tab 变化</span>
+  <div class="app-outer"><div class="app-inner"><div class="app-shell" id="appB">
+    <header class="app-header"><div class="header-left"><p class="eyebrow">Ezio的百宝箱</p><h1>剪切板</h1></div><div class="header-actions"><button class="icon-btn"><svg><use href="#ic-settings"/></svg></button><button class="icon-btn" title="清空剪切板"><svg><use href="#ic-trash"/></svg></button><button class="icon-btn"><svg><use href="#ic-minus"/></svg></button></div></header>
+    <div class="tab-content"><div class="card"><div class="card-top"><span>github.com/Mengshiming</span><time>刚刚</time></div></div></div>
+    <div class="tab-bar-outer"><div class="tab-bar">
+      <button class="tab-btn"><svg><use href="#ic-notes"/></svg>便签</button>
+      <button class="tab-btn active"><svg><use href="#ic-clipboard"/></svg>剪切板</button>
+      <button class="tab-btn"><svg><use href="#ic-mail"/></svg>邮件</button>
+    </div></div>
+  </div></div></div>
+  <div style="font-size:11px;color:var(--text-secondary);text-align:center;max-width:260px;line-height:1.5">便签 Tab → <span style="color:var(--accent)">+ 新建</span><br>剪切板 Tab → <span style="color:var(--accent)">🗑 清空</span><br>邮件 Tab → <span style="color:var(--accent)">🔄 拉取</span></div>
+</div>
+
+<!-- C -->
+<div class="scene">
+  <span class="scene-label">方案 C — 仅设置和隐藏</span>
+  <div class="app-outer"><div class="app-inner"><div class="app-shell" id="appC">
+    <header class="app-header"><div class="header-left"><p class="eyebrow">Ezio的百宝箱</p><h1>剪切板</h1></div><div class="header-actions"><button class="icon-btn"><svg><use href="#ic-settings"/></svg></button><button class="icon-btn"><svg><use href="#ic-minus"/></svg></button></div></header>
+    <div class="tab-content"><div class="card"><div class="card-top"><span>github.com/Mengshiming</span><time>刚刚</time></div></div></div>
+    <div class="tab-bar-outer"><div class="tab-bar">
+      <button class="tab-btn"><svg><use href="#ic-notes"/></svg>便签</button>
+      <button class="tab-btn active"><svg><use href="#ic-clipboard"/></svg>剪切板</button>
+      <button class="tab-btn"><svg><use href="#ic-mail"/></svg>邮件</button>
+    </div></div>
+  </div></div></div>
+  <div style="font-size:11px;color:var(--text-secondary);text-align:center;max-width:260px;line-height:1.5">只保留设置和隐藏两个按钮<br>最简洁，操作在各 Tab 内部完成</div>
+</div>
+
+</body>
+</html>

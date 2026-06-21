@@ -1,0 +1,660 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>便签 v2 — Premium Design Preview</title>
+<style>
+:root {
+  --bg-root: #050508;
+  --bg-window: rgba(12,13,16,0.94);
+  --bg-card: rgba(22,24,30,0.88);
+  --bg-card-hover: rgba(28,31,38,0.94);
+  --bg-input: rgba(16,18,22,0.92);
+  --bg-elevated: rgba(18,20,26,0.96);
+  --bg-overlay: rgba(4,5,8,0.72);
+  --text: #e8eaef;
+  --text-secondary: #8b8f9a;
+  --text-tertiary: #5c606d;
+  --border: rgba(255,255,255,0.06);
+  --border-hairline: rgba(255,255,255,0.04);
+  --accent: #5ebf9e;
+  --accent-glow: rgba(94,191,158,0.18);
+  --accent-dim: rgba(94,191,158,0.08);
+  --danger: #e07373;
+  --danger-dim: rgba(224,115,115,0.10);
+  --radius-window: 20px;
+  --radius-panel: 14px;
+  --radius-card: 12px;
+  --radius-sm: 8px;
+  --radius-xs: 6px;
+  --radius-full: 9999px;
+  --ease-out-expo: cubic-bezier(0.16,1,0.3,1);
+  --ease-spring: cubic-bezier(0.34,1.56,0.64,1);
+}
+
+[data-theme="light"] {
+  --bg-root: #f3f4f6;
+  --bg-window: rgba(255,255,255,0.94);
+  --bg-card: rgba(249,250,251,0.92);
+  --bg-card-hover: rgba(243,244,246,0.96);
+  --bg-input: #fff;
+  --bg-elevated: rgba(255,255,255,0.98);
+  --bg-overlay: rgba(8,10,14,0.48);
+  --text: #111318;
+  --text-secondary: #6b6f7a;
+  --text-tertiary: #9ca0ac;
+  --border: rgba(0,0,0,0.06);
+  --border-hairline: rgba(0,0,0,0.03);
+  --accent: #2f7d78;
+  --accent-glow: rgba(47,125,120,0.14);
+  --accent-dim: rgba(47,125,120,0.06);
+  --danger: #c44;
+  --danger-dim: rgba(204,68,68,0.08);
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Noto Sans CJK SC', sans-serif;
+  font-size: 13px;
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40px;
+  gap: 48px;
+  flex-wrap: wrap;
+  background: var(--bg-root);
+  transition: background 0.5s var(--ease-out-expo);
+}
+
+/* ===== Background Texture ===== */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  background:
+    radial-gradient(ellipse 80% 60% at 20% 30%, rgba(94,191,158,0.04) 0%, transparent 60%),
+    radial-gradient(ellipse 60% 70% at 80% 60%, rgba(94,120,191,0.03) 0%, transparent 60%);
+  pointer-events: none;
+}
+
+/* ===== App Shell — Double Bezel ===== */
+.app-outer {
+  position: relative;
+  z-index: 1;
+  padding: 2px;
+  border-radius: calc(var(--radius-window) + 2px);
+  background: linear-gradient(135deg, rgba(255,255,255,0.06), rgba(255,255,255,0.02), rgba(255,255,255,0.06));
+  box-shadow:
+    0 0 0 1px rgba(255,255,255,0.04),
+    0 24px 64px rgba(0,0,0,0.48),
+    0 8px 24px rgba(0,0,0,0.32);
+}
+[data-theme="light"] .app-outer {
+  background: linear-gradient(135deg, rgba(0,0,0,0.04), rgba(0,0,0,0.01), rgba(0,0,0,0.04));
+  box-shadow:
+    0 0 0 1px rgba(0,0,0,0.04),
+    0 24px 64px rgba(0,0,0,0.10),
+    0 8px 24px rgba(0,0,0,0.06);
+}
+.app-inner {
+  width: 280px;
+  border-radius: var(--radius-window);
+  background: var(--bg-window);
+  backdrop-filter: blur(40px) saturate(140%);
+  -webkit-backdrop-filter: blur(40px) saturate(140%);
+  overflow: hidden;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.06);
+}
+[data-theme="light"] .app-inner {
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.40);
+}
+
+.app-shell {
+  display: grid;
+  grid-template-rows: auto auto minmax(0,1fr) auto auto;
+  max-height: 580px;
+}
+
+/* ===== Header ===== */
+.app-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 16px 8px;
+}
+.header-left .eyebrow {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin-bottom: 1px;
+}
+.header-left h1 {
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+  color: var(--text);
+}
+.header-actions { display: flex; gap: 4px; }
+
+.icon-btn {
+  display: inline-grid;
+  width: 30px; height: 30px;
+  place-items: center;
+  border-radius: var(--radius-sm);
+  border: none;
+  background: var(--bg-card);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.2s var(--ease-out-expo);
+}
+.icon-btn svg { width: 15px; height: 15px; opacity: 0.7; }
+.icon-btn:hover { background: var(--bg-card-hover); color: var(--text); }
+.icon-btn:hover svg { opacity: 1; }
+.icon-btn.active { background: var(--accent-glow); color: var(--accent); }
+.icon-btn.active svg { opacity: 1; }
+
+/* ===== Tab Content Area ===== */
+.tab-content {
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 0 12px 8px;
+}
+.tab-content::-webkit-scrollbar { width: 3px; }
+.tab-content::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.08); border-radius: 2px; }
+
+/* ===== Search ===== */
+.search-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 34px;
+  padding: 0 10px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  margin-bottom: 2px;
+  transition: border-color 0.2s var(--ease-out-expo);
+}
+.search-wrap:focus-within { border-color: rgba(94,191,158,0.36); }
+.search-wrap svg { width: 14px; height: 14px; color: var(--text-tertiary); flex-shrink: 0; }
+.search-wrap input {
+  width: 100%; border: 0; outline: 0;
+  background: transparent; font-size: 12px; color: var(--text);
+  font-family: inherit;
+}
+.search-wrap input::placeholder { color: var(--text-tertiary); }
+
+/* ===== Cards — Double Bezel ===== */
+.card-wrap {
+  position: relative;
+  padding: 1px;
+  border-radius: var(--radius-card);
+  background: transparent;
+  transition: background 0.25s var(--ease-out-expo);
+}
+.card-wrap:hover { background: linear-gradient(135deg, rgba(94,191,158,0.14), transparent 60%); }
+.card-wrap.pinned { background: linear-gradient(135deg, rgba(94,191,158,0.12), transparent 50%); }
+
+.card {
+  position: relative;
+  padding: 10px 11px;
+  border-radius: calc(var(--radius-card) - 1px);
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  cursor: pointer;
+  transition: background 0.2s var(--ease-out-expo), border-color 0.2s var(--ease-out-expo);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.03);
+}
+.card-wrap:hover .card { border-color: rgba(94,191,158,0.22); background: var(--bg-card-hover); }
+.card.done { opacity: 0.52; }
+
+.card-top { display: flex; align-items: center; gap: 6px; }
+.card-top .dot {
+  width: 20px; height: 20px; flex-shrink: 0;
+  display: grid; place-items: center;
+  border-radius: 50%; border: 1.5px solid var(--text-tertiary);
+  color: transparent; font-size: 13px;
+  transition: all 0.25s var(--ease-out-expo);
+  background: transparent;
+}
+.card-top .dot.done { border-color: var(--accent); color: var(--accent); background: var(--accent-dim); }
+.card-top strong {
+  flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-size: 13px; font-weight: 600; color: var(--text); letter-spacing: -0.01em;
+}
+.card.done strong { text-decoration: line-through; text-decoration-thickness: 1px; text-decoration-color: var(--text-tertiary); }
+.card-top time { font-size: 11px; color: var(--text-tertiary); flex-shrink: 0; font-variant-numeric: tabular-nums; }
+.pin-dot {
+  width: 16px; height: 16px; border-radius: 4px; border: none; background: transparent;
+  display: grid; place-items: center; cursor: pointer; opacity: 0;
+  transition: opacity 0.15s, background 0.15s; color: var(--text-tertiary);
+}
+.card-wrap:hover .pin-dot, .pin-dot.on { opacity: 1; }
+.pin-dot.on { color: var(--accent); background: var(--accent-dim); }
+
+.card-preview {
+  margin: 5px 0 6px 26px;
+  font-size: 11px; color: var(--text-secondary);
+  line-height: 16px;
+  overflow: hidden; display: -webkit-box;
+  -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+}
+.card-meta {
+  display: flex; justify-content: space-between; align-items: center;
+  margin-left: 26px;
+}
+.pill {
+  padding: 2px 8px; border-radius: var(--radius-xs);
+  font-size: 10px; font-weight: 600;
+  color: var(--accent); background: var(--accent-dim);
+  letter-spacing: 0.02em;
+}
+.pill.attach { display: flex; align-items: center; gap: 3px; }
+
+/* ===== Clip Cards ===== */
+.clip-card .card-top .type-badge {
+  font-size: 9px; font-weight: 600; text-transform: uppercase;
+  letter-spacing: 0.05em; color: var(--text-tertiary);
+}
+.clip-actions { display: flex; gap: 2px; justify-content: flex-end; margin-top: 4px; }
+.mini-btn {
+  width: 24px; height: 24px; border-radius: 6px; border: none; background: transparent;
+  color: var(--text-tertiary); cursor: pointer; display: grid; place-items: center;
+  transition: all 0.15s;
+}
+.mini-btn:hover { background: var(--bg-input); color: var(--text); }
+.mini-btn svg { width: 12px; height: 12px; }
+
+/* ===== Footer ===== */
+.app-footer {
+  display: flex; justify-content: space-between;
+  padding: 6px 16px 6px;
+  color: var(--text-tertiary); font-size: 11px;
+}
+
+/* ===== Tab Bar — Floating Pill ===== */
+.tab-bar-outer {
+  padding: 4px 12px 10px;
+}
+.tab-bar {
+  display: flex;
+  gap: 2px;
+  padding: 3px;
+  border-radius: var(--radius-full);
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+}
+.tab-btn {
+  flex: 1; position: relative;
+  display: flex; align-items: center; justify-content: center; gap: 6px;
+  height: 34px; padding: 0 8px;
+  border: none; border-radius: var(--radius-full);
+  background: transparent;
+  color: var(--text-tertiary);
+  font-size: 11px; font-weight: 500; font-family: inherit;
+  cursor: pointer;
+  transition: color 0.25s var(--ease-out-expo);
+  letter-spacing: -0.01em;
+}
+.tab-btn svg { width: 15px; height: 15px; }
+.tab-btn:hover { color: var(--text-secondary); }
+.tab-btn.active { color: var(--text); font-weight: 600; }
+.tab-btn.active::before {
+  content: '';
+  position: absolute; inset: 2px;
+  border-radius: var(--radius-full);
+  background: var(--accent-glow);
+  border: 1px solid rgba(94,191,158,0.12);
+}
+
+/* ===== Stats Bar ===== */
+.stats-bar {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 0 2px; font-size: 10px; color: var(--text-tertiary);
+}
+.stats-bar .clear-btn {
+  background: none; border: none; color: var(--danger);
+  font-size: 10px; cursor: pointer; font-family: inherit;
+  opacity: 0.7; transition: opacity 0.15s;
+}
+.stats-bar .clear-btn:hover { opacity: 1; }
+
+/* ===== Empty State ===== */
+.empty-state {
+  display: grid; place-items: center; align-content: center;
+  gap: 8px; min-height: 200px; text-align: center;
+  color: var(--text-tertiary);
+}
+.empty-state svg { width: 32px; height: 32px; opacity: 0.5; }
+.empty-state p { font-size: 12px; }
+.empty-state .hint { font-size: 11px; opacity: 0.7; }
+
+/* ===== Mail Setup ===== */
+.mail-setup {
+  text-align: center; padding: 16px 8px;
+}
+.mail-setup h3 { font-size: 15px; font-weight: 600; color: var(--text); margin: 8px 0 4px; letter-spacing: -0.01em; }
+.mail-setup > p { font-size: 11px; color: var(--text-secondary); margin-bottom: 14px; }
+.field-group { display: flex; flex-direction: column; gap: 8px; text-align: left; }
+.field { display: grid; gap: 4px; }
+.field label { font-size: 11px; color: var(--text-tertiary); font-weight: 500; }
+.field input {
+  width: 100%; height: 34px; padding: 0 10px;
+  border: 1px solid var(--border); border-radius: var(--radius-sm);
+  background: var(--bg-input); color: var(--text);
+  font-size: 12px; font-family: inherit; outline: 0;
+  transition: border-color 0.2s var(--ease-out-expo);
+}
+.field input:focus { border-color: rgba(94,191,158,0.40); }
+.btn-primary {
+  height: 36px; border: none; border-radius: var(--radius-sm);
+  background: var(--accent); color: #0d1a16;
+  font-size: 13px; font-weight: 600; font-family: inherit;
+  cursor: pointer; transition: all 0.2s var(--ease-out-expo);
+  letter-spacing: -0.01em;
+}
+.btn-primary:hover { filter: brightness(1.08); transform: scale(1.01); }
+.btn-primary:active { transform: scale(0.98); }
+
+/* ===== Mail List ===== */
+.mail-toolbar {
+  display: flex; justify-content: space-between; align-items: center;
+  font-size: 10px; color: var(--text-tertiary); padding: 0 2px;
+}
+.mail-toolbar .actions { display: flex; gap: 2px; }
+
+.mail-card .mail-subject {
+  font-size: 12px; font-weight: 600; color: var(--text);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  letter-spacing: -0.01em;
+}
+.mail-card .mail-from { font-size: 11px; color: var(--accent); margin: 2px 0; }
+.mail-card .mail-snippet { font-size: 11px; color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ===== Control Panel ===== */
+.ctrl-panel {
+  position: relative; z-index: 1;
+  width: 200px; padding: 16px;
+  border-radius: var(--radius-panel);
+  background: var(--bg-window);
+  backdrop-filter: blur(40px);
+  -webkit-backdrop-filter: blur(40px);
+  border: 1px solid var(--border);
+  box-shadow: 0 12px 32px rgba(0,0,0,0.24);
+  display: flex; flex-direction: column; gap: 14px;
+}
+.ctrl-panel h3 {
+  font-size: 12px; font-weight: 600; color: var(--text);
+  letter-spacing: -0.01em;
+}
+.ctrl-row { display: flex; gap: 4px; flex-wrap: wrap; }
+.ctrl-btn {
+  padding: 5px 10px; border: 1px solid var(--border); border-radius: var(--radius-xs);
+  background: var(--bg-input); color: var(--text-secondary);
+  font-size: 11px; font-family: inherit; cursor: pointer;
+  transition: all 0.15s var(--ease-out-expo);
+}
+.ctrl-btn:hover { border-color: rgba(94,191,158,0.3); color: var(--text); }
+.ctrl-btn.on { border-color: var(--accent); color: var(--accent); background: var(--accent-dim); font-weight: 600; }
+
+/* ===== Demo Labels ===== */
+.demo-label {
+  display: block; font-size: 11px; font-weight: 600; letter-spacing: 0.04em;
+  color: var(--text-tertiary); text-transform: uppercase;
+  text-align: center; margin-bottom: 12px;
+}
+</style>
+</head>
+<body>
+
+<!-- SVG Icons (lightweight geometric) -->
+<svg style="display:none" xmlns="http://www.w3.org/2000/svg">
+  <symbol id="ic-search" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></symbol>
+  <symbol id="ic-plus" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></symbol>
+  <symbol id="ic-minus" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M5 12h14"/></symbol>
+  <symbol id="ic-x" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></symbol>
+  <symbol id="ic-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></symbol>
+  <symbol id="ic-pin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 17v5M9 10.76a2 2 0 0 1-1.002 1.738c-1.53.83-2.212 1.246-2.177 1.797.036.555.34.705 2.845.705h6.668c2.504 0 2.809-.15 2.845-.705.035-.55-.647-.967-2.178-1.797A2 2 0 0 1 15 10.76V6h1a1 1 0 0 0 0-2H8a1 1 0 1 0 0 2h1Z"/></symbol>
+  <symbol id="ic-trash" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></symbol>
+  <symbol id="ic-clipboard" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect width="8" height="4" x="8" y="2" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/></symbol>
+  <symbol id="ic-mail" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></symbol>
+  <symbol id="ic-notes" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect width="8" height="4" x="8" y="2" rx="2"/><line x1="9" x2="9" y1="12" y2="12"/><line x1="13" x2="13" y1="12" y2="12"/></symbol>
+  <symbol id="ic-settings" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></symbol>
+  <symbol id="ic-refresh" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 3v6h-6"/></symbol>
+  <symbol id="ic-power" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18.36 6.64a9 9 0 1 1-12.73 0"/><line x1="12" x2="12" y1="2" y2="12"/></symbol>
+  <symbol id="ic-circle" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/></symbol>
+  <symbol id="ic-status-on" viewBox="0 0 24 24" fill="currentColor" stroke="none"><circle cx="12" cy="12" r="5"/></symbol>
+  <symbol id="ic-picture" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></symbol>
+  <symbol id="ic-file" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/></symbol>
+  <symbol id="ic-link" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></symbol>
+</svg>
+
+<!-- ===== Tab 1: Notes ===== -->
+<div style="display:flex;flex-direction:column;align-items:center;gap:0">
+  <span class="demo-label">Tab 1 — 便签</span>
+  <div class="app-outer">
+    <div class="app-inner">
+      <div class="app-shell" id="app-notes">
+        <header class="app-header">
+          <div class="header-left">
+            <p class="eyebrow">全部</p>
+            <h1>便签</h1>
+          </div>
+          <div class="header-actions">
+            <button class="icon-btn"><svg><use href="#ic-settings"/></svg></button>
+            <button class="icon-btn"><svg><use href="#ic-plus"/></svg></button>
+            <button class="icon-btn"><svg><use href="#ic-minus"/></svg></button>
+          </div>
+        </header>
+        <div style="padding:0 12px 6px">
+          <div class="search-wrap"><svg><use href="#ic-search"/></svg><input placeholder="搜索，或输入：明天9点交报告 #工作"></div>
+        </div>
+        <div class="tab-content">
+          <div class="card-wrap pinned">
+            <div class="card"><div class="card-top"><span class="dot">&#10003;</span><button class="pin-dot on"><svg style="width:12px;height:12px"><use href="#ic-pin"/></svg></button><strong>完成Q2工作报告</strong><time>17:00</time></div><div class="card-preview">需要包含营收分析、用户增长和团队总结</div><div class="card-meta"><span class="pill">工作</span><span class="pill attach">2</span></div></div>
+          </div>
+          <div class="card-wrap">
+            <div class="card"><div class="card-top"><span class="dot"></span><button class="pin-dot"><svg style="width:12px;height:12px"><use href="#ic-pin"/></svg></button><strong>周末超市采购</strong><time>10:00</time></div><div class="card-preview">牛奶 x2 · 全麦面包 · 鸡蛋一盒 · 苹果</div><div class="card-meta"><span class="pill">生活</span></div></div>
+          </div>
+          <div class="card-wrap">
+            <div class="card done"><div class="card-top"><span class="dot done">&#10003;</span><button class="pin-dot"><svg style="width:12px;height:12px"><use href="#ic-pin"/></svg></button><strong>周会讨论产品路线图</strong><time>09:30</time></div><div class="card-preview">Q3 OKR 对齐 · 技术债清理 · UX优化</div><div class="card-meta"><span class="pill">会议</span></div></div>
+          </div>
+        </div>
+        <div class="app-footer"><span>3 条</span><span>06/21 周六</span></div>
+        <div class="tab-bar-outer">
+          <div class="tab-bar">
+            <button class="tab-btn active"><svg><use href="#ic-notes"/></svg>便签</button>
+            <button class="tab-btn"><svg><use href="#ic-clipboard"/></svg>剪切板</button>
+            <button class="tab-btn"><svg><use href="#ic-mail"/></svg>邮件</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== Tab 2: Clipboard ===== -->
+<div style="display:flex;flex-direction:column;align-items:center;gap:0">
+  <span class="demo-label">Tab 2 — 剪切板</span>
+  <div class="app-outer">
+    <div class="app-inner">
+      <div class="app-shell" id="app-clipboard">
+        <header class="app-header">
+          <div class="header-left">
+            <p class="eyebrow">剪切板</p>
+            <h1>便签</h1>
+          </div>
+          <div class="header-actions">
+            <button class="icon-btn"><svg><use href="#ic-settings"/></svg></button>
+            <button class="icon-btn"><svg><use href="#ic-plus"/></svg></button>
+            <button class="icon-btn"><svg><use href="#ic-minus"/></svg></button>
+          </div>
+        </header>
+        <div style="padding:0 12px 4px">
+          <div class="search-wrap"><svg><use href="#ic-search"/></svg><input placeholder="搜索剪切板历史..."></div>
+        </div>
+        <div class="stats-bar" style="padding:0 14px 2px"><span>5 条记录</span><button class="clear-btn">清空未固定</button></div>
+        <div class="tab-content">
+          <div class="card-wrap pinned">
+            <div class="card clip-card">
+              <div class="card-top"><span class="type-badge">URL</span><time>刚刚</time></div>
+              <div class="card-preview" style="margin-left:0;font-size:11px;color:var(--accent)">github.com/Mengshiming2110</div>
+              <div class="clip-actions"><button class="mini-btn"><svg style="width:11px;height:11px"><use href="#ic-pin"/></svg></button><button class="mini-btn"><svg style="width:11px;height:11px"><use href="#ic-trash"/></svg></button></div>
+            </div>
+          </div>
+          <div class="card-wrap">
+            <div class="card clip-card">
+              <div class="card-top"><span class="type-badge">HTML</span><time>2 分钟前</time></div>
+              <div class="card-preview" style="margin-left:0">Q2 营收报告：同比增长 23%，用户数突破 120 万...</div>
+              <div class="clip-actions"><button class="mini-btn"><svg style="width:11px;height:11px"><use href="#ic-pin"/></svg></button><button class="mini-btn"><svg style="width:11px;height:11px"><use href="#ic-trash"/></svg></button></div>
+            </div>
+          </div>
+          <div class="card-wrap">
+            <div class="card clip-card">
+              <div class="card-top"><span class="type-badge">TXT</span><time>5 分钟前</time></div>
+              <div class="card-preview" style="margin-left:0">明天下午3点会议室A讨论新功能排期</div>
+              <div class="clip-actions"><button class="mini-btn"><svg style="width:11px;height:11px"><use href="#ic-pin"/></svg></button><button class="mini-btn"><svg style="width:11px;height:11px"><use href="#ic-trash"/></svg></button></div>
+            </div>
+          </div>
+          <div class="card-wrap">
+            <div class="card clip-card">
+              <div class="card-top"><span class="type-badge">SQL</span><time>12 分钟前</time></div>
+              <div class="card-preview" style="margin-left:0;font-family:SF Mono,monospace;font-size:10px">SELECT * FROM orders WHERE status = 'pending'</div>
+              <div class="clip-actions"><button class="mini-btn"><svg style="width:11px;height:11px"><use href="#ic-pin"/></svg></button><button class="mini-btn"><svg style="width:11px;height:11px"><use href="#ic-trash"/></svg></button></div>
+            </div>
+          </div>
+          <div class="card-wrap">
+            <div class="card clip-card">
+              <div class="card-top"><span class="type-badge">IMG</span><time>1 小时前</time></div>
+              <div class="card-preview" style="margin-left:0;display:flex;align-items:center;gap:6px"><svg style="width:14px;height:14px"><use href="#ic-picture"/></svg>screenshot_20260621.png</div>
+              <div class="clip-actions"><button class="mini-btn"><svg style="width:11px;height:11px"><use href="#ic-pin"/></svg></button><button class="mini-btn"><svg style="width:11px;height:11px"><use href="#ic-trash"/></svg></button></div>
+            </div>
+          </div>
+        </div>
+        <div class="app-footer"><span>5 条</span><span>06/21 周六</span></div>
+        <div class="tab-bar-outer">
+          <div class="tab-bar">
+            <button class="tab-btn"><svg><use href="#ic-notes"/></svg>便签</button>
+            <button class="tab-btn active"><svg><use href="#ic-clipboard"/></svg>剪切板</button>
+            <button class="tab-btn"><svg><use href="#ic-mail"/></svg>邮件</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== Tab 3: Mail ===== -->
+<div style="display:flex;flex-direction:column;align-items:center;gap:0">
+  <span class="demo-label">Tab 3 — 邮件（已配置状态）</span>
+  <div class="app-outer">
+    <div class="app-inner">
+      <div class="app-shell" id="app-mail">
+        <header class="app-header">
+          <div class="header-left">
+            <p class="eyebrow">邮件</p>
+            <h1>便签</h1>
+          </div>
+          <div class="header-actions">
+            <button class="icon-btn"><svg><use href="#ic-settings"/></svg></button>
+            <button class="icon-btn"><svg><use href="#ic-plus"/></svg></button>
+            <button class="icon-btn"><svg><use href="#ic-minus"/></svg></button>
+          </div>
+        </header>
+        <div class="mail-toolbar" style="padding:0 14px 6px">
+          <span>5 封邮件</span>
+          <div class="actions">
+            <span style="width:6px;height:6px;border-radius:50%;background:var(--accent);display:inline-block;margin-right:6px"></span>
+            <button class="mini-btn"><svg style="width:13px;height:13px"><use href="#ic-refresh"/></svg></button>
+            <button class="mini-btn"><svg style="width:13px;height:13px"><use href="#ic-power"/></svg></button>
+          </div>
+        </div>
+        <div class="tab-content">
+          <div class="card-wrap">
+            <div class="card mail-card" style="border-left:2px solid var(--accent);border-radius:0 var(--radius-card) var(--radius-card) 0">
+              <div class="card-top"><strong class="mail-subject">出货确认单 2026-Q2-0182</strong><time>10 分钟前</time></div>
+              <div class="mail-from">zhang.wei@company.com</div>
+              <div class="mail-snippet">附件为Q2季度出货确认单，共3个批次，请查收并确认...</div>
+            </div>
+          </div>
+          <div class="card-wrap">
+            <div class="card mail-card">
+              <div class="card-top"><strong class="mail-subject">标签系统更新通知</strong><time>1 小时前</time></div>
+              <div class="mail-from">system@company.com</div>
+              <div class="mail-snippet">标签系统将于本周五升级至 v3.2，新增字段：海关编码、...</div>
+            </div>
+          </div>
+          <div class="card-wrap">
+            <div class="card mail-card">
+              <div class="card-top"><strong class="mail-subject">Fwd: 客户反馈 - 德国市场 Q3 需求</strong><time>2 小时前</time></div>
+              <div class="mail-from">li.chen@company.com</div>
+              <div class="mail-snippet">转发德国客户对Q3订单的反馈意见，重点关注包装标准和...</div>
+            </div>
+          </div>
+        </div>
+        <div class="app-footer"><span>5 封</span><span>已连接</span></div>
+        <div class="tab-bar-outer">
+          <div class="tab-bar">
+            <button class="tab-btn"><svg><use href="#ic-notes"/></svg>便签</button>
+            <button class="tab-btn"><svg><use href="#ic-clipboard"/></svg>剪切板</button>
+            <button class="tab-btn active"><svg><use href="#ic-mail"/></svg>邮件</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== Control Panel ===== -->
+<div style="display:flex;flex-direction:column;gap:14px">
+  <div class="ctrl-panel">
+    <h3>Design Tokens</h3>
+    <div class="ctrl-row">
+      <button class="ctrl-btn on" onclick="setTheme('dark',this)">Dark</button>
+      <button class="ctrl-btn" onclick="setTheme('light',this)">Light</button>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:6px">
+      <div style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text-secondary)">
+        <span style="width:10px;height:10px;border-radius:3px;background:var(--accent)"></span> Accent #5ebf9e
+      </div>
+      <div style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text-secondary)">
+        <span style="width:10px;height:10px;border-radius:3px;background:var(--danger)"></span> Danger #e07373
+      </div>
+    </div>
+    <div style="display:flex;gap:6px;font-size:10px;color:var(--text-tertiary)">
+      <span>Radius 20/14/12/8px</span>
+    </div>
+  </div>
+
+  <div class="ctrl-panel">
+    <h3>Interaction Notes</h3>
+    <div style="font-size:11px;color:var(--text-secondary);line-height:1.7">
+      · Double-bezel cards with hairline inner highlight<br>
+      · Floating pill tab bar with slide highlight<br>
+      · Custom cubic-bezier transitions<br>
+      · SVG icon system (1.5px stroke weight)<br>
+      · Deep OLED bg with radial mesh glow<br>
+      · Card hover: gradient border reveal
+    </div>
+  </div>
+</div>
+
+<script>
+function setTheme(t, btn) {
+  document.querySelectorAll('[data-theme]').forEach(el => el.setAttribute('data-theme', t))
+  document.querySelectorAll('.ctrl-btn').forEach(b => b.classList.remove('on'))
+  if (btn) btn.classList.add('on')
+}
+</script>
+</body>
+</html>

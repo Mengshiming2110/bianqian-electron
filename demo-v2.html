@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>便签 v2 — 三 Tab 集成原型</title>
+<style>
+:root, [data-theme="light"] {
+  --bg: rgba(255,255,255,0.92); --card: #f5f5f5; --card-hover: #eae7e2;
+  --input: #fff; --elevated: #fff; --overlay: rgba(0,0,0,0.35);
+  --text: #1a1a1a; --muted: #888; --border: rgba(0,0,0,0.08);
+  --accent: #2F7D78; --accent-strong: #1a5c58; --accent-soft: rgba(47,125,120,0.1);
+  --danger: #e5484d; --radius: 18px; --radius-sm: 10px; --radius-xs: 6px;
+  --shadow: 0 12px 40px rgba(0,0,0,0.15);
+}
+[data-theme="dark"] {
+  --bg: rgba(28,28,30,0.92); --card: #2c2c2e; --card-hover: #38383a;
+  --input: #1c1c1e; --elevated: #2c2c2e; --overlay: rgba(0,0,0,0.55);
+  --text: #e5e5e5; --muted: #98989d; --border: rgba(255,255,255,0.08);
+  --accent: #4ea8a0; --accent-strong: #6fc5bc; --accent-soft: rgba(78,168,160,0.12);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{
+  font-family:'Noto Sans CJK SC','PingFang SC','Microsoft YaHei',sans-serif;
+  font-size:13px; min-height:100vh; display:flex; align-items:center; justify-content:center;
+  padding:30px; gap:30px; flex-wrap:wrap; transition:0.4s;
+}
+
+/* ====== 应用外壳 ====== */
+.app{
+  width:280px; display:grid; grid-template-rows:auto auto minmax(0,1fr) auto auto;
+  border:1px solid var(--border); border-radius:var(--radius);
+  background:var(--bg); box-shadow:var(--shadow);
+  backdrop-filter:blur(18px); overflow:hidden; max-height:620px;
+}
+
+/* Header */
+.header{
+  display:flex; align-items:center; justify-content:space-between;
+  padding:14px 14px 10px;
+}
+.header h1{font-size:21px;color:var(--text);line-height:1.1}
+.eyebrow{color:var(--accent);font-size:11px;font-weight:700;margin-bottom:1px}
+.header-actions{display:flex;gap:5px}
+.ib{
+  display:grid;width:30px;height:30px;place-items:center;
+  border-radius:var(--radius-sm);color:var(--text);background:var(--card);
+  border:none;cursor:pointer;font-size:15px
+}
+.ib:hover{color:var(--accent-strong);background:var(--accent-soft)}
+
+/* 面板区域 */
+.panel-area{min-height:0;overflow-y:auto;display:flex;flex-direction:column;gap:6px;padding:0 12px 8px}
+
+/* 搜索 */
+.search{
+  display:flex;align-items:center;gap:7px;height:32px;padding:0 9px;
+  border:1px solid var(--border);border-radius:var(--radius-sm);
+  background:var(--card);color:var(--muted);margin-bottom:2px
+}
+.search input{width:100%;border:0;outline:0;background:transparent;font-size:12px;color:var(--text)}
+
+/* 便签卡片 */
+.note{
+  padding:9px;border:1px solid var(--border);border-radius:var(--radius-sm);
+  background:var(--card);cursor:pointer;transition:border-color 0.15s
+}
+.note:hover{border-color:var(--accent)}
+.note.done{opacity:.56}
+.note-top{display:flex;align-items:center;gap:6px}
+.note-top strong{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px;color:var(--text)}
+.note-top time{font-size:11px;color:var(--muted)}
+.note-prev{margin:5px 0 6px 26px;font-size:11px;color:var(--muted);line-height:16px}
+.note-meta{display:flex;justify-content:space-between;margin-left:26px}
+.pill{padding:2px 7px;border-radius:var(--radius-xs);color:var(--accent-strong);background:var(--accent-soft);font-size:11px}
+
+/* 剪切板卡片 */
+.clip{
+  padding:8px 9px;border:1px solid var(--border);border-radius:var(--radius-sm);
+  background:var(--card);cursor:pointer;transition:border-color 0.15s
+}
+.clip:hover{border-color:var(--accent)}
+.clip.pin{border-left:3px solid var(--accent)}
+.clip-top{display:flex;justify-content:space-between;font-size:9px;color:var(--muted);margin-bottom:3px}
+.clip-prev{font-size:11px;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-bottom:3px}
+.clip-actions{display:flex;gap:3px;justify-content:flex-end}
+.is{width:22px;height:22px;font-size:11px;border-radius:6px;border:none;background:transparent;cursor:pointer;color:var(--muted)}
+.is:hover{background:var(--card-hover)}
+
+/* 邮件卡片 */
+.mail{
+  padding:8px 9px;border:1px solid var(--border);border-radius:var(--radius-sm);
+  background:var(--card);cursor:pointer;transition:border-color 0.15s
+}
+.mail:hover{border-color:var(--accent)}
+.mail.new{border-left:3px solid var(--accent)}
+.mail-top{display:flex;justify-content:space-between;gap:6px;margin-bottom:2px}
+.mail-top strong{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px;color:var(--text)}
+.mail-top time{font-size:10px;color:var(--muted);flex-shrink:0}
+.mail-from{font-size:10px;color:var(--accent);margin-bottom:2px}
+.mail-prev{font-size:10px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+/* Footer */
+.footer{
+  display:flex;justify-content:space-between;padding:6px 14px 8px;
+  color:var(--muted);font-size:11px
+}
+
+/* ====== Tab Bar ====== */
+.tabs{
+  display:flex;border-top:1px solid var(--border);padding:1px 4px;gap:1px
+}
+.tab{
+  flex:1;display:flex;flex-direction:column;align-items:center;gap:1px;
+  padding:5px 4px 4px;border:none;border-radius:var(--radius-sm);
+  background:transparent;color:var(--muted);font-size:9px;font-family:inherit;
+  cursor:pointer;transition:all 0.15s
+}
+.tab:hover{background:var(--card);color:var(--text)}
+.tab.on{background:var(--accent-soft);color:var(--accent-strong)}
+.tab .t-icon{font-size:15px;line-height:1}
+.tab .t-label{font-weight:600}
+
+/* ====== 右侧控制栏 ====== */
+.ctrl{
+  width:220px;display:flex;flex-direction:column;gap:10px;
+  background:var(--bg);border-radius:var(--radius-sm);padding:14px;
+  box-shadow:var(--shadow);backdrop-filter:blur(18px)
+}
+.ctrl h3{font-size:14px;color:var(--text);margin-bottom:2px}
+.ctrl-btn{
+  padding:6px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);
+  background:var(--input);color:var(--text);font-size:12px;cursor:pointer;
+  font-family:inherit;transition:all 0.15s
+}
+.ctrl-btn:hover{border-color:var(--accent)}
+.ctrl-btn.on{border-color:var(--accent);color:var(--accent-strong);background:var(--accent-soft);font-weight:700}
+.ctrl-row{display:flex;gap:4px;flex-wrap:wrap}
+.theme-row{display:flex;gap:4px}
+.theme-btn{flex:1}
+
+/* 右上角标签 */
+.badge{position:absolute;top:10px;right:10px;padding:3px 8px;border-radius:999px;
+  font-size:10px;font-weight:700;background:rgba(47,125,120,0.12);color:var(--accent-strong)}
+</style>
+</head>
+<body data-theme="light" style="position:relative">
+
+<!-- ====== 便签 Tab ====== -->
+<div style="display:flex;flex-direction:column;align-items:center;gap:8px">
+  <span style="font-size:12px;color:var(--muted);font-weight:700">Tab 1 — 便签（已有功能不变）</span>
+  <div class="app" id="app1">
+    <div class="header">
+      <div><p class="eyebrow">全部</p><h1>便签</h1></div>
+      <div class="header-actions">
+        <button class="ib">🌓</button>
+        <button class="ib">＋</button>
+        <button class="ib">−</button>
+      </div>
+    </div>
+    <div class="search"><span>🔍</span><input placeholder="搜索，或输入：明天9点交报告 #工作"></div>
+    <div class="panel-area">
+      <div class="note">
+        <div class="note-top"><span style="color:var(--accent)">○</span><button style="opacity:0;width:18px;font-size:11px;border:none;background:transparent">📌</button><strong>完成Q2工作报告</strong><time>17:00</time></div>
+        <div class="note-prev">需要包含营收分析、用户增长和团队总结...</div>
+        <div class="note-meta"><span class="pill">工作</span><span class="pill">📎 2</span></div>
+      </div>
+      <div class="note">
+        <div class="note-top"><span style="color:var(--accent)">○</span><button style="opacity:0;width:18px;font-size:11px;border:none;background:transparent">📌</button><strong>周末超市采购</strong><time>10:00</time></div>
+        <div class="note-prev">牛奶 x2 · 全麦面包 · 鸡蛋一盒 · 苹果</div>
+        <div class="note-meta"><span class="pill">生活</span></div>
+      </div>
+      <div class="note done">
+        <div class="note-top"><span style="color:#22c55e">✅</span><button style="opacity:0;width:18px;font-size:11px;border:none;background:transparent">📌</button><strong>周会讨论产品路线图</strong><time>09:30</time></div>
+        <div class="note-prev">Q3 OKR 对齐 · 技术债清理 · UX优化</div>
+        <div class="note-meta"><span class="pill">会议</span></div>
+      </div>
+    </div>
+    <div class="footer"><span>3 条</span><span>06/21 周六</span></div>
+    <div class="tabs">
+      <button class="tab on"><span class="t-icon">📋</span><span class="t-label">便签</span></button>
+      <button class="tab"><span class="t-icon">📎</span><span class="t-label">剪切板</span></button>
+      <button class="tab"><span class="t-icon">📧</span><span class="t-label">邮件</span></button>
+    </div>
+  </div>
+</div>
+
+<!-- ====== 剪切板 Tab ====== -->
+<div style="display:flex;flex-direction:column;align-items:center;gap:8px">
+  <span style="font-size:12px;color:var(--muted);font-weight:700">Tab 2 — 剪切板（新增）</span>
+  <div class="app" id="app2">
+    <div class="header">
+      <div><p class="eyebrow">剪切板</p><h1>便签</h1></div>
+      <div class="header-actions">
+        <button class="ib">🌓</button>
+        <button class="ib">＋</button>
+        <button class="ib">−</button>
+      </div>
+    </div>
+    <div class="search"><span>🔍</span><input placeholder="搜索剪切板历史..."></div>
+    <div style="display:flex;justify-content:space-between;padding:0 12px;font-size:10px;color:var(--muted)">
+      <span>5 条记录</span><button style="background:none;border:none;color:var(--danger);font-size:10px;cursor:pointer">清空未固定</button>
+    </div>
+    <div class="panel-area">
+      <div class="clip pin">
+        <div class="clip-top"><span>文字</span><span>刚刚</span></div>
+        <div class="clip-prev">https://github.com/Mengshiming2110/bianqian-electron</div>
+        <div class="clip-actions"><button class="is">📌</button><button class="is">🗑</button></div>
+      </div>
+      <div class="clip">
+        <div class="clip-top"><span>网页</span><span>2 分钟前</span></div>
+        <div class="clip-prev">Q2 营收报告 — 同比增长 23%，用户数突破 120 万...</div>
+        <div class="clip-actions"><button class="is">📍</button><button class="is">🗑</button></div>
+      </div>
+      <div class="clip">
+        <div class="clip-top"><span>文字</span><span>5 分钟前</span></div>
+        <div class="clip-prev">明天下午3点会议室A讨论新功能排期</div>
+        <div class="clip-actions"><button class="is">📍</button><button class="is">🗑</button></div>
+      </div>
+      <div class="clip">
+        <div class="clip-top"><span>文字</span><span>12 分钟前</span></div>
+        <div class="clip-prev">SELECT * FROM orders WHERE status = 'pending'</div>
+        <div class="clip-actions"><button class="is">📍</button><button class="is">🗑</button></div>
+      </div>
+      <div class="clip">
+        <div class="clip-top"><span>图片</span><span>1 小时前</span></div>
+        <div class="clip-prev">🖼 screenshot_20260621_143022.png</div>
+        <div class="clip-actions"><button class="is">📍</button><button class="is">🗑</button></div>
+      </div>
+    </div>
+    <div class="footer"><span>5 条</span><span>06/21 周六</span></div>
+    <div class="tabs">
+      <button class="tab"><span class="t-icon">📋</span><span class="t-label">便签</span></button>
+      <button class="tab on"><span class="t-icon">📎</span><span class="t-label">剪切板</span></button>
+      <button class="tab"><span class="t-icon">📧</span><span class="t-label">邮件</span></button>
+    </div>
+  </div>
+</div>
+
+<!-- ====== 邮件 Tab ====== -->
+<div style="display:flex;flex-direction:column;align-items:center;gap:8px">
+  <span style="font-size:12px;color:var(--muted);font-weight:700">Tab 3 — 邮件（新增，未配置状态）</span>
+  <div class="app" id="app3" style="position:relative">
+    <div class="header">
+      <div><p class="eyebrow">邮件</p><h1>便签</h1></div>
+      <div class="header-actions">
+        <button class="ib">🌓</button>
+        <button class="ib">＋</button>
+        <button class="ib">−</button>
+      </div>
+    </div>
+    <div class="panel-area" style="display:grid;place-items:center;align-content:center;min-height:260px">
+      <div style="text-align:center;color:var(--muted)">
+        <div style="font-size:40px;margin-bottom:10px">📧</div>
+        <div style="font-size:15px;font-weight:700;color:var(--text);margin-bottom:4px">邮件设置</div>
+        <div style="font-size:12px;margin-bottom:14px">配置 Exchange 连接信息以拉取出货邮件</div>
+        <div style="display:flex;flex-direction:column;gap:6px;text-align:left;width:220px">
+          <div><div style="font-size:11px;color:var(--muted);margin-bottom:2px">Exchange 服务器</div>
+            <div style="height:32px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--input);padding:0 8px;display:flex;align-items:center;font-size:12px;color:var(--muted)">mail.company.com</div></div>
+          <div><div style="font-size:11px;color:var(--muted);margin-bottom:2px">邮箱地址</div>
+            <div style="height:32px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--input);padding:0 8px;display:flex;align-items:center;font-size:12px;color:var(--muted)">you@company.com</div></div>
+          <div><div style="font-size:11px;color:var(--muted);margin-bottom:2px">密码</div>
+            <div style="height:32px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--input);padding:0 8px;display:flex;align-items:center;font-size:12px;color:var(--muted)">••••••••</div></div>
+          <button style="height:34px;border:none;border-radius:var(--radius-sm);background:var(--accent);color:#fff;font-size:13px;cursor:pointer;font-family:inherit;margin-top:4px">连接并开始拉取</button>
+        </div>
+      </div>
+    </div>
+    <div class="tabs">
+      <button class="tab"><span class="t-icon">📋</span><span class="t-label">便签</span></button>
+      <button class="tab"><span class="t-icon">📎</span><span class="t-label">剪切板</span></button>
+      <button class="tab on"><span class="t-icon">📧</span><span class="t-label">邮件</span></button>
+    </div>
+  </div>
+</div>
+
+<!-- ====== 控制面板 ====== -->
+<div style="display:flex;flex-direction:column;gap:20px">
+  <div class="ctrl">
+    <h3>🎨 主题切换</h3>
+    <div class="theme-row">
+      <button class="ctrl-btn theme-btn on" onclick="setTheme('light',this)">☀️ 浅色</button>
+      <button class="ctrl-btn theme-btn" onclick="setTheme('dark',this)">🌙 深色</button>
+    </div>
+  </div>
+
+  <div class="ctrl">
+    <h3>📐 布局说明</h3>
+    <div style="font-size:12px;color:var(--muted);line-height:1.7">
+      • 顶部：标题 + 操作按钮（不变）<br>
+      • 中部：Tab 内容切换<br>
+      • 底部：<span style="color:var(--accent-strong);font-weight:700">三 Tab 导航栏</span>（新增）<br>
+      • 便签/剪切板/邮件 完全独立<br>
+      • 剪切板：全自动记录<br>
+      • 邮件：首次配置，后续自动拉取
+    </div>
+  </div>
+
+  <div class="ctrl">
+    <h3>🎯 交互说明</h3>
+    <div style="font-size:12px;color:var(--muted);line-height:1.7">
+      • 点击底部 Tab 切换面板<br>
+      • 剪切板：点击条目 = 粘贴回剪切板<br>
+      • 剪切板：📍 固定 / 🗑 删除<br>
+      • 邮件：点击查看详情弹窗<br>
+      • 搜索框随 Tab 切换独立过滤<br>
+      • F3 仍控制整个窗口显示/隐藏
+    </div>
+  </div>
+</div>
+
+<script>
+function setTheme(t, btn) {
+  document.querySelectorAll('[data-theme]').forEach(el => el.setAttribute('data-theme', t))
+  document.querySelectorAll('.theme-btn').forEach(b => b.classList.remove('on'))
+  btn.classList.add('on')
+}
+</script>
+</body>
+</html>

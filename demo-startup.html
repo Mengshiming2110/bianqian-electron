@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>启动行为 - 三种方案对比</title>
+<style>
+:root {
+  --bg-root: #050508; --bg-window: rgba(12,13,16,0.94);
+  --bg-card: rgba(22,24,30,0.88); --text: #e8eaef; --text-secondary: #8b8f9a; --text-tertiary: #5c606d;
+  --border: rgba(255,255,255,0.06); --accent: #5ebf9e; --accent-dim: rgba(94,191,158,0.08);
+  --radius-window: 20px; --radius-xs: 6px;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Noto Sans CJK SC', sans-serif;
+  font-size: 13px; min-height: 100vh;
+  display: flex; align-items: center; justify-content: center; gap: 48px; padding: 40px; flex-wrap: wrap;
+  background: var(--bg-root);
+}
+body::before {
+  content: ''; position: fixed; inset: 0; z-index: 0; pointer-events: none;
+  background: radial-gradient(ellipse 80% 60% at 50% 30%, rgba(94,191,158,0.04) 0%, transparent 60%);
+}
+
+.scene { display: flex; flex-direction: column; align-items: center; gap: 14px; position: relative; z-index: 1; }
+.scene-label {
+  font-size: 11px; font-weight: 600; letter-spacing: 0.04em;
+  color: var(--text-tertiary); text-transform: uppercase;
+}
+
+/* Desktop mockup */
+.desktop {
+  width: 340px; height: 220px;
+  border-radius: var(--radius-window); border: 1px solid var(--border);
+  background: rgba(18,20,26,0.6); position: relative; overflow: hidden;
+}
+/* Taskbar */
+.taskbar {
+  position: absolute; bottom: 0; left: 0; right: 0; height: 36px;
+  background: rgba(30,32,40,0.9); border-top: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: flex-end; padding: 0 10px; gap: 6px;
+}
+.tray-area {
+  display: flex; align-items: center; gap: 5px;
+}
+.tray-icon {
+  width: 15px; height: 15px; border-radius: 3px; font-size: 10px;
+  display: grid; place-items: center;
+}
+.tray-bianqian {
+  background: rgba(94,191,158,0.20);
+  color: var(--accent);
+  font-size: 8px; font-weight: 700;
+}
+.tray-other {
+  background: rgba(255,255,255,0.06);
+  color: var(--text-tertiary);
+  font-size: 7px;
+}
+
+/* Window on desktop */
+.float-window {
+  position: absolute; width: 200px; height: 140px;
+  border-radius: 12px; border: 1px solid var(--border);
+  background: var(--bg-window); box-shadow: 0 12px 40px rgba(0,0,0,0.4);
+  top: 20px; right: 16px;
+  padding: 10px 12px;
+  display: flex; flex-direction: column; gap: 6px;
+}
+.float-window.hidden { display: none; }
+.win-header { display: flex; justify-content: space-between; align-items: center; }
+.win-title { font-size: 13px; font-weight: 700; color: var(--text); }
+.win-card {
+  padding: 6px 8px; border-radius: 6px; background: var(--bg-card);
+  border: 1px solid var(--border); font-size: 10px; color: var(--text-secondary);
+}
+
+/* Status indicator */
+.status {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 12px; color: var(--text-secondary);
+}
+.status .dot { width: 6px; height: 6px; border-radius: 50%; }
+.status .dot.on { background: var(--accent); }
+.status .dot.off { background: transparent; border: 1px solid var(--text-tertiary); }
+
+/* ===== Toggle button ===== */
+.toggle-btns {
+  display: flex; gap: 4px;
+}
+.toggle-btn {
+  padding: 5px 10px; border: 1px solid var(--border); border-radius: var(--radius-xs);
+  background: var(--bg-card); color: var(--text-secondary);
+  font-size: 11px; font-family: inherit; cursor: pointer;
+  transition: all 0.15s;
+}
+.toggle-btn:hover { border-color: rgba(94,191,158,0.3); color: var(--text); }
+.toggle-btn.on { border-color: var(--accent); color: var(--accent); background: var(--accent-dim); font-weight: 600; }
+
+.choice-label {
+  font-size: 13px; font-weight: 600; color: var(--text);
+  text-align: center;
+}
+.choice-desc {
+  font-size: 11px; color: var(--text-secondary); text-align: center;
+  line-height: 1.5; max-width: 280px;
+}
+</style>
+</head>
+<body>
+
+<!-- A: Show window -->
+<div class="scene">
+  <span class="scene-label">方案 A — 启动即显示窗口</span>
+  <div class="desktop" id="sceneA">
+    <div class="float-window">
+      <div class="win-header"><span class="win-title">便签</span><span style="font-size:10px;color:var(--text-tertiary)">全部</span></div>
+      <div class="win-card">完成Q2工作报告</div>
+      <div class="win-card">周末超市采购</div>
+      <div class="win-card" style="opacity:0.52">周会讨论产品路线图</div>
+    </div>
+    <div class="taskbar">
+      <div class="tray-area">
+        <span class="tray-icon tray-other">W</span>
+        <span class="tray-icon tray-other">N</span>
+        <span class="tray-icon tray-bianqian">便</span>
+      </div>
+    </div>
+  </div>
+  <div class="choice-desc">双击图标启动 → 窗口直接出现在右上角<br><span style="color:var(--accent)">✅ 直观，开箱即用</span></div>
+</div>
+
+<!-- B: Tray only -->
+<div class="scene">
+  <span class="scene-label">方案 B — 仅托盘，窗口默认隐藏</span>
+  <div class="desktop" id="sceneB">
+    <div class="taskbar">
+      <div class="tray-area">
+        <span class="tray-icon tray-other">W</span>
+        <span class="tray-icon tray-other">N</span>
+        <span class="tray-icon tray-bianqian">便</span>
+      </div>
+    </div>
+  </div>
+  <div class="choice-desc">启动后只有托盘图标，点左键或 F3 才显示窗口<br><span style="color:var(--text-secondary)">✅ 不打扰，安静运行</span></div>
+</div>
+
+<!-- C: Remember last state -->
+<div class="scene">
+  <span class="scene-label">方案 C — 记住上次状态</span>
+  <div class="desktop" id="sceneC">
+    <div class="float-window">
+      <div class="win-header"><span class="win-title">便签</span><span style="font-size:10px;color:var(--text-tertiary)">全部</span></div>
+      <div class="win-card">完成Q2工作报告</div>
+      <div class="win-card">周末超市采购</div>
+    </div>
+    <div class="taskbar">
+      <div class="tray-area">
+        <span class="tray-icon tray-other">W</span>
+        <span class="tray-icon tray-other">N</span>
+        <span class="tray-icon tray-bianqian">便</span>
+      </div>
+    </div>
+  </div>
+  <div class="toggle-btns">
+    <button class="toggle-btn on" onclick="toggleSceneC('show', this)">上次是开着</button>
+    <button class="toggle-btn" onclick="toggleSceneC('hide', this)">上次是关着</button>
+  </div>
+  <div class="choice-desc">关闭时记住窗口状态，下次启动恢复<br><span style="color:var(--accent)">✅ 灵活，尊重用户习惯</span></div>
+</div>
+
+<script>
+function toggleSceneC(state, btn) {
+  const win = document.querySelector('#sceneC .float-window')
+  document.querySelectorAll('#sceneC .toggle-btn').forEach(b => b.classList.remove('on'))
+  btn.classList.add('on')
+  if (state === 'hide') {
+    win.style.display = 'none'
+    btn.textContent = '上次是关着'
+  } else {
+    win.style.display = ''
+    btn.textContent = '上次是开着'
+  }
+}
+</script>
+
+</body>
+</html>

@@ -1,8 +1,8 @@
 {
-  "name": "bianqian-electron",
-  "version": "0.6.0",
-  "description": "Floating desktop notes built with Electron and Vue.",
-  "author": "Codex",
+  "name": "ezio-toolbox",
+  "version": "1.0.0",
+  "description": "Ezio的百宝箱 — 便签·剪切板·邮件 三合一桌面工具箱",
+  "author": "Ezio",
   "main": "out/main/index.js",
   "scripts": {
     "dev": "electron-vite dev",
@@ -11,6 +11,7 @@
     "dist": "electron-vite build && electron-builder"
   },
   "dependencies": {
+    "better-sqlite3": "^12.11.1",
     "dompurify": "^3.4.6",
     "electron-store": "^8.2.0",
     "lucide-vue-next": "^0.468.0",
@@ -27,8 +28,8 @@
     "vite": "^5.4.11"
   },
   "build": {
-    "appId": "com.local.bianqian",
-    "productName": "便签",
+    "appId": "com.ezio.toolbox",
+    "productName": "Ezio的百宝箱",
     "asar": false,
     "directories": {
       "output": "dist"
@@ -38,6 +39,11 @@
       "resources/**/*",
       "package.json"
     ],
+    "publish": {
+      "provider": "github",
+      "owner": "Mengshiming2110",
+      "repo": "bianqian-electron"
+    },
     "win": {
       "signAndEditExecutable": false,
       "target": [
