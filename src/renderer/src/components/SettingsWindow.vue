@@ -11,6 +11,7 @@
         </div>
         <div class="settings-slider-row">
           <SlidersHorizontal :size="15" />
+          <span class="settings-slider-label">透明度</span>
           <input
             :value="Math.round(state.opacity * 100)"
             type="range"
@@ -28,7 +29,7 @@
         </button>
         <button class="settings-menu-row" type="button" @click="view = 'modes'">
           <span>窗口模式</span>
-          <small>{{ state.windowMode === 'mini' ? '迷你' : '列表' }}</small>
+          <small>列表</small>
           <ChevronRight :size="15" />
         </button>
         <button class="settings-menu-row" type="button" @click="view = 'themes'">
@@ -148,21 +149,12 @@
         </div>
         <button
           class="settings-list-row"
-          :class="{ active: state.windowMode !== 'mini' }"
+          :class="{ active: true }"
           type="button"
           @click="selectMode('normal')"
         >
           <span>列表模式</span>
-          <small>完整列表</small>
-        </button>
-        <button
-          class="settings-list-row"
-          :class="{ active: state.windowMode === 'mini' }"
-          type="button"
-          @click="selectMode('mini')"
-        >
-          <span>迷你模式</span>
-          <small>最多 3 条</small>
+          <small>便签、剪切板、邮件统一高度</small>
         </button>
         <div class="settings-divider"></div>
         <button
@@ -211,8 +203,7 @@ const allCategories = ['全部', '工作', '生活', '学习', '会议', '其他
 const modePresets = [
   { id: 'default', label: '常规', opacity: 0.92, passThrough: false, mode: 'normal' },
   { id: 'focus', label: '专注', opacity: 1, passThrough: false, mode: 'normal' },
-  { id: 'meeting', label: '会议', opacity: 0.72, passThrough: true, mode: 'normal' },
-  { id: 'minimal', label: '极简', opacity: 0.48, passThrough: false, mode: 'mini' }
+  { id: 'meeting', label: '会议', opacity: 0.72, passThrough: true, mode: 'normal' }
 ]
 
 const resolvedTheme = computed(() => {
@@ -332,10 +323,9 @@ async function setTheme(theme) {
 
 async function selectMode(mode) {
   if (window.api?.window?.setMode) {
-    const s = await window.api.window.setMode(mode)
+    const s = await window.api.window.setMode('normal')
     if (s) state.windowMode = s.windowMode
   }
-  if (mode === 'mini') close()
 }
 
 async function selectCategory(cat) {
@@ -359,7 +349,6 @@ async function applyPreset(preset) {
     const s = await window.api.window.setMode(preset.mode)
     if (s) state.windowMode = s.windowMode
   }
-  if (preset.mode === 'mini') close()
 }
 </script>
 
@@ -425,6 +414,12 @@ async function applyPreset(preset) {
   flex: 1;
   accent-color: var(--accent);
   height: 4px;
+}
+
+.settings-slider-label {
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 600;
 }
 
 .settings-slider-row strong {

@@ -9,8 +9,8 @@
   }">
     <header class="app-header">
       <div>
-        <p class="eyebrow">{{ activeTab === 'notes' ? notes.activeCategory : 'Ezio的百宝箱' }}</p>
-        <h1>{{ tabTitle }}</h1>
+        <p class="eyebrow">{{ tabEyebrow }}</p>
+        <h1>便签</h1>
       </div>
       <div class="header-actions">
         <button ref="settingsButtonRef" class="icon-button" :class="{ active: settingsOpen }" title="设置" type="button" @click="toggleSettings"><Settings :size="18" /></button>
@@ -23,7 +23,9 @@
 
     <div v-show="isMiniMode || modeTransition !== 'idle'" class="mini-drag-bar"></div>
 
-    <section v-show="!isMiniMode || modeTransition !== 'idle'" class="toolbar">
+    <section class="tab-content">
+      <div v-show="activeTab === 'notes'" class="tab-pane notes-pane">
+    <section v-show="activeTab === 'notes' && (!isMiniMode || modeTransition !== 'idle')" class="toolbar">
       <div class="search-box">
         <Search :size="15" />
         <input
@@ -36,7 +38,7 @@
       </div>
     </section>
 
-    <section class="note-list" :class="{ 'sort-active': sortDrag.active, 'sort-settling': sortDrag.settling }" aria-label="便签列表">
+    <section v-show="activeTab === 'notes'" class="note-list" :class="{ 'sort-active': sortDrag.active, 'sort-settling': sortDrag.settling }" aria-label="便签列表">
       <article
         v-for="note in displayedNotes"
         :key="note.id"
@@ -96,11 +98,13 @@
       </div>
     </section>
 
-    <ClipboardPanel v-if="activeTab === 'clipboard'" />
-    <MailPanel v-if="activeTab === 'mail'" />
+      </div>
+
+      <ClipboardPanel v-if="activeTab === 'clipboard'" class="tab-pane" />
+      <MailPanel v-if="activeTab === 'mail'" class="tab-pane" />
+    </section>
 
     <footer v-show="!isMiniMode || modeTransition !== 'idle'" class="app-footer">
-      <span>{{ activeTab === 'clipboard' ? clipboardStore.items.length + ' 条记录' : activeTab === 'mail' ? mailStore.mails.length + ' 封' : notes.filteredNotes.length + ' 条' }}</span>
       <span>{{ todayLabel }}</span>
     </footer>
 
@@ -225,9 +229,12 @@
 
   </main>
   <div v-if="hasError" class="error-fallback">
-    <StickyNote :size="30" />
-    <p>出了点问题</p>
-    <button type="button" @click="hasError = false">重试</button>
+    <div class="error-panel">
+      <StickyNote :size="32" />
+      <h2>出了点问题</h2>
+      <p>页面临时失去响应，重试后会回到当前窗口。</p>
+      <button type="button" @click="hasError = false">重试</button>
+    </div>
   </div>
 
   <WelcomeCard v-if="!welcomeSeen" @dismiss="welcomeSeen = true" />
@@ -368,14 +375,19 @@ const attachPopover = reactive({
 
 const isMiniMode = computed(() => windowMode.value === 'mini')
 const displayedNotes = computed(() => (isMiniMode.value ? notes.filteredNotes.slice(0, 3) : notes.filteredNotes))
+const tabEyebrow = computed(() => {
+  if (activeTab.value === 'notes') return notes.activeCategory
+  if (activeTab.value === 'clipboard') return '剪切板工具'
+  return '邮件工具'
+})
 const modePresets = [
   { id: 'default', label: '常规', opacity: 0.92, passThrough: false, mode: 'normal' },
   { id: 'focus', label: '专注', opacity: 1, passThrough: false, mode: 'normal' },
-  { id: 'meeting', label: '会议', opacity: 0.72, passThrough: true, mode: 'normal' },
-  { id: 'minimal', label: '极简', opacity: 0.48, passThrough: false, mode: 'mini' }
+  { id: 'meeting', label: '会议', opacity: 0.72, passThrough: true, mode: 'normal' }
 ]
 
 let skipNextResize = false
+const NORMAL_WINDOW_HEIGHT = 680
 
 watch(
   () => notes.filteredNotes.map((note) => `${note.id}:${note.title}:${note.content}:${note.attachments.length}:${note.completed}:${note.pinned}`).join('|'),
@@ -388,6 +400,10 @@ watch(
     resizeDebounce = setTimeout(syncContentHeight, 80)
   }
 )
+
+watch(activeTab, () => {
+  nextTick(() => syncContentHeight())
+})
 
 function toggleSettings() {
   if (isMiniMode.value) return
@@ -1128,25 +1144,8 @@ function syncContentHeight() {
     return
   }
 
-  const header = el.querySelector('.app-header')
-  const toolbar = el.querySelector('.toolbar')
-  const footer = el.querySelector('.app-footer')
-  const usedHeight =
-    (header?.offsetHeight || 0) +
-    (toolbar?.offsetHeight || 0) +
-    (footer?.offsetHeight || 0)
-  const minWindowHeight = 360
-  const screenMaxHeight = Math.max(minWindowHeight, (window.screen?.availHeight || window.innerHeight) - 80)
-  const listContentHeight = noteList.scrollHeight
-  const growsWithContent = notes.filteredNotes.length > 3
-  const wantedHeight = growsWithContent
-    ? Math.max(minWindowHeight, usedHeight + listContentHeight)
-    : minWindowHeight
-  const targetHeight = Math.min(screenMaxHeight, wantedHeight)
-  const listMaxHeight = Math.max(96, targetHeight - usedHeight)
-
-  noteList.style.maxHeight = `${Math.floor(listMaxHeight)}px`
-  window.api?.window.resizeToContent(targetHeight)
+  noteList.style.maxHeight = ''
+  window.api?.window.resizeToContent(NORMAL_WINDOW_HEIGHT)
 }
 
 function checkRemindersOnResume() {
@@ -1266,10 +1265,11 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .app-shell {
+  position: relative;
   display: grid;
   height: 100%;
   width: 100%;
-  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  grid-template-rows: auto auto minmax(0, 1fr) 0 auto;
   overflow: hidden;
   border: 1px solid var(--border);
   border-radius: var(--radius-window);
@@ -1278,6 +1278,21 @@ onBeforeUnmount(() => {
   backdrop-filter: blur(18px);
   clip-path: inset(0 round var(--radius-window));
   isolation: isolate;
+}
+
+.tab-content {
+  min-height: 0;
+  overflow: hidden;
+}
+
+.tab-pane {
+  height: 100%;
+  min-height: 0;
+}
+
+.notes-pane {
+  display: flex;
+  flex-direction: column;
 }
 
 .app-header {
@@ -1590,20 +1605,32 @@ onBeforeUnmount(() => {
 }
 
 .app-footer {
+  position: absolute;
+  top: 16px;
+  right: 118px;
+  z-index: 20;
   display: flex;
-  justify-content: space-between;
-  padding: 8px 14px 11px;
+  align-items: center;
+  justify-content: center;
+  width: 72px;
+  min-height: 16px;
+  padding: 0;
   color: var(--text-muted);
   font-size: 12px;
+  line-height: 1;
+  pointer-events: none;
 }
 
 .editor-overlay {
   position: fixed;
   inset: 0;
+  overflow: hidden;
   display: grid;
   place-items: center;
   padding: 12px;
+  border-radius: var(--radius-window);
   background: var(--bg-overlay);
+  clip-path: inset(0 round var(--radius-window));
 }
 
 .editor-panel {
@@ -1900,25 +1927,70 @@ onBeforeUnmount(() => {
 
 .error-fallback {
   display: grid;
-  min-height: 100%;
+  height: 100%;
+  width: 100%;
   place-items: center;
-  align-content: center;
-  gap: 8px;
-  color: var(--text-muted);
-  font-size: 13px;
+  padding: 22px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-window);
+  color: var(--text);
+  background: var(--bg-window);
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(8px);
+  clip-path: inset(0 round var(--radius-window));
 }
 
-.error-fallback p {
+.error-panel {
+  display: grid;
+  width: min(100%, 280px);
+  justify-items: center;
+  gap: 10px;
+  padding: 26px 20px 22px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-panel);
+  background: var(--bg-card);
+  text-align: center;
+  box-shadow: 0 12px 30px rgba(32, 44, 42, 0.12);
+}
+
+.error-panel svg {
+  color: var(--text-muted);
+}
+
+.error-panel h2,
+.error-panel p {
   margin: 0;
 }
 
-.error-fallback button {
-  padding: 6px 16px;
+.error-panel h2 {
+  color: var(--text);
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.error-panel p {
+  max-width: 220px;
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.error-panel button {
+  min-width: 96px;
+  height: 36px;
+  margin-top: 4px;
+  padding: 0 18px;
   border: 1px solid var(--border);
   border-radius: var(--radius-control);
-  color: var(--accent-strong);
-  background: var(--accent-soft);
+  color: #fff;
+  background: var(--accent);
   font-size: 13px;
+  font-weight: 600;
+}
+
+.error-panel button:hover {
+  background: var(--accent-strong);
 }
 
 /* ===== 暗色模式适配 ===== */
@@ -2058,6 +2130,7 @@ onBeforeUnmount(() => {
 
 /* ===== Tab Bar ===== */
 .tab-bar {
+  grid-row: 5;
   display: flex;
   border-top: 1px solid var(--border);
   padding: 3px 6px 6px;

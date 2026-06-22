@@ -31,9 +31,9 @@
     </div>
 
     <div v-else class="empty-state">
-      <StickyNote :size="30" />
-      <p>暂无剪切板历史</p>
-      <p class="hint">复制任意文字，这里会自动记录</p>
+      <ClipboardList :size="30" />
+      <p>还没有剪切板记录</p>
+      <p class="hint">复制文字或图片后会出现在这里</p>
     </div>
 
     <div v-if="showDetail" class="detail-overlay" @click.self="showDetail = false">
@@ -47,7 +47,7 @@
 
 <script setup>
 import { ref, onMounted, onUnmounted } from 'vue'
-import { Pin, Trash2, X, StickyNote } from 'lucide-vue-next'
+import { ClipboardList, Pin, Trash2, X } from 'lucide-vue-next'
 import { useClipboardStore } from '../stores/clipboard'
 
 const store = useClipboardStore()
@@ -100,7 +100,7 @@ function relativeTime(iso) {
 .clip-card:hover { border-color: var(--accent); }
 .clip-card.pinned { border-left: 3px solid var(--accent); }
 .clip-top { display: flex; justify-content: space-between; margin-bottom: 3px; }
-.type-tag { font-size: 9px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); }
+.type-tag { font-size: 11px; font-weight: 600; color: var(--accent); }
 .clip-top time { font-size: 10px; color: var(--text-muted); }
 .clip-preview { font-size: 12px; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .clip-actions { display: flex; gap: 2px; flex-shrink: 0; }
@@ -109,7 +109,7 @@ function relativeTime(iso) {
 .mini-btn .active { color: var(--accent); }
 .empty-state { display: grid; place-items: center; align-content: center; min-height: 160px; color: var(--text-muted); font-size: 13px; gap: 4px; }
 .empty-state .hint { font-size: 11px; opacity: 0.7; }
-.detail-overlay { position: fixed; inset: 0; z-index: 1000; background: var(--bg-overlay); display: grid; place-items: center; padding: 12px; }
+.detail-overlay { position: fixed; inset: 0; z-index: 1000; overflow: hidden; border-radius: var(--radius-window); background: var(--bg-overlay); clip-path: inset(0 round var(--radius-window)); display: grid; place-items: center; padding: 12px; }
 .detail-panel { width: 100%; max-height: 80vh; padding: 14px; border-radius: 12px; background: var(--bg-elevated); border: 1px solid var(--border); box-shadow: var(--shadow); }
 .detail-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
 .detail-header h3 { font-size: 15px; font-weight: 600; color: var(--text); }

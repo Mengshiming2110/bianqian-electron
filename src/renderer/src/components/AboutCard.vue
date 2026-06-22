@@ -1,10 +1,9 @@
 <template>
   <div v-if="visible" class="about-overlay" @click.self="visible = false">
     <div class="about-card">
-      <h3>Ezio的百宝箱</h3>
+      <h3>便签</h3>
       <p class="about-ver">版本 1.0.0</p>
-      <p class="about-desc">便签 · 剪切板 · 邮件<br>三合一桌面工具箱</p>
-      <p class="about-stack">基于 Electron + Vue 3 构建</p>
+      <p class="about-desc">便签、剪切板、邮件工具</p>
       <button class="confirm-btn" @click="visible = false" style="margin-top:8px">关闭</button>
     </div>
   </div>
@@ -18,12 +17,11 @@ defineExpose({ show })
 </script>
 
 <style scoped>
-.about-overlay { position: fixed; inset: 0; z-index: 2000; background: var(--bg-overlay); backdrop-filter: blur(4px); display: grid; place-items: center; padding: 20px; }
+.about-overlay { position: fixed; inset: 0; z-index: 2000; overflow: hidden; border-radius: var(--radius-window); background: var(--bg-overlay); backdrop-filter: blur(4px); clip-path: inset(0 round var(--radius-window)); display: grid; place-items: center; padding: 20px; }
 .about-card { width: min(100%, 280px); padding: 24px 20px; text-align: center; border: 1px solid var(--border); border-radius: 14px; background: var(--bg-elevated); box-shadow: var(--shadow); }
 .about-card h3 { font-size: 18px; font-weight: 700; color: var(--text); margin-bottom: 4px; }
 .about-ver { font-size: 13px; color: var(--accent); font-weight: 600; margin-bottom: 8px; }
 .about-desc { font-size: 12px; color: var(--text-muted); margin-bottom: 6px; }
-.about-stack { font-size: 10px; color: var(--text-muted); opacity: 0.7; }
 .confirm-btn { width: 100%; height: 38px; border: none; border-radius: 8px; background: var(--accent); color: #fff; font-size: 14px; font-weight: 600; cursor: pointer; font-family: inherit; }
 .confirm-btn:hover { opacity: 0.9; }
 </style>

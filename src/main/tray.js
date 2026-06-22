@@ -36,7 +36,7 @@ export class TrayController {
     const passThrough = this.windowManager.getInteractionState().passThrough
     const image = createTrayImage(passThrough)
     this.tray = new Tray(image)
-    this.tray.setToolTip('Ezio的百宝箱')
+    this.tray.setToolTip('便签')
     this.tray.on('click', () => this.windowManager.toggle())
     this.rebuildMenu()
     return this.tray
@@ -46,7 +46,7 @@ export class TrayController {
     if (!this.tray) return
     const passThrough = this.windowManager.getInteractionState().passThrough
     this.tray.setImage(createTrayImage(passThrough))
-    this.tray.setToolTip('Ezio的百宝箱')
+    this.tray.setToolTip('便签')
   }
 
   rebuildMenu() {

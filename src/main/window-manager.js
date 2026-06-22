@@ -7,6 +7,9 @@ import { EdgeDockController, EDGE_STATE } from './edge-dock.js'
 import { stopRecord } from './shortcuts.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
+const NORMAL_WINDOW_WIDTH = 280
+const NORMAL_WINDOW_HEIGHT = 680
+const NORMAL_WINDOW_MIN_WIDTH = 260
 
 export class WindowManager {
   constructor() {
@@ -39,8 +42,8 @@ export class WindowManager {
   getDefaultBounds() {
     const workArea = screen.getPrimaryDisplay().workArea
     return {
-      width: this.windowMode === 'mini' ? 220 : 280,
-      height: this.windowMode === 'mini' ? 120 : 360,
+      width: NORMAL_WINDOW_WIDTH,
+      height: NORMAL_WINDOW_HEIGHT,
       x: workArea.x + workArea.width - 300,
       y: workArea.y + 20
     }
@@ -67,8 +70,8 @@ export class WindowManager {
 
     this.window = new BrowserWindow({
       ...this.getInitialBounds(),
-      minWidth: this.windowMode === 'mini' ? 200 : 260,
-      minHeight: this.windowMode === 'mini' ? 80 : 360,
+      minWidth: NORMAL_WINDOW_MIN_WIDTH,
+      minHeight: NORMAL_WINDOW_HEIGHT,
       frame: false,
       transparent: true,
       resizable: true,
@@ -230,7 +233,7 @@ export class WindowManager {
   }
 
   setWindowMode(mode) {
-    this.windowMode = mode === 'mini' ? 'mini' : 'normal'
+    this.windowMode = 'normal'
     updateSettings({ windowMode: this.windowMode })
     this.applyWindowMode()
     this.broadcastInteractionState()
@@ -312,17 +315,13 @@ export class WindowManager {
 
     this.edge.restoreImmediate({ keepDock: true })
 
-    if (this.windowMode === 'mini') {
-      this.window.setMinimumSize(200, 80)
-      this.window.setBounds({ ...this.window.getBounds(), width: 220 })
-    } else {
-      this.window.setMinimumSize(260, 200)
-      const bounds = this.window.getBounds()
-      this.window.setBounds({
-        ...bounds,
-        width: Math.max(bounds.width, 280)
-      })
-    }
+    this.window.setMinimumSize(NORMAL_WINDOW_MIN_WIDTH, NORMAL_WINDOW_HEIGHT)
+    const bounds = this.window.getBounds()
+    this.window.setBounds({
+      ...bounds,
+      width: Math.max(bounds.width, NORMAL_WINDOW_WIDTH),
+      height: Math.max(bounds.height, NORMAL_WINDOW_HEIGHT)
+    })
 
     this.ensureVisibleInWorkArea()
     this.edge.onWindowMoved()
@@ -334,10 +333,8 @@ export class WindowManager {
 
     const bounds = this.window.getBounds()
     const workArea = screen.getDisplayMatching(bounds).workArea
-    const minHeight = this.windowMode === 'mini' ? 80 : 360
-    const maxHeight = this.windowMode === 'mini'
-      ? workArea.height - 40
-      : Math.min(workArea.height - 80, workArea.y + workArea.height - bounds.y - 40)
+    const minHeight = NORMAL_WINDOW_HEIGHT
+    const maxHeight = Math.min(workArea.height - 80, workArea.y + workArea.height - bounds.y - 40)
     const targetHeight = Math.max(minHeight, Math.min(maxHeight, Math.ceil(contentHeight)))
     const targetY = Math.max(
       workArea.y + 12,
@@ -457,11 +454,11 @@ export class WindowManager {
       ? screen.getPrimaryDisplay().workArea
       : screen.getDisplayMatching(bounds).workArea
     const width = Math.min(
-      Math.max(bounds.width, this.windowMode === 'mini' ? 200 : 260),
+      Math.max(bounds.width, NORMAL_WINDOW_MIN_WIDTH),
       workArea.width - 24
     )
     const height = Math.min(
-      Math.max(bounds.height, this.windowMode === 'mini' ? 80 : 200),
+      Math.max(bounds.height, NORMAL_WINDOW_HEIGHT),
       workArea.height - 24
     )
     const offscreen =

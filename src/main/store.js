@@ -17,7 +17,7 @@ function createStore() {
         clipboardLimit: 50,
         autoStart: false,
         mailInterval: 5,
-        mailConfig: { server: '', email: '', password: '' },
+        mailConfig: { server: '', email: '', domainUser: '', domain: 'LSTECH' },
         windowMode: 'normal',
         edgeAutoHide: false,
         theme: 'system',
@@ -186,9 +186,9 @@ export function getSettings() {
     autoStart: Boolean(settings.autoStart),
     mailInterval: typeof settings.mailInterval === 'number' ? settings.mailInterval : 5,
     mailConfig: settings.mailConfig && typeof settings.mailConfig === 'object'
-      ? { server: '', email: '', password: '', ...settings.mailConfig }
-      : { server: '', email: '', password: '' },
-    windowMode: settings.windowMode === 'mini' ? 'mini' : 'normal',
+      ? { server: '', email: '', domainUser: '', domain: 'LSTECH', ...settings.mailConfig, password: '' }
+      : { server: '', email: '', domainUser: '', domain: 'LSTECH', password: '' },
+    windowMode: 'normal',
     edgeAutoHide: Boolean(settings.edgeAutoHide),
     theme: settings.theme === 'light' || settings.theme === 'dark' ? settings.theme : 'system',
     shortcuts: {

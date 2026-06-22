@@ -1,7 +1,7 @@
 {
   "name": "ezio-toolbox",
   "version": "1.0.0",
-  "description": "Ezio的百宝箱 — 便签·剪切板·邮件 三合一桌面工具箱",
+  "description": "便签、剪切板、邮件桌面工具",
   "author": "Ezio",
   "main": "out/main/index.js",
   "scripts": {
@@ -29,7 +29,7 @@
   },
   "build": {
     "appId": "com.ezio.toolbox",
-    "productName": "Ezio的百宝箱",
+    "productName": "便签",
     "asar": false,
     "directories": {
       "output": "dist"

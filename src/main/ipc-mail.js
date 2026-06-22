@@ -4,14 +4,38 @@ import { MailBridge } from './mail-bridge'
 
 let bridge = null
 
+function normalizeMailConfig(config = {}) {
+  const domain = String(config.domain || 'LSTECH').trim() || 'LSTECH'
+  const domainUser = String(config.domainUser || config.username || '').trim()
+  const email = String(config.email || '').trim()
+  const server = String(config.server || '').trim()
+  const password = String(config.password || '')
+
+  return {
+    server,
+    email,
+    domain,
+    domainUser,
+    username: domainUser,
+    password,
+    smtp: email,
+    domain_user: domainUser
+  }
+}
+
 export function setupMailHandlers() {
   ipcMain.handle('mail:configure', async (_, config) => {
     try {
       if (bridge) bridge.stop()
       bridge = new MailBridge()
-      bridge.start(config)
+      await bridge.start(normalizeMailConfig(config))
+      await bridge.fetchMails(null, { throwOnError: true })
       return { ok: true }
-    } catch (err) { console.error('[ipc] mail:configure 失败:', err.message); return { ok: false, error: err.message } }
+    } catch (err) {
+      if (bridge) { bridge.stop(); bridge = null }
+      console.error('[ipc] mail:configure 失败:', err.message)
+      return { ok: false, error: err.message }
+    }
   })
 
   ipcMain.handle('mail:list', async () => {

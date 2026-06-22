@@ -1,4 +1,5 @@
 import { spawn } from 'node:child_process'
+import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { app } from 'electron'
 
@@ -13,11 +14,15 @@ export class MailBridge {
     this.config = null
   }
 
-  start(config) {
+  async start(config) {
     this.config = config
     const exePath = app.isPackaged
       ? join(process.resourcesPath, 'MailService.exe')
       : join(app.getAppPath(), 'resources', 'MailService.exe')
+
+    if (!existsSync(exePath)) {
+      throw new Error(`邮件服务不存在: ${exePath}`)
+    }
 
     try {
       const port = String(9800 + Math.floor(Math.random() * 200))
@@ -25,7 +30,18 @@ export class MailBridge {
 
       this.process = spawn(exePath, [port], {
         stdio: ['pipe', 'pipe', 'pipe'],
-        windowsHide: true
+        windowsHide: true,
+        env: {
+          ...process.env,
+          MAIL_SERVER: config.server || '',
+          MAIL_SMTP: config.email || '',
+          MAIL_EMAIL: config.email || '',
+          MAIL_DOMAIN: config.domain || '',
+          MAIL_DOMAIN_USER: config.domainUser || config.username || '',
+          MAIL_USERNAME: config.username || config.domainUser || '',
+          MAIL_PASS: config.password || '',
+          MAIL_PASSWORD: config.password || ''
+        }
       })
 
       this.process.stdout.on('data', (data) => {
@@ -40,13 +56,14 @@ export class MailBridge {
         if (code !== 0) this._retry()
       })
 
-      setTimeout(() => this._sendConfig(), 1000)
-
       this.healthTimer = setInterval(() => this._healthCheck(), 30000)
 
       console.log('[mail-bridge] 启动, port:', port)
+      await new Promise((resolve) => setTimeout(resolve, 1000))
+      return await this._sendConfig()
     } catch (err) {
       console.error('[mail-bridge] 启动失败:', err.message)
+      throw err
     }
   }
 
@@ -59,6 +76,7 @@ export class MailBridge {
       })
     } catch (err) {
       console.error('[mail-bridge] 配置发送失败:', err.message)
+      throw err
     }
   }
 
@@ -98,11 +116,12 @@ export class MailBridge {
     }
   }
 
-  async fetchMails(since) {
+  async fetchMails(since, options = {}) {
     try {
       const params = since ? `?since=${encodeURIComponent(since)}` : ''
       return await this._fetch(`/mails${params}`)
-    } catch {
+    } catch (err) {
+      if (options.throwOnError) throw err
       return []
     }
   }
