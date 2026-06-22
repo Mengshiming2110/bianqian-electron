@@ -1,8 +1,8 @@
 {
-  "name": "ezio-toolbox",
+  "name": "lingyi-work-assistant",
   "version": "1.0.0",
-  "description": "便签、剪切板、邮件桌面工具",
-  "author": "Ezio",
+  "description": "领益内部备忘、剪切板和 Outlook 邮件桌面助手",
+  "author": "Lingyi",
   "main": "out/main/index.js",
   "scripts": {
     "dev": "electron-vite dev",
@@ -25,11 +25,12 @@
     "electron": "^28.3.3",
     "electron-builder": "^25.1.8",
     "electron-vite": "^2.3.0",
+    "rcedit": "^5.0.2",
     "vite": "^5.4.11"
   },
-  "build": {
-    "appId": "com.ezio.toolbox",
-    "productName": "便签",
+    "build": {
+    "appId": "com.lingyi.workassistant",
+    "productName": "领益工作助手",
     "asar": false,
     "directories": {
       "output": "dist"
@@ -39,12 +40,19 @@
       "resources/**/*",
       "package.json"
     ],
+    "extraResources": [
+      {
+        "from": "resources/MailService.exe",
+        "to": "MailService.exe"
+      }
+    ],
     "publish": {
       "provider": "github",
       "owner": "Mengshiming2110",
       "repo": "bianqian-electron"
     },
     "win": {
+      "icon": "resources/icon.ico",
       "signAndEditExecutable": false,
       "target": [
         {
@@ -57,12 +65,15 @@
       "artifactName": "${productName}-${version}-setup.${ext}"
     },
     "nsis": {
+      "installerIcon": "resources/icon.ico",
+      "uninstallerIcon": "resources/icon.ico",
       "oneClick": false,
       "perMachine": false,
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "shortcutName": "便签"
-    }
+      "shortcutName": "领益工作助手"
+    },
+    "afterPack": "scripts/after-pack.cjs"
   }
 }

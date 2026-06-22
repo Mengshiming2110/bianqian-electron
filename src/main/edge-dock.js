@@ -1,7 +1,7 @@
 import { screen } from 'electron'
 
-const EDGE_THRESHOLD = 20
-const EDGE_EXPOSED = 4
+const EDGE_THRESHOLD = 28
+const EDGE_EXPOSED = 6
 const EDGE_HIDE_DELAY = 500
 const EDGE_ANIMATION_MS = 180
 const ANIMATION_FRAME_MS = 16
@@ -60,7 +60,7 @@ export class EdgeDockController {
   checkSnap() {
     const win = this.window
     if (!win || win.isDestroyed() || this._animating) return
-    if (this.isPinned || !this.autoHide) return
+    if (this.isPinned) return
 
     const bounds = win.getBounds()
     const area = this.getWorkArea()
@@ -247,11 +247,12 @@ export class EdgeDockController {
     const area = this.getWorkArea()
 
     if (this.isHidden() && !this._animating) {
-      if (this.state === EDGE_STATE.HIDDEN_LEFT && cursor.x <= area.x + EDGE_EXPOSED) {
+      const revealZone = EDGE_EXPOSED + 10
+      if (this.state === EDGE_STATE.HIDDEN_LEFT && cursor.x <= area.x + revealZone) {
         this.show()
         return
       }
-      if (this.state === EDGE_STATE.HIDDEN_RIGHT && cursor.x >= area.x + area.width - EDGE_EXPOSED) {
+      if (this.state === EDGE_STATE.HIDDEN_RIGHT && cursor.x >= area.x + area.width - revealZone) {
         this.show()
         return
       }

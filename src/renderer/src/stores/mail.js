@@ -1,5 +1,17 @@
 import { defineStore } from 'pinia'
 
+const DEFAULT_MAIL_SERVER = 'mail.lingyiitech.com'
+const DEFAULT_MAIL_DOMAIN = 'LSTECH'
+const DEFAULT_MAIL_INTERVAL_MINUTES = 5
+
+let autoFetchTimer = null
+let autoFetchInFlight = false
+
+function normalizeMailInterval(value) {
+  const minutes = Number(value)
+  return [1, 5, 15, 30].includes(minutes) ? minutes : DEFAULT_MAIL_INTERVAL_MINUTES
+}
+
 export const useMailStore = defineStore('mail', {
   state: () => ({
     mails: [],
@@ -8,29 +20,42 @@ export const useMailStore = defineStore('mail', {
     configured: false,
     config: null,
     error: null,
+    doctorResult: null,
+    doctorRunning: false,
     lastSync: null,
-    unreadCount: 0
+    unreadCount: 0,
+    mailInterval: DEFAULT_MAIL_INTERVAL_MINUTES
   }),
 
   actions: {
     async configure(config) {
-      this.config = config
+      const payload = {
+        server: String(config?.server || DEFAULT_MAIL_SERVER).trim() || DEFAULT_MAIL_SERVER,
+        email: String(config?.email || '').trim(),
+        domainUser: String(config?.domainUser || config?.username || '').trim(),
+        domain: String(config?.domain || DEFAULT_MAIL_DOMAIN).trim() || DEFAULT_MAIL_DOMAIN,
+        password: String(config?.password || '')
+      }
+      this.config = payload
       this.error = null
       try {
-        const result = await window.api.mail.configure(config)
+        const result = await window.api.mail.configure(payload)
         if (result?.ok) {
           this.configured = true
           this.isRunning = true
           await this.fetch()
+          await this.startAutoFetch()
         } else {
           this.configured = false
           this.isRunning = false
+          this.stopAutoFetch()
           this.error = this.mapError(result?.error || '连接失败')
         }
         return result
       } catch (err) {
         this.configured = false
         this.isRunning = false
+        this.stopAutoFetch()
         this.error = this.mapError(err?.message || err || '连接失败')
         return { ok: false, error: this.error }
       }
@@ -59,20 +84,62 @@ export const useMailStore = defineStore('mail', {
         this.isRunning = status?.running || false
         this.configured = this.isRunning
         this.unreadCount = this.mails.filter(m => !m.is_read).length
+        if (this.isRunning) {
+          await this.startAutoFetch()
+        } else {
+          this.stopAutoFetch()
+        }
       } catch (err) {
         this.error = this.mapError(err?.message || err || '邮件状态读取失败')
         this.isRunning = false
         this.configured = false
+        this.stopAutoFetch()
       }
     },
 
     async fetch() {
+      if (autoFetchInFlight) return
+      autoFetchInFlight = true
       try {
         await window.api.mail.fetch()
         await this.load()
         this.lastSync = new Date().toISOString()
       } catch (err) {
         this.error = this.mapError(err?.message || err || '邮件拉取失败')
+      } finally {
+        autoFetchInFlight = false
+      }
+    },
+
+    async doctor(config) {
+      this.doctorRunning = true
+      try {
+        this.doctorResult = await window.api.mail.doctor(config)
+        return this.doctorResult
+      } catch (err) {
+        this.doctorResult = { ok: false, error: err?.message || String(err || '诊断失败') }
+        return this.doctorResult
+      } finally {
+        this.doctorRunning = false
+      }
+    },
+
+    async startAutoFetch() {
+      this.stopAutoFetch()
+      const settings = await window.api?.settings?.get?.()
+      this.mailInterval = normalizeMailInterval(settings?.mailInterval)
+
+      if (!this.isRunning) return
+
+      autoFetchTimer = window.setInterval(() => {
+        if (this.isRunning) this.fetch()
+      }, this.mailInterval * 60 * 1000)
+    },
+
+    stopAutoFetch() {
+      if (autoFetchTimer) {
+        window.clearInterval(autoFetchTimer)
+        autoFetchTimer = null
       }
     },
 
@@ -90,6 +157,7 @@ export const useMailStore = defineStore('mail', {
     },
 
     async stop() {
+      this.stopAutoFetch()
       await window.api.mail.stop()
       this.isRunning = false
       this.configured = false

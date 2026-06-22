@@ -3,12 +3,14 @@ import { queryAll, queryOne, execute } from './database'
 import { MailBridge } from './mail-bridge'
 
 let bridge = null
+const DEFAULT_MAIL_SERVER = 'mail.lingyiitech.com'
+const DEFAULT_MAIL_DOMAIN = 'LSTECH'
 
 function normalizeMailConfig(config = {}) {
-  const domain = String(config.domain || 'LSTECH').trim() || 'LSTECH'
+  const domain = String(config.domain || DEFAULT_MAIL_DOMAIN).trim() || DEFAULT_MAIL_DOMAIN
   const domainUser = String(config.domainUser || config.username || '').trim()
   const email = String(config.email || '').trim()
-  const server = String(config.server || '').trim()
+  const server = String(config.server || DEFAULT_MAIL_SERVER).trim() || DEFAULT_MAIL_SERVER
   const password = String(config.password || '')
 
   return {
@@ -46,14 +48,32 @@ export function setupMailHandlers() {
   ipcMain.handle('mail:fetch', async () => {
     if (!bridge) return []
     try {
-      const mails = await bridge.fetchMails()
+      const mails = await bridge.fetchMails(null, { throwOnError: true })
       if (!Array.isArray(mails) || !mails.length) return []
       for (const m of mails) {
         execute('INSERT OR IGNORE INTO mail_items (id, subject, sender, body, received_at) VALUES (?, ?, ?, ?, ?)',
           [m.id, m.subject || '', m.sender || '', m.body || '', m.received_at || ''])
       }
       return mails
-    } catch (err) { console.error('[ipc] mail:fetch 失败:', err.message); return [] }
+    } catch (err) {
+      console.error('[ipc] mail:fetch 失败:', err.message)
+      throw err
+    }
+  })
+
+  ipcMain.handle('mail:doctor', async (_, config) => {
+    try {
+      if (bridge) {
+        bridge.stop()
+        bridge = null
+      }
+      bridge = new MailBridge()
+      await bridge.start(normalizeMailConfig(config), { configure: false })
+      return await bridge.doctor()
+    } catch (err) {
+      console.error('[ipc] mail:doctor 失败:', err.message)
+      return { ok: false, error: err.message }
+    }
   })
 
   ipcMain.handle('mail:detail', async (_, id) => {

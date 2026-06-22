@@ -4,6 +4,9 @@ import { join } from 'node:path'
 import { app } from 'electron'
 
 const RETRY_MAX = 3
+const SERVICE_READY_TIMEOUT_MS = 20000
+const SERVICE_POLL_INTERVAL_MS = 300
+const MAIL_REQUEST_TIMEOUT_MS = 30000
 
 export class MailBridge {
   constructor() {
@@ -12,16 +15,23 @@ export class MailBridge {
     this.retryCount = 0
     this.healthTimer = null
     this.config = null
+    this.stopping = false
   }
 
-  async start(config) {
+  async start(config, options = {}) {
+    const shouldConfigure = options.configure !== false
     this.config = config
-    const exePath = app.isPackaged
-      ? join(process.resourcesPath, 'MailService.exe')
-      : join(app.getAppPath(), 'resources', 'MailService.exe')
+    this.stopping = false
+    const exeCandidates = app.isPackaged
+      ? [
+          join(process.resourcesPath, 'MailService.exe'),
+          join(app.getAppPath(), 'resources', 'MailService.exe')
+        ]
+      : [join(app.getAppPath(), 'resources', 'MailService.exe')]
+    const exePath = exeCandidates.find((candidate) => existsSync(candidate))
 
-    if (!existsSync(exePath)) {
-      throw new Error(`邮件服务不存在: ${exePath}`)
+    if (!exePath) {
+      throw new Error(`邮件服务不存在: ${exeCandidates.join(' 或 ')}`)
     }
 
     try {
@@ -53,14 +63,17 @@ export class MailBridge {
       this.process.on('exit', (code) => {
         console.warn('[mail-bridge] 进程退出, code:', code)
         this.process = null
-        if (code !== 0) this._retry()
+        if (!this.stopping && code !== 0) this._retry()
       })
 
       this.healthTimer = setInterval(() => this._healthCheck(), 30000)
 
       console.log('[mail-bridge] 启动, port:', port)
-      await new Promise((resolve) => setTimeout(resolve, 1000))
-      return await this._sendConfig()
+      await this._waitUntilReady()
+      if (shouldConfigure) {
+        return await this._sendConfig()
+      }
+      return true
     } catch (err) {
       console.error('[mail-bridge] 启动失败:', err.message)
       throw err
@@ -72,7 +85,8 @@ export class MailBridge {
     try {
       await this._fetch('/start', {
         method: 'POST',
-        body: JSON.stringify(this.config)
+        body: JSON.stringify(this.config),
+        timeoutMs: MAIL_REQUEST_TIMEOUT_MS
       })
     } catch (err) {
       console.error('[mail-bridge] 配置发送失败:', err.message)
@@ -82,7 +96,7 @@ export class MailBridge {
 
   async _healthCheck() {
     try {
-      await this._fetch('/health')
+      await this._fetch('/health', { timeoutMs: 5000 })
       this.retryCount = 0
     } catch {
       console.warn('[mail-bridge] 健康检查失败')
@@ -98,19 +112,49 @@ export class MailBridge {
     setTimeout(() => this.start(this.config), 3000)
   }
 
+  async _waitUntilReady() {
+    const startedAt = Date.now()
+    let lastError = null
+
+    while (Date.now() - startedAt < SERVICE_READY_TIMEOUT_MS) {
+      if (!this.process) {
+        throw new Error('邮件服务启动失败，进程已退出')
+      }
+
+      try {
+        await this._fetch('/health', { timeoutMs: 2000 })
+        return
+      } catch (err) {
+        lastError = err
+        await new Promise((resolve) => setTimeout(resolve, SERVICE_POLL_INTERVAL_MS))
+      }
+    }
+
+    throw new Error(`邮件服务启动超时: ${lastError?.message || '未响应'}`)
+  }
+
   async _fetch(path, options = {}) {
     const url = this.baseUrl + path
     const controller = new AbortController()
-    const timeout = setTimeout(() => controller.abort(), 5000)
+    const timeoutMs = options.timeoutMs || MAIL_REQUEST_TIMEOUT_MS
+    const timeout = setTimeout(() => controller.abort(), timeoutMs)
+    const { timeoutMs: _timeoutMs, ...fetchOptions } = options
 
     try {
       const res = await fetch(url, {
-        ...options,
+        ...fetchOptions,
         signal: controller.signal,
-        headers: { 'Content-Type': 'application/json', ...options.headers }
+        headers: { 'Content-Type': 'application/json', ...fetchOptions.headers }
       })
-      if (!res.ok) throw new Error(`HTTP ${res.status}`)
-      return res.json()
+      const text = await res.text()
+      let payload = null
+      try {
+        payload = text ? JSON.parse(text) : null
+      } catch {}
+      if (!res.ok) {
+        throw new Error(payload?.error || text || `HTTP ${res.status}`)
+      }
+      return payload
     } finally {
       clearTimeout(timeout)
     }
@@ -119,7 +163,7 @@ export class MailBridge {
   async fetchMails(since, options = {}) {
     try {
       const params = since ? `?since=${encodeURIComponent(since)}` : ''
-      return await this._fetch(`/mails${params}`)
+      return await this._fetch(`/mails${params}`, { timeoutMs: MAIL_REQUEST_TIMEOUT_MS })
     } catch (err) {
       if (options.throwOnError) throw err
       return []
@@ -128,20 +172,25 @@ export class MailBridge {
 
   async fetchMailDetail(id) {
     try {
-      return await this._fetch(`/mail/${id}`)
+      return await this._fetch(`/mail/${id}`, { timeoutMs: MAIL_REQUEST_TIMEOUT_MS })
     } catch {
       return null
     }
   }
 
+  async doctor() {
+    return await this._fetch('/doctor', { timeoutMs: 5000 })
+  }
+
   stop() {
+    this.stopping = true
     if (this.healthTimer) {
       clearInterval(this.healthTimer)
       this.healthTimer = null
     }
     if (this.process) {
       try {
-        this._fetch('/stop', { method: 'POST' }).catch(() => {})
+        this._fetch('/stop', { method: 'POST', timeoutMs: 3000 }).catch(() => {})
         setTimeout(() => {
           if (this.process) { this.process.kill(); this.process = null }
         }, 2000)

@@ -10,6 +10,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url))
 const NORMAL_WINDOW_WIDTH = 280
 const NORMAL_WINDOW_HEIGHT = 680
 const NORMAL_WINDOW_MIN_WIDTH = 260
+const APP_ICON_PATH = join(app.getAppPath(), 'resources', 'icon.ico')
 
 export class WindowManager {
   constructor() {
@@ -78,6 +79,7 @@ export class WindowManager {
       alwaysOnTop: true,
       skipTaskbar: true,
       show: false,
+      icon: APP_ICON_PATH,
       backgroundColor: '#00000000',
       webPreferences: {
         preload: join(__dirname, '../preload/index.js'),
@@ -108,13 +110,17 @@ export class WindowManager {
       this.window.hide()
     })
 
-    this.window.on('moved', () => {
+    const handleWindowMoved = () => {
       this.edge.onWindowMoved()
       updateSettings({ windowBounds: this.window.getBounds() })
-    })
+    }
+
+    this.window.on('move', handleWindowMoved)
+    this.window.on('moved', handleWindowMoved)
 
     this.window.on('resized', () => {
       updateSettings({ windowBounds: this.window.getBounds() })
+      this.edge.onWindowMoved()
     })
 
     this.window.webContents.once('did-finish-load', () => {
@@ -170,6 +176,7 @@ export class WindowManager {
     this.applyFilter(this.pendingFilter)
     this.applyAlwaysOnTop()
     this.applyInteractionState()
+    this.edge.onWindowMoved()
   }
 
   hide() {
@@ -244,7 +251,7 @@ export class WindowManager {
     this.edge.autoHide = Boolean(enabled)
     updateSettings({ edgeAutoHide: this.edge.autoHide })
     if (this.edge.autoHide) {
-      this.edge.onWindowMoved()
+      this.edge.checkSnap()
     } else if (this.edge.isHidden()) {
       this.edge.show()
     } else {
@@ -385,6 +392,7 @@ export class WindowManager {
       frame: false,
       parent: this.window,
       show: false,
+      icon: APP_ICON_PATH,
       focusable: true,
       backgroundColor: '#ffffff',
       webPreferences: {
@@ -449,6 +457,7 @@ export class WindowManager {
     }
 
     const bounds = this.window.getBounds()
+    const edgeState = this.edge.state
     const isOffscreenCoord = bounds.x < -10000 || bounds.y < -10000
     const workArea = isOffscreenCoord
       ? screen.getPrimaryDisplay().workArea
@@ -461,15 +470,26 @@ export class WindowManager {
       Math.max(bounds.height, NORMAL_WINDOW_HEIGHT),
       workArea.height - 24
     )
+    const isEdgeManaged =
+      edgeState === EDGE_STATE.DOCKED_LEFT ||
+      edgeState === EDGE_STATE.DOCKED_RIGHT ||
+      edgeState === EDGE_STATE.HIDDEN_LEFT ||
+      edgeState === EDGE_STATE.HIDDEN_RIGHT
     const offscreen =
       isOffscreenCoord ||
-      bounds.x + width < workArea.x + 24 ||
-      bounds.x > workArea.x + workArea.width - 24 ||
+      (!isEdgeManaged && bounds.x + width < workArea.x + 24) ||
+      (!isEdgeManaged && bounds.x > workArea.x + workArea.width - 24) ||
       bounds.y + height < workArea.y + 24 ||
       bounds.y > workArea.y + workArea.height - 24
-    const x = offscreen
+    let x = offscreen
       ? workArea.x + workArea.width - width - 20
       : Math.max(workArea.x + 12, Math.min(bounds.x, workArea.x + workArea.width - width - 12))
+    if (!offscreen) {
+      if (edgeState === EDGE_STATE.DOCKED_LEFT) x = workArea.x
+      if (edgeState === EDGE_STATE.DOCKED_RIGHT) x = workArea.x + workArea.width - width
+      if (edgeState === EDGE_STATE.HIDDEN_LEFT) x = workArea.x - width + 6
+      if (edgeState === EDGE_STATE.HIDDEN_RIGHT) x = workArea.x + workArea.width - 6
+    }
     const y = offscreen
       ? workArea.y + 20
       : Math.max(workArea.y + 12, Math.min(bounds.y, workArea.y + workArea.height - height - 12))
@@ -537,7 +557,8 @@ export class WindowManager {
       resizable: true,
       frame: false,
       transparent: true,
-      title: noteData.title || '便签',
+      title: noteData.title || '领益工作助手',
+      icon: APP_ICON_PATH,
       webPreferences: {
         preload: join(__dirname, '../preload/index.js'),
         contextIsolation: true,

@@ -3,10 +3,14 @@ import { randomUUID } from 'node:crypto'
 import { CATEGORIES, normalizeCategory } from './categories.js'
 
 let backingStore
+const STORE_NAME = '领益工作助手数据'
+const LEGACY_STORE_NAME = '便签数据'
+const DEFAULT_MAIL_SERVER = 'mail.lingyiitech.com'
+const DEFAULT_MAIL_DOMAIN = 'LSTECH'
 
-function createStore() {
+function createStore(name = STORE_NAME) {
   return new Store({
-    name: '便签数据',
+    name,
     clearInvalidConfig: true,
     encryptionKey: 'bianqian-electron-store-v1',
     defaults: {
@@ -17,7 +21,7 @@ function createStore() {
         clipboardLimit: 50,
         autoStart: false,
         mailInterval: 5,
-        mailConfig: { server: '', email: '', domainUser: '', domain: 'LSTECH' },
+        mailConfig: { server: DEFAULT_MAIL_SERVER, email: '', domainUser: '', domain: DEFAULT_MAIL_DOMAIN },
         windowMode: 'normal',
         edgeAutoHide: false,
         theme: 'system',
@@ -37,9 +41,26 @@ function createStore() {
   })
 }
 
+function migrateLegacyStore(store) {
+  if (store.has('notes') || store.has('settings')) return
+
+  try {
+    const legacy = createStore(LEGACY_STORE_NAME)
+    if (legacy.has('notes')) {
+      store.set('notes', legacy.get('notes', []))
+    }
+    if (legacy.has('settings')) {
+      store.set('settings', legacy.get('settings', {}))
+    }
+  } catch (error) {
+    console.warn('[store] legacy migration skipped:', error?.message || error)
+  }
+}
+
 function getBackingStore() {
   if (!backingStore) {
     backingStore = createStore()
+    migrateLegacyStore(backingStore)
   }
   return backingStore
 }
@@ -116,7 +137,7 @@ export function updateNote(id, patch) {
   const index = notes.findIndex((note) => note.id === String(id))
 
   if (index === -1) {
-    throw new Error('便签不存在')
+    throw new Error('备忘不存在')
   }
 
   const nextNote = normalizeNote({ ...notes[index], ...patch, id: notes[index].id, createdAt: notes[index].createdAt })
@@ -141,7 +162,7 @@ export function toggleNote(id) {
   const note = notes.find((item) => item.id === String(id))
 
   if (!note) {
-    throw new Error('便签不存在')
+    throw new Error('备忘不存在')
   }
 
   return updateNote(id, { completed: !note.completed })
@@ -185,9 +206,7 @@ export function getSettings() {
     clipboardLimit: typeof settings.clipboardLimit === 'number' ? settings.clipboardLimit : 50,
     autoStart: Boolean(settings.autoStart),
     mailInterval: typeof settings.mailInterval === 'number' ? settings.mailInterval : 5,
-    mailConfig: settings.mailConfig && typeof settings.mailConfig === 'object'
-      ? { server: '', email: '', domainUser: '', domain: 'LSTECH', ...settings.mailConfig, password: '' }
-      : { server: '', email: '', domainUser: '', domain: 'LSTECH', password: '' },
+    mailConfig: normalizeMailConfig(settings.mailConfig),
     windowMode: 'normal',
     edgeAutoHide: Boolean(settings.edgeAutoHide),
     theme: settings.theme === 'light' || settings.theme === 'dark' ? settings.theme : 'system',
@@ -195,6 +214,17 @@ export function getSettings() {
       ...DEFAULT_SHORTCUTS,
       ...(settings.shortcuts || {})
     }
+  }
+}
+
+function normalizeMailConfig(config) {
+  const mailConfig = config && typeof config === 'object' ? config : {}
+  return {
+    server: String(mailConfig.server || DEFAULT_MAIL_SERVER).trim() || DEFAULT_MAIL_SERVER,
+    email: String(mailConfig.email || '').trim(),
+    domainUser: String(mailConfig.domainUser || mailConfig.username || '').trim(),
+    domain: String(mailConfig.domain || DEFAULT_MAIL_DOMAIN).trim() || DEFAULT_MAIL_DOMAIN,
+    password: ''
   }
 }
 

@@ -1,31 +1,22 @@
 <template>
   <ShortcutEditor v-if="isShortcutEditor" />
-  <main v-else-if="!hasError" ref="appShellRef" class="app-shell" :class="{
-    'pass-through-mode': passThroughMode,
-    'mini-mode': isMiniMode,
-    'mode-transitioning': modeTransition !== 'idle',
-    'transition-to-mini': modeTransition === 'to-mini',
-    'transition-to-normal': modeTransition === 'to-normal'
-  }">
+  <main v-else-if="!hasError" ref="appShellRef" class="app-shell" :class="{ 'pass-through-mode': passThroughMode }">
     <header class="app-header">
-      <div>
+      <div class="header-title">
         <p class="eyebrow">{{ tabEyebrow }}</p>
-        <h1>便签</h1>
       </div>
       <div class="header-actions">
         <button ref="settingsButtonRef" class="icon-button" :class="{ active: settingsOpen }" title="设置" type="button" @click="toggleSettings"><Settings :size="18" /></button>
-        <button v-if="activeTab === 'notes'" class="icon-button" title="新建便签" type="button" @click="openEditor()"><Plus :size="18" /></button>
+        <button v-if="activeTab === 'notes'" class="icon-button" title="新建备忘" type="button" @click="openEditor()"><Plus :size="18" /></button>
         <button v-if="activeTab === 'clipboard'" class="icon-button" title="清空剪切板" type="button" @click="clipboardStore.clearAll()"><Trash2 :size="18" /></button>
         <button v-if="activeTab === 'mail'" class="icon-button" title="拉取邮件" type="button" @click="mailStore.fetch()"><Bell :size="18" /></button>
         <button class="icon-button" title="隐藏窗口" type="button" @click="hideWindow"><Minus :size="18" /></button>
       </div>
     </header>
 
-    <div v-show="isMiniMode || modeTransition !== 'idle'" class="mini-drag-bar"></div>
-
     <section class="tab-content">
       <div v-show="activeTab === 'notes'" class="tab-pane notes-pane">
-    <section v-show="activeTab === 'notes' && (!isMiniMode || modeTransition !== 'idle')" class="toolbar">
+    <section v-show="activeTab === 'notes'" class="toolbar">
       <div class="search-box">
         <Search :size="15" />
         <input
@@ -38,7 +29,7 @@
       </div>
     </section>
 
-    <section v-show="activeTab === 'notes'" class="note-list" :class="{ 'sort-active': sortDrag.active, 'sort-settling': sortDrag.settling }" aria-label="便签列表">
+    <section v-show="activeTab === 'notes'" class="note-list" :class="{ 'sort-active': sortDrag.active, 'sort-settling': sortDrag.settling }" aria-label="备忘列表">
       <article
         v-for="note in displayedNotes"
         :key="note.id"
@@ -69,7 +60,7 @@
           <button
             class="pin-button"
             :class="{ active: note.pinned }"
-            :title="note.pinned ? '取消置顶' : '置顶便签'"
+            :title="note.pinned ? '取消置顶' : '置顶备忘'"
             type="button"
             @click.stop="notes.togglePinned(note.id)"
           >
@@ -78,7 +69,7 @@
           <strong>{{ note.title }}</strong>
           <time>{{ note.time }}</time>
         </div>
-        <MarkdownPreview v-if="note.content" :content="note.content" :is-mini="isMiniMode" />
+        <MarkdownPreview v-if="note.content" :content="note.content" :is-mini="false" />
         <div class="card-row card-meta">
           <span class="category-pill">{{ note.category }}</span>
           <span
@@ -94,7 +85,7 @@
 
       <div v-if="!notes.filteredNotes.length" class="empty-state">
         <StickyNote :size="30" />
-        <p>没有便签</p>
+        <p>没有备忘</p>
       </div>
     </section>
 
@@ -104,12 +95,12 @@
       <MailPanel v-if="activeTab === 'mail'" class="tab-pane" />
     </section>
 
-    <footer v-show="!isMiniMode || modeTransition !== 'idle'" class="app-footer">
+    <footer class="app-footer">
       <span>{{ todayLabel }}</span>
     </footer>
 
     <nav class="tab-bar">
-      <button v-for="tab in tabs" :key="tab.id" class="tab-btn" :class="{ active: activeTab === tab.id }" :disabled="isMiniMode && tab.id !== 'notes'" @click="switchTab(tab.id)">
+      <button v-for="tab in tabs" :key="tab.id" class="tab-btn" :class="{ active: activeTab === tab.id }" @click="switchTab(tab.id)">
         <component :is="tabIcons[tab.id]" :size="16" />
         <span>{{ tab.label }}</span>
       </button>
@@ -118,7 +109,7 @@
     <div v-if="editorOpen" class="editor-overlay" @click.self="closeEditor">
       <form class="editor-panel" @submit.prevent="saveEditor">
         <header class="editor-header">
-          <h2>{{ draft.id ? '编辑便签' : '新建便签' }}</h2>
+          <h2>{{ draft.id ? '编辑备忘' : '新建备忘' }}</h2>
           <button class="icon-button" title="关闭" type="button" @click="closeEditor">
             <X :size="18" />
           </button>
@@ -229,11 +220,18 @@
 
   </main>
   <div v-if="hasError" class="error-fallback">
+    <div class="error-context">
+      <span>{{ tabEyebrow }}</span>
+      <time>{{ todayLabel }}</time>
+    </div>
     <div class="error-panel">
       <StickyNote :size="32" />
-      <h2>出了点问题</h2>
-      <p>页面临时失去响应，重试后会回到当前窗口。</p>
-      <button type="button" @click="hasError = false">重试</button>
+      <h2>界面临时失去响应</h2>
+      <p>数据仍保存在本机。重试会回到当前窗口，不会清空备忘、剪切板或邮箱配置。</p>
+      <div class="error-actions">
+        <button type="button" @click="hasError = false">重试</button>
+        <button type="button" class="secondary" @click="hideWindow">先隐藏</button>
+      </div>
     </div>
   </div>
 
@@ -282,15 +280,15 @@ const clipboardStore = useClipboardStore()
 const mailStore = useMailStore()
 
 const activeTab = ref('notes')
-const tabs = [{ id: 'notes', label: '便签', icon: 'StickyNote' }, { id: 'clipboard', label: '剪切板', icon: 'ClipboardList' }, { id: 'mail', label: '邮件', icon: 'Mail' }]
+const tabs = [{ id: 'notes', label: '备忘', icon: 'StickyNote' }, { id: 'clipboard', label: '剪切板', icon: 'ClipboardList' }, { id: 'mail', label: '邮件', icon: 'Mail' }]
 const tabIcons = { notes: StickyNote, clipboard: ClipboardList, mail: Mail }
 const aboutRef = ref(null)
 const welcomeSeen = ref(false)
 
-const tabTitle = computed(() => ({ notes: '便签', clipboard: '剪切板', mail: '邮件' }[activeTab.value] || '便签'))
+const tabTitle = computed(() => ({ notes: '备忘', clipboard: '剪切板', mail: '邮件' }[activeTab.value] || '备忘'))
 const searchPlaceholder = computed(() => ({ notes: '搜索，或输入：明天9点交报告 #工作', clipboard: '搜索剪切板历史...', mail: '搜索邮件...' }[activeTab.value] || '搜索...'))
 
-function switchTab(id) { if (isMiniMode.value && id !== 'notes') return; activeTab.value = id }
+function switchTab(id) { activeTab.value = id }
 function onNavigateTab(tab) { activeTab.value = tab }
 function onShowAbout() { aboutRef.value?.show() }
 function onTogglePassThrough() { togglePassThrough() }
@@ -314,7 +312,6 @@ watch(editorOpen, (val) => {
 })
 const passThroughMode = ref(false)
 const windowOpacity = ref(0.92)
-const windowMode = ref('normal')
 const edgeAutoHide = ref(false)
 const themePreference = ref('system')
 const systemDark = ref(false)
@@ -334,8 +331,6 @@ const themeLabel = computed(() => {
   return map[themePreference.value] || '跟随系统'
 })
 
-const modeTransition = ref('idle')
-const resizePaused = ref(false)
 const animatingCardIds = reactive(new Map())
 const hasError = ref(false)
 const appShellRef = ref(null)
@@ -373,8 +368,7 @@ const attachPopover = reactive({
   anchorEl: null
 })
 
-const isMiniMode = computed(() => windowMode.value === 'mini')
-const displayedNotes = computed(() => (isMiniMode.value ? notes.filteredNotes.slice(0, 3) : notes.filteredNotes))
+const displayedNotes = computed(() => notes.filteredNotes)
 const tabEyebrow = computed(() => {
   if (activeTab.value === 'notes') return notes.activeCategory
   if (activeTab.value === 'clipboard') return '剪切板工具'
@@ -406,8 +400,6 @@ watch(activeTab, () => {
 })
 
 function toggleSettings() {
-  if (isMiniMode.value) return
-
   if (settingsOpen.value) {
     window.api?.settingsWindow?.close()
     return
@@ -480,7 +472,6 @@ function getSortDragStyle(noteId) {
 }
 
 function onSortMouseDown(note, event) {
-  if (isMiniMode.value) return
   if (event.button !== 0) return
   if (event.target.closest('button, a, input, select, textarea')) return
 
@@ -889,7 +880,7 @@ async function saveEditor() {
 }
 
 async function deleteEditorNote() {
-  if (!draft.id || !confirm('删除这条便签？')) {
+  if (!draft.id || !confirm('删除这条备忘？')) {
     return
   }
 
@@ -935,7 +926,6 @@ async function refreshInteractionState() {
   const state = await window.api?.window.getInteractionState?.()
   passThroughMode.value = Boolean(state?.passThrough)
   windowOpacity.value = Number(state?.opacity || 0.92)
-  windowMode.value = state?.windowMode || 'normal'
   edgeAutoHide.value = Boolean(state?.edgeAutoHide)
   if (state?.theme) themePreference.value = state.theme
 }
@@ -945,7 +935,6 @@ async function togglePassThrough() {
   const state = await window.api?.window.setPassThrough?.(!passThroughMode.value)
   passThroughMode.value = Boolean(state?.passThrough)
   windowOpacity.value = Number(state?.opacity || windowOpacity.value)
-  windowMode.value = state?.windowMode || windowMode.value
   edgeAutoHide.value = Boolean(state?.edgeAutoHide)
 }
 
@@ -961,36 +950,13 @@ async function setWindowOpacity(value) {
 }
 
 async function setMode(mode) {
-  if (mode === 'mini' && settingsOpen.value) closeSettings()
-  const targetIsMini = mode === 'mini'
-  if (targetIsMini === isMiniMode.value) return
-
   if (sortDrag.active || sortDrag.settling) cancelSortDrag()
-  resizePaused.value = true
+  if (settingsOpen.value) closeSettings()
 
-  if (targetIsMini) {
-    modeTransition.value = 'to-mini'
-    const state = await window.api?.window.setMode?.('mini')
-    await delay(280)
-    windowMode.value = state?.windowMode || mode
-    edgeAutoHide.value = Boolean(state?.edgeAutoHide)
-    await nextTick()
-  } else {
-    const state = await window.api?.window.setMode?.('normal')
-    windowMode.value = state?.windowMode || mode
-    edgeAutoHide.value = Boolean(state?.edgeAutoHide)
-    await nextTick()
-    modeTransition.value = 'to-normal'
-    await nextTick()
-    requestAnimationFrame(() => {
-      if (appShellRef.value) appShellRef.value.classList.add('fade-in')
-    })
-    await delay(300)
-    if (appShellRef.value) appShellRef.value.classList.remove('fade-in')
-  }
+  const state = await window.api?.window.setMode?.('normal')
+  edgeAutoHide.value = Boolean(state?.edgeAutoHide)
+  await nextTick()
 
-  modeTransition.value = 'idle'
-  resizePaused.value = false
   syncContentHeight()
 }
 
@@ -1000,14 +966,13 @@ async function toggleEdgeAutoHide() {
 }
 
 async function applyPreset(preset) {
-  if ((preset.mode === 'mini' || preset.passThrough) && settingsOpen.value) closeSettings()
-  const modeState = await window.api?.window.setMode?.(preset.mode)
+  if (preset.passThrough && settingsOpen.value) closeSettings()
+  const modeState = await window.api?.window.setMode?.('normal')
   const opacityState = await window.api?.window.setOpacity?.(preset.opacity)
   const passState = await window.api?.window.setPassThrough?.(preset.passThrough)
   const state = passState || opacityState || modeState
   passThroughMode.value = Boolean(state?.passThrough ?? preset.passThrough)
   windowOpacity.value = Number(state?.opacity || preset.opacity)
-  windowMode.value = state?.windowMode || preset.mode
   edgeAutoHide.value = Boolean(state?.edgeAutoHide)
   setTimeout(syncContentHeight, 80)
 }
@@ -1121,28 +1086,11 @@ onErrorCaptured((err) => {
 })
 
 function syncContentHeight() {
-  if (modeTransition.value !== 'idle') return
   const el = appShellRef.value
   if (!el) return
 
   const noteList = el.querySelector('.note-list')
   if (!noteList) return
-
-  if (isMiniMode.value) {
-    noteList.style.maxHeight = ''
-    const dragBar = el.querySelector('.mini-drag-bar')
-    const dragBarHeight = dragBar?.offsetHeight || 18
-    const cards = noteList.querySelectorAll('.note-card')
-    let cardsHeight = 0
-    cards.forEach((card, i) => {
-      if (i < 3) cardsHeight += card.offsetHeight
-    })
-    const gap = 6
-    const padding = 10
-    const totalHeight = dragBarHeight + cardsHeight + Math.max(0, Math.min(cards.length, 3) - 1) * gap + padding * 2
-    window.api?.window.resizeToContent(totalHeight)
-    return
-  }
 
   noteList.style.maxHeight = ''
   window.api?.window.resizeToContent(NORMAL_WINDOW_HEIGHT)
@@ -1176,17 +1124,14 @@ onMounted(async () => {
   if (window.api?.window.onInteractionState) {
     unsubscribeHandlers.push(
       window.api.window.onInteractionState((state) => {
-        const wasMini = windowMode.value === 'mini'
         const wasPassThrough = passThroughMode.value
         passThroughMode.value = Boolean(state?.passThrough)
         windowOpacity.value = Number(state?.opacity || windowOpacity.value)
-        windowMode.value = state?.windowMode || windowMode.value
         edgeAutoHide.value = Boolean(state?.edgeAutoHide)
         if (state?.theme) themePreference.value = state.theme
         if (settingsOpen.value) {
-          const nowMini = windowMode.value === 'mini'
           const nowPassThrough = passThroughMode.value
-          if ((!wasMini && nowMini) || (!wasPassThrough && nowPassThrough)) {
+          if (!wasPassThrough && nowPassThrough) {
             window.api?.settingsWindow?.close()
           }
         }
@@ -1233,7 +1178,6 @@ onMounted(async () => {
   window.addEventListener('resize', syncContentHeight)
 
   resizeObserver = new ResizeObserver(() => {
-    if (resizePaused.value) return
     clearTimeout(resizeDebounce)
     resizeDebounce = setTimeout(syncContentHeight, 80)
   })
@@ -1304,22 +1248,22 @@ onBeforeUnmount(() => {
   -webkit-app-region: drag;
 }
 
-.app-header h1,
 .editor-header h2,
 .eyebrow {
   margin: 0;
 }
 
-.app-header h1 {
-  font-size: 22px;
-  line-height: 1.1;
+.eyebrow {
+  min-height: 32px;
+  display: flex;
+  align-items: center;
+  color: var(--accent);
+  font-size: 13px;
+  font-weight: 700;
 }
 
-.eyebrow {
-  margin-bottom: 3px;
-  color: var(--accent);
-  font-size: 12px;
-  font-weight: 700;
+.header-title {
+  min-width: 0;
 }
 
 .header-actions,
@@ -1407,8 +1351,11 @@ onBeforeUnmount(() => {
 }
 
 .note-card:hover {
-  border-color: rgba(47, 125, 120, 0.52);
+  filter: brightness(1.04);
   background: var(--bg-card-hover);
+}
+.note-card:active {
+  transform: scale(0.99);
 }
 
 .note-card.drag-over {
@@ -1427,12 +1374,12 @@ onBeforeUnmount(() => {
   cursor: grabbing;
 }
 
-.note-card.color-red { border-left: 3px solid #ef4444; }
-.note-card.color-orange { border-left: 3px solid #f97316; }
-.note-card.color-yellow { border-left: 3px solid #eab308; }
-.note-card.color-green { border-left: 3px solid #22c55e; }
-.note-card.color-blue { border-left: 3px solid #3b82f6; }
-.note-card.color-purple { border-left: 3px solid #a855f7; }
+.note-card.color-red { border-color: rgba(239, 68, 68, 0.38); background: color-mix(in srgb, var(--bg-card) 92%, #ef4444); }
+.note-card.color-orange { border-color: rgba(249, 115, 22, 0.38); background: color-mix(in srgb, var(--bg-card) 92%, #f97316); }
+.note-card.color-yellow { border-color: rgba(234, 179, 8, 0.38); background: color-mix(in srgb, var(--bg-card) 92%, #eab308); }
+.note-card.color-green { border-color: rgba(34, 197, 94, 0.38); background: color-mix(in srgb, var(--bg-card) 92%, #22c55e); }
+.note-card.color-blue { border-color: rgba(59, 130, 246, 0.38); background: color-mix(in srgb, var(--bg-card) 92%, #3b82f6); }
+.note-card.color-purple { border-color: rgba(168, 85, 247, 0.38); background: color-mix(in srgb, var(--bg-card) 92%, #a855f7); }
 
 .color-dot {
   display: inline-block;
@@ -1484,7 +1431,8 @@ onBeforeUnmount(() => {
 }
 
 .pass-through-mode .note-card:hover {
-  border-color: var(--border);
+  filter: none;
+  background: var(--bg-card);
   background: var(--bg-card);
 }
 
@@ -1606,8 +1554,8 @@ onBeforeUnmount(() => {
 
 .app-footer {
   position: absolute;
-  top: 16px;
-  right: 118px;
+  top: 8px;
+  right: 70px;
   z-index: 20;
   display: flex;
   align-items: center;
@@ -1826,49 +1774,6 @@ onBeforeUnmount(() => {
   background: var(--danger);
 }
 
-.mini-mode {
-  grid-template-rows: auto auto;
-}
-
-.mini-mode .app-header {
-  display: none;
-}
-
-.mini-drag-bar {
-  height: 18px;
-  -webkit-app-region: drag;
-  cursor: grab;
-}
-
-.mini-mode .note-list {
-  gap: 6px;
-  padding: 0 10px 10px;
-}
-
-.mini-mode .note-card {
-  padding: 8px;
-}
-
-.mini-mode .note-preview {
-  min-height: 0;
-  margin: 3px 0 5px 29px;
-  -webkit-line-clamp: unset;
-}
-
-.mini-mode .card-meta {
-  display: none;
-}
-
-.note-card.color-red {
-  display: inline-grid;
-  width: 26px;
-  height: 26px;
-  place-items: center;
-  border-radius: 7px;
-  color: var(--text-muted);
-  background: transparent;
-}
-
 .opacity-control {
   display: none;
 }
@@ -1926,6 +1831,7 @@ onBeforeUnmount(() => {
 }
 
 .error-fallback {
+  position: relative;
   display: grid;
   height: 100%;
   width: 100%;
@@ -1941,7 +1847,32 @@ onBeforeUnmount(() => {
   clip-path: inset(0 round var(--radius-window));
 }
 
+.error-fallback::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(circle at 70% 85%, rgba(47, 125, 120, 0.12), transparent 34%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.14), transparent 42%);
+  pointer-events: none;
+}
+
+.error-context {
+  position: absolute;
+  top: 14px;
+  left: 16px;
+  right: 16px;
+  z-index: 1;
+  display: flex;
+  justify-content: space-between;
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 600;
+}
+
 .error-panel {
+  position: relative;
+  z-index: 1;
   display: grid;
   width: min(100%, 280px);
   justify-items: center;
@@ -1970,10 +1901,15 @@ onBeforeUnmount(() => {
 }
 
 .error-panel p {
-  max-width: 220px;
+  max-width: 240px;
   color: var(--text-muted);
   font-size: 12px;
   line-height: 1.5;
+}
+
+.error-actions {
+  display: flex;
+  gap: 8px;
 }
 
 .error-panel button {
@@ -1991,6 +1927,15 @@ onBeforeUnmount(() => {
 
 .error-panel button:hover {
   background: var(--accent-strong);
+}
+
+.error-panel button.secondary {
+  color: var(--text);
+  background: var(--bg-input);
+}
+
+.error-panel button.secondary:hover {
+  background: var(--accent-soft);
 }
 
 /* ===== 暗色模式适配 ===== */
@@ -2081,51 +2026,6 @@ onBeforeUnmount(() => {
 /* 移除旧的 text-decoration 完成样式，改用 ::after */
 .note-card.completed strong {
   text-decoration: none;
-}
-
-/* ===== 模式切换动画 ===== */
-
-.app-shell.mode-transitioning {
-  pointer-events: none;
-}
-
-.app-shell.transition-to-mini .app-header,
-.app-shell.transition-to-mini .toolbar,
-.app-shell.transition-to-mini .app-footer {
-  opacity: 0;
-  transition: opacity 0.26s ease-out;
-}
-
-.app-shell.transition-to-mini .mini-drag-bar {
-  opacity: 1;
-  transition: opacity 0.26s ease-out 0.06s;
-}
-
-.app-shell.transition-to-normal .app-header,
-.app-shell.transition-to-normal .toolbar,
-.app-shell.transition-to-normal .app-footer {
-  opacity: 0;
-}
-
-.app-shell.transition-to-normal.fade-in .app-header,
-.app-shell.transition-to-normal.fade-in .toolbar,
-.app-shell.transition-to-normal.fade-in .app-footer {
-  opacity: 1;
-  transition: opacity 0.26s ease-out;
-}
-
-.app-shell.transition-to-normal .mini-drag-bar {
-  opacity: 0;
-  transition: opacity 0.2s ease-out;
-}
-
-.mini-mode.mode-transitioning .app-header {
-  display: flex;
-}
-
-.mini-mode.mode-transitioning .toolbar,
-.mini-mode.mode-transitioning .app-footer {
-  display: block;
 }
 
 /* ===== Tab Bar ===== */

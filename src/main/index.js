@@ -9,7 +9,8 @@ import { setupClipboardHandlers } from './ipc-clipboard'
 import { setupMailHandlers, stopMailBridge } from './ipc-mail'
 import { getSettings, updateSettings } from './store'
 
-app.setAppUserModelId('com.local.bianqian')
+app.setName('领益工作助手')
+app.setAppUserModelId('com.lingyi.workassistant')
 
 let windowManager
 let trayController
@@ -36,6 +37,14 @@ if (!gotLock) {
     // 加载设置，应用剪切板上限
     const settings = getSettings()
     setClipboardLimit(settings.clipboardLimit || 50)
+    try {
+      app.setLoginItemSettings({
+        openAtLogin: Boolean(settings.autoStart),
+        path: process.execPath
+      })
+    } catch (err) {
+      console.warn('[settings] autoStart restore failed:', err?.message || err)
+    }
 
     registerIpc(windowManager, trayController)
     setupClipboardHandlers()
@@ -56,6 +65,7 @@ if (!gotLock) {
         const win = windowManager.getWindow()
         if (win && !win.isDestroyed()) {
           win.setBounds(savedBounds)
+          windowManager.edge.onWindowMoved()
         }
       }
     }

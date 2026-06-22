@@ -1,9 +1,9 @@
 <template>
   <div v-if="visible" class="about-overlay" @click.self="visible = false">
     <div class="about-card">
-      <h3>便签</h3>
+      <h3>领益工作助手</h3>
       <p class="about-ver">版本 1.0.0</p>
-      <p class="about-desc">便签、剪切板、邮件工具</p>
+      <p class="about-desc">备忘、剪切板、邮件工具</p>
       <button class="confirm-btn" @click="visible = false" style="margin-top:8px">关闭</button>
     </div>
   </div>

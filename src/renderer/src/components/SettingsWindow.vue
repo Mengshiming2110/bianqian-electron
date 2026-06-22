@@ -28,8 +28,8 @@
           <ChevronRight :size="15" />
         </button>
         <button class="settings-menu-row" type="button" @click="view = 'modes'">
-          <span>窗口模式</span>
-          <small>列表</small>
+          <span>显示预设</span>
+          <small>{{ activePresetLabel }}</small>
           <ChevronRight :size="15" />
         </button>
         <button class="settings-menu-row" type="button" @click="view = 'themes'">
@@ -44,9 +44,14 @@
           </div>
           <div class="settings-status-row">
             <span>贴边收纳</span>
-            <small>{{ state.edgeAutoHide ? '已开启' : '托盘控制' }}</small>
+            <small>{{ state.edgeAutoHide ? '自动收起' : '只吸附不收起' }}</small>
           </div>
         </div>
+        <button class="settings-toggle-row" type="button" @click="toggleEdgeAutoHide">
+          <span>贴边自动收起</span>
+          <small>{{ state.edgeAutoHide ? '离开鼠标后只露出边缘' : '拖到边缘时固定停靠' }}</small>
+          <span class="toggle-switch" :class="{ on: state.edgeAutoHide }"></span>
+        </button>
 
         <!-- 剪切板设置 -->
         <div class="setting-group">
@@ -145,7 +150,7 @@
           <button class="settings-back-button" type="button" @click="view = 'main'">
             <ArrowLeft :size="15" />
           </button>
-          <span>窗口模式</span>
+          <span>显示预设</span>
         </div>
         <button
           class="settings-list-row"
@@ -153,8 +158,8 @@
           type="button"
           @click="selectMode('normal')"
         >
-          <span>列表模式</span>
-          <small>便签、剪切板、邮件统一高度</small>
+          <span>标准视图</span>
+          <small>备忘、剪切板、邮件统一高度</small>
         </button>
         <div class="settings-divider"></div>
         <button
@@ -183,8 +188,10 @@ import {
   Sun,
   X
 } from 'lucide-vue-next'
+import { useMailStore } from '../stores/mail'
 
-const view = reactive({ value: 'main' })
+const view = ref('main')
+const mailStore = useMailStore()
 const state = reactive({
   opacity: 0.92,
   windowMode: 'normal',
@@ -202,8 +209,8 @@ const allCategories = ['全部', '工作', '生活', '学习', '会议', '其他
 
 const modePresets = [
   { id: 'default', label: '常规', opacity: 0.92, passThrough: false, mode: 'normal' },
-  { id: 'focus', label: '专注', opacity: 1, passThrough: false, mode: 'normal' },
-  { id: 'meeting', label: '会议', opacity: 0.72, passThrough: true, mode: 'normal' }
+  { id: 'focus', label: '清晰', opacity: 1, passThrough: false, mode: 'normal' },
+  { id: 'meeting', label: '演示', opacity: 0.72, passThrough: true, mode: 'normal' }
 ]
 
 const resolvedTheme = computed(() => {
@@ -216,6 +223,13 @@ const resolvedTheme = computed(() => {
 const themeLabel = computed(() => {
   const map = { system: '跟随系统', light: '浅色', dark: '深色' }
   return map[state.theme] || '跟随系统'
+})
+
+const activePresetLabel = computed(() => {
+  const pct = Math.round(state.opacity * 100)
+  if (state.passThrough) return '演示'
+  if (pct >= 99) return '清晰'
+  return '常规'
 })
 
 async function loadSettings() {
@@ -237,6 +251,9 @@ async function saveAutoStart() {
 
 async function saveMailInterval() {
   await window.api?.settings?.save({ mailInterval: mailInterval.value })
+  if (mailStore.isRunning) {
+    await mailStore.startAutoFetch()
+  }
 }
 
 let unsubInteraction = null
@@ -325,6 +342,13 @@ async function selectMode(mode) {
   if (window.api?.window?.setMode) {
     const s = await window.api.window.setMode('normal')
     if (s) state.windowMode = s.windowMode
+  }
+}
+
+async function toggleEdgeAutoHide() {
+  if (window.api?.window?.setEdgeAutoHide) {
+    const s = await window.api.window.setEdgeAutoHide(!state.edgeAutoHide)
+    if (s) state.edgeAutoHide = s.edgeAutoHide
   }
 }
 
@@ -473,6 +497,62 @@ async function applyPreset(preset) {
 
 .settings-status-row small {
   font-size: 11px;
+}
+
+.settings-toggle-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 2px 10px;
+  align-items: center;
+  padding: 9px;
+  border: 0;
+  border-radius: var(--radius-control);
+  background: var(--bg-input);
+  color: var(--text);
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.settings-toggle-row:hover {
+  background: var(--accent-soft);
+}
+
+.settings-toggle-row small {
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.toggle-switch {
+  grid-row: 1 / span 2;
+  grid-column: 2;
+  width: 34px;
+  height: 20px;
+  border-radius: 999px;
+  background: var(--border);
+  position: relative;
+  transition: background 0.16s ease;
+}
+
+.toggle-switch::after {
+  content: '';
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--bg-elevated);
+  box-shadow: 0 1px 3px rgba(15, 35, 33, 0.22);
+  transition: transform 0.16s ease;
+}
+
+.toggle-switch.on {
+  background: var(--accent);
+}
+
+.toggle-switch.on::after {
+  transform: translateX(14px);
 }
 
 .settings-back-button {

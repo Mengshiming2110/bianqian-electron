@@ -130,6 +130,7 @@ contextBridge.exposeInMainWorld('api', {
     configure: (config) => ipcRenderer.invoke('mail:configure', config),
     list: () => ipcRenderer.invoke('mail:list'),
     fetch: () => ipcRenderer.invoke('mail:fetch'),
+    doctor: (config) => ipcRenderer.invoke('mail:doctor', config),
     detail: (id) => ipcRenderer.invoke('mail:detail', id),
     stop: () => ipcRenderer.invoke('mail:stop'),
     status: () => ipcRenderer.invoke('mail:status')

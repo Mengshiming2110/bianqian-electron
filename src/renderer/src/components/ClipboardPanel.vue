@@ -96,8 +96,9 @@ function relativeTime(iso) {
 .select-check { width: 16px; height: 16px; border-radius: 4px; border: 1.5px solid var(--text-muted); flex-shrink: 0; display: grid; place-items: center; font-size: 10px; cursor: pointer; margin-right: 6px; }
 .select-check.checked { background: var(--accent); border-color: var(--accent); color: #fff; }
 .clip-list { flex: 1; overflow-y: auto; padding: 0 12px; display: flex; flex-direction: column; gap: 6px; }
-.clip-card { display: flex; align-items: center; gap: 8px; padding: 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg-card); cursor: pointer; transition: border-color 0.15s; }
-.clip-card:hover { border-color: var(--accent); }
+.clip-card { display: flex; align-items: center; gap: 8px; padding: 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg-card); cursor: pointer; transition: filter 0.15s, background 0.15s; }
+.clip-card:hover { filter: brightness(1.04); background: var(--bg-card-hover); }
+.clip-card:active { transform: scale(0.99); }
 .clip-card.pinned { border-left: 3px solid var(--accent); }
 .clip-top { display: flex; justify-content: space-between; margin-bottom: 3px; }
 .type-tag { font-size: 11px; font-weight: 600; color: var(--accent); }

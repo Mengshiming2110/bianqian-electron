@@ -30,6 +30,21 @@ const MAX_ATTACHMENTS_PER_NOTE = 10
 
 let storeLock = Promise.resolve()
 
+function applyAutoStart(enabled) {
+  if (!app.isPackaged && process.platform === 'win32') {
+    return
+  }
+
+  try {
+    app.setLoginItemSettings({
+      openAtLogin: Boolean(enabled),
+      path: process.execPath
+    })
+  } catch (err) {
+    console.warn('[settings] autoStart apply failed:', err?.message || err)
+  }
+}
+
 function withLock(fn) {
   let resolve, reject
   const promise = new Promise((res, rej) => { resolve = res; reject = rej })
@@ -337,7 +352,10 @@ export function registerIpc(windowManager, trayController) {
 
   ipcMain.handle('settings:save', (_, s) => {
     try {
-      updateSettings(s)
+      const settings = updateSettings(s)
+      if (Object.prototype.hasOwnProperty.call(s || {}, 'autoStart')) {
+        applyAutoStart(settings.autoStart)
+      }
       return true
     } catch (err) {
       console.error('[ipc] settings:save 失败:', err.message)
