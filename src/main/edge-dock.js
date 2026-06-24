@@ -6,7 +6,6 @@ const EDGE_HIDE_DELAY = 500
 const EDGE_ANIMATION_MS = 180
 const ANIMATION_FRAME_MS = 16
 const BOUNDS_WATCH_MS = 250
-const SHOW_COOLDOWN_MS = 800
 
 export const EDGE_STATE = {
   NORMAL: 'normal',
@@ -35,7 +34,7 @@ export class EdgeDockController {
     this._pointerTimer = null
     this._boundsTimer = null
     this._lastBoundsKey = ''
-    this._lastShowTime = 0
+    this._mouseVisitedSinceShow = false
   }
 
   get window() { return this._getWindow() }
@@ -144,7 +143,7 @@ export class EdgeDockController {
 
   scheduleHide() {
     if (!this.autoHide || this.isHidden() || this._animating) return
-    if (Date.now() - this._lastShowTime < SHOW_COOLDOWN_MS) return  // 刚唤出，冷却中
+    if (!this._mouseVisitedSinceShow) return  // 还没进过窗口，不隐藏
     this.clearHideTimer()
     this._hideTimer = setTimeout(() => this.hide(), EDGE_HIDE_DELAY)
   }
@@ -181,7 +180,7 @@ export class EdgeDockController {
     if (!this.isHidden() || this._animating) return
     if (!win || win.isDestroyed()) return
 
-    this._lastShowTime = Date.now()
+    this._mouseVisitedSinceShow = false
     this.clearHideTimer()
     const area = this.getWorkArea()
 
@@ -298,6 +297,7 @@ export class EdgeDockController {
       const inside = cursor.x >= bounds.x && cursor.x <= bounds.x + bounds.width &&
           cursor.y >= bounds.y && cursor.y <= bounds.y + bounds.height
       if (inside) {
+        this._mouseVisitedSinceShow = true
         this.clearHideTimer()
       } else if (!this._hideTimer) {
         this.scheduleHide()
