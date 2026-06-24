@@ -53,11 +53,6 @@ export const useClipboardStore = defineStore('clipboard', {
 
     async paste(id) {
       await window.api.clipboard.paste(id)
-      const item = this.items.find(item => item.id === id)
-      if (item) {
-        item.last_copied_at = new Date().toISOString()
-        item.copy_count = (item.copy_count || 1) + 1
-      }
     },
 
     addItem(item) {

@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import socket
 import sys
 import threading
 import time
@@ -23,6 +24,7 @@ MAIL_ENV_KEYS = {'MAIL_SMTP', 'MAIL_DOMAIN_USER', 'MAIL_PASS', 'MAIL_DOMAIN', 'M
 SKILL_ALIASES = ('ly_outlook_mail', '领益Outlook邮件', '领益 Outlook 邮件', 'ly-outlook', 'ly-outlook-mail')
 DEFAULT_DOMAIN = 'LSTECH'
 DEFAULT_SERVER = 'mail.lingyiitech.com'
+DEFAULT_EWS_PORT = 443
 
 
 def _json(handler, status, payload):
@@ -206,13 +208,15 @@ def _doctor():
     password = os.getenv('MAIL_PASS') or os.getenv('MAIL_PASSWORD') or ''
     domain = os.getenv('MAIL_DOMAIN') or DEFAULT_DOMAIN
     server = os.getenv('MAIL_SERVER') or DEFAULT_SERVER
+    network = _probe_server(server)
 
     return {
-        'ok': exchangelib_ok and bool(smtp and domain_user and password),
+        'ok': exchangelib_ok and network.get('tcp') and bool(smtp and domain_user and password),
         'dependency': {
             'exchangelib': exchangelib_ok,
             'error': dependency_error,
         },
+        'network': network,
         'config': {
             'server': server,
             'smtp_present': bool(smtp),
@@ -223,6 +227,41 @@ def _doctor():
         'connected': ACCOUNT is not None,
         'last_error': LAST_ERROR,
     }
+
+
+def _probe_server(server):
+    host = str(server or DEFAULT_SERVER).strip()
+    if host.startswith('http://') or host.startswith('https://'):
+        host = urlparse(host).hostname or host
+
+    result = {
+        'host': host,
+        'dns': False,
+        'tcp': False,
+        'port': DEFAULT_EWS_PORT,
+        'address': '',
+        'error': '',
+    }
+
+    if not host:
+        result['error'] = '服务器地址为空'
+        return result
+
+    try:
+        address = socket.gethostbyname(host)
+        result['dns'] = True
+        result['address'] = address
+    except Exception as exc:
+        result['error'] = f'DNS 解析失败: {exc}'
+        return result
+
+    try:
+        with socket.create_connection((host, DEFAULT_EWS_PORT), timeout=5):
+            result['tcp'] = True
+    except Exception as exc:
+        result['error'] = f'{host}:{DEFAULT_EWS_PORT} 无法连接: {exc}'
+
+    return result
 
 
 def _message_key(item):

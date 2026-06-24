@@ -5,6 +5,7 @@ const EDGE_EXPOSED = 6
 const EDGE_HIDE_DELAY = 500
 const EDGE_ANIMATION_MS = 180
 const ANIMATION_FRAME_MS = 16
+const BOUNDS_WATCH_MS = 250
 
 export const EDGE_STATE = {
   NORMAL: 'normal',
@@ -31,6 +32,8 @@ export class EdgeDockController {
     this._animating = false
     this._visibleX = null
     this._pointerTimer = null
+    this._boundsTimer = null
+    this._lastBoundsKey = ''
   }
 
   get window() { return this._getWindow() }
@@ -55,6 +58,27 @@ export class EdgeDockController {
     if (this._animating || this.isHidden()) return
     clearTimeout(this._snapTimer)
     this._snapTimer = setTimeout(() => this.checkSnap(), 80)
+  }
+
+  startBoundsWatcher() {
+    this.stopBoundsWatcher()
+    this._lastBoundsKey = ''
+    this._boundsTimer = setInterval(() => {
+      const win = this.window
+      if (!win || win.isDestroyed() || !win.isVisible() || this._animating || this.isHidden()) return
+      const bounds = win.getBounds()
+      const key = `${bounds.x},${bounds.y},${bounds.width},${bounds.height}`
+      if (key === this._lastBoundsKey) return
+      this._lastBoundsKey = key
+      this.onWindowMoved()
+    }, BOUNDS_WATCH_MS)
+  }
+
+  stopBoundsWatcher() {
+    if (this._boundsTimer) {
+      clearInterval(this._boundsTimer)
+      this._boundsTimer = null
+    }
   }
 
   checkSnap() {

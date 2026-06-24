@@ -12,6 +12,27 @@ function hashContent(text) {
   return createHash('sha256').update(text).digest('hex').slice(0, 16)
 }
 
+function htmlToPlainText(html) {
+  return String(html || '')
+    .replace(/<!--StartFragment-->|<!--EndFragment-->/gi, '')
+    .replace(/<style[\s\S]*?<\/style>/gi, ' ')
+    .replace(/<script[\s\S]*?<\/script>/gi, ' ')
+    .replace(/<\/(p|div|tr|li|h[1-6])>/gi, '\n')
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/t[dh]>/gi, '\t')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&amp;/gi, '&')
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>')
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;|&apos;/gi, "'")
+    .replace(/[ \t]+\n/g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .replace(/[ \t]{2,}/g, ' ')
+    .trim()
+}
+
 function readClipboard() {
   const img = clipboard.readImage()
   if (!img.isEmpty()) {
@@ -22,10 +43,11 @@ function readClipboard() {
   }
   const html = clipboard.readHTML()
   if (html && html.trim()) {
-    const h = hashContent(html)
+    const plainText = clipboard.readText().trim() || htmlToPlainText(html)
+    if (!plainText) return null
+    const h = hashContent(plainText)
     if (h === lastHash) return null
-    const text = html.replace(/<[^>]+>/g, '').trim().slice(0, 200)
-    return { type: 'html', content: html, preview: text, hash: h }
+    return { type: 'text', content: plainText, preview: plainText.slice(0, 200), hash: h }
   }
   const text = clipboard.readText()
   if (text && text.trim()) {
@@ -99,11 +121,12 @@ export function writeToClipboard(id) {
   if (!item) return false
   if (item.type === 'image') {
     clipboard.writeImage(nativeImage.createFromDataURL(item.content))
+    lastSelfPasteHash = item.hash
   } else {
-    clipboard.writeText(item.content || '')
+    const text = item.type === 'html' ? (item.preview || htmlToPlainText(item.content)) : (item.content || '')
+    clipboard.writeText(text)
+    lastSelfPasteHash = hashContent(text)
   }
-  lastSelfPasteHash = item.hash
-  execute('UPDATE clipboard_items SET last_copied_at = ? WHERE id = ?', [new Date().toISOString(), id])
   return true
 }
 

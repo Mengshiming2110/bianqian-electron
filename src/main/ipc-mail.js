@@ -51,8 +51,16 @@ export function setupMailHandlers() {
       const mails = await bridge.fetchMails(null, { throwOnError: true })
       if (!Array.isArray(mails) || !mails.length) return []
       for (const m of mails) {
-        execute('INSERT OR IGNORE INTO mail_items (id, subject, sender, body, received_at) VALUES (?, ?, ?, ?, ?)',
-          [m.id, m.subject || '', m.sender || '', m.body || '', m.received_at || ''])
+        execute(
+          `INSERT INTO mail_items (id, subject, sender, body, html, received_at, is_read)
+           VALUES (?, ?, ?, ?, ?, ?, ?)
+           ON CONFLICT(id) DO UPDATE SET
+             subject = excluded.subject,
+             sender = excluded.sender,
+             body = excluded.body,
+             received_at = excluded.received_at`,
+          [m.id, m.subject || '', m.sender || '', m.body || m.preview || '', m.html || '', m.received_at || '', m.is_read ? 1 : 0]
+        )
       }
       return mails
     } catch (err) {
@@ -77,8 +85,46 @@ export function setupMailHandlers() {
   })
 
   ipcMain.handle('mail:detail', async (_, id) => {
-    try { return queryOne('SELECT * FROM mail_items WHERE id = ?', [id]) || null }
-    catch (err) { console.error('[ipc] mail:detail 失败:', err.message); return null }
+    try {
+      const cached = queryOne('SELECT * FROM mail_items WHERE id = ?', [id]) || null
+      if (!bridge) return cached
+
+      const detail = await bridge.fetchMailDetail(id)
+      if (!detail) return cached
+
+      const next = {
+        ...(cached || {}),
+        ...detail,
+        id,
+        body: detail.body || cached?.body || '',
+        html: detail.html || cached?.html || ''
+      }
+
+      execute(
+        `INSERT INTO mail_items (id, subject, sender, body, html, received_at, is_read)
+         VALUES (?, ?, ?, ?, ?, ?, ?)
+         ON CONFLICT(id) DO UPDATE SET
+           subject = excluded.subject,
+           sender = excluded.sender,
+           body = excluded.body,
+           html = excluded.html,
+           received_at = excluded.received_at,
+           is_read = 1`,
+        [
+          next.id,
+          next.subject || '',
+          next.sender || '',
+          next.body || '',
+          next.html || '',
+          next.received_at || next.datetime_received || '',
+          1
+        ]
+      )
+      return queryOne('SELECT * FROM mail_items WHERE id = ?', [id]) || next
+    } catch (err) {
+      console.error('[ipc] mail:detail 失败:', err.message)
+      return queryOne('SELECT * FROM mail_items WHERE id = ?', [id]) || null
+    }
   })
 
   ipcMain.handle('mail:stop', () => {

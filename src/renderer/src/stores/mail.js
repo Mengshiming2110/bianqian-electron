@@ -66,14 +66,18 @@ export const useMailStore = defineStore('mail', {
       const msg = String(raw).toLowerCase()
       if (msg.includes('邮件服务不存在') || msg.includes('mailservice'))
         return '邮件服务组件缺失，请确认安装包包含 MailService.exe'
-      if (msg.includes('domain') || msg.includes('域账号') || msg.includes('domain_user'))
-        return '域账号或 AD 域不正确，请检查公司登录账号'
+      if (msg.includes('dns') || msg.includes('enotfound') || msg.includes('getaddrinfo'))
+        return '服务器 DNS 解析失败，请检查 Exchange 地址或公司网络'
+      if (msg.includes('timed out') || msg.includes('timeout') || msg.includes('econnrefused') || msg.includes('无法连接'))
+        return '无法连到 Exchange 服务器 443 端口，请确认已连接公司网络或 VPN'
       if (msg.includes('password') || msg.includes('auth') || msg.includes('401') || msg.includes('403'))
         return '密码错误或账号被锁定，请重新输入密码'
-      if (msg.includes('dns') || msg.includes('econnrefused') || msg.includes('timeout') || msg.includes('enotfound'))
-        return '无法连接到服务器，请确认已连接公司网络'
+      if (msg.includes('unauthorized') || msg.includes('access denied') || msg.includes('forbidden'))
+        return '账号无权访问 EWS，请联系 IT 确认 Exchange/EWS 权限'
+      if (msg.includes('domain_user') || msg.includes('域账号'))
+        return 'AD 账号或 AD 域不正确，请检查公司登录账号'
       if (msg.includes('not found') || msg.includes('404'))
-        return '服务器地址不正确，请检查 Exchange 地址'
+        return 'EWS 地址不可用，请检查 Exchange 服务器地址'
       return `连接失败：${raw}`
     },
 

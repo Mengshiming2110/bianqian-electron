@@ -11,6 +11,8 @@ const NORMAL_WINDOW_WIDTH = 280
 const NORMAL_WINDOW_HEIGHT = 680
 const NORMAL_WINDOW_MIN_WIDTH = 260
 const APP_ICON_PATH = join(app.getAppPath(), 'resources', 'icon.ico')
+const WM_MOVE = 0x0003
+const WM_WINDOWPOSCHANGED = 0x0047
 
 export class WindowManager {
   constructor() {
@@ -102,6 +104,7 @@ export class WindowManager {
 
     this.window.on('closed', () => {
       this.edge.stopMouseWatcher()
+      this.edge.stopBoundsWatcher()
       this.window = null
     })
 
@@ -117,6 +120,8 @@ export class WindowManager {
 
     this.window.on('move', handleWindowMoved)
     this.window.on('moved', handleWindowMoved)
+    this.window.hookWindowMessage(WM_MOVE, handleWindowMoved)
+    this.window.hookWindowMessage(WM_WINDOWPOSCHANGED, handleWindowMoved)
 
     this.window.on('resized', () => {
       updateSettings({ windowBounds: this.window.getBounds() })
@@ -138,6 +143,7 @@ export class WindowManager {
     }
 
     this.edge.startMouseWatcher()
+    this.edge.startBoundsWatcher()
     this.applyWindowMode()
     this.applyInteractionState()
     return this.window

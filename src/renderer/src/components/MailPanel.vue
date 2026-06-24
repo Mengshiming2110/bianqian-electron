@@ -28,11 +28,14 @@
             <dl>
               <div><dt>依赖</dt><dd>{{ store.doctorResult.dependency?.exchangelib ? '正常' : (store.doctorResult.dependency?.error || '异常') }}</dd></div>
               <div><dt>服务器</dt><dd>{{ store.doctorResult.config?.server || form.server || DEFAULT_MAIL_SERVER }}</dd></div>
+              <div><dt>DNS</dt><dd>{{ store.doctorResult.network?.dns ? (store.doctorResult.network?.address || '正常') : '未通' }}</dd></div>
+              <div><dt>端口</dt><dd>{{ store.doctorResult.network?.tcp ? `443 已通` : '443 未通' }}</dd></div>
               <div><dt>AD 域</dt><dd>{{ store.doctorResult.config?.domain || form.domain || DEFAULT_MAIL_DOMAIN }}</dd></div>
               <div><dt>邮箱</dt><dd>{{ store.doctorResult.config?.smtp_present ? '已填写' : '未填写' }}</dd></div>
               <div><dt>账号</dt><dd>{{ store.doctorResult.config?.domain_user_present ? '已填写' : '未填写' }}</dd></div>
               <div><dt>密码</dt><dd>{{ store.doctorResult.config?.password_present ? '已填写' : '未填写' }}</dd></div>
             </dl>
+            <p v-if="store.doctorResult.network?.error">{{ store.doctorResult.network.error }}</p>
             <p v-if="store.doctorResult.error || store.doctorResult.last_error">{{ store.doctorResult.error || store.doctorResult.last_error }}</p>
           </div>
           <div class="mail-error-card" v-if="store.error" role="alert">
@@ -81,10 +84,69 @@
     <!-- 详情 -->
     <div v-if="store.selectedMail" class="detail-overlay" @click.self="store.closeDetail()">
       <div class="detail-panel">
-        <div class="detail-header"><h3>{{ store.selectedMail.subject }}</h3><button class="mini-btn" @click="store.closeDetail()"><X :size="14" /></button></div>
+        <div class="detail-header"><h3>{{ taskSummary?.title || store.selectedMail.subject }}</h3><button class="mini-btn" @click="store.closeDetail()"><X :size="14" /></button></div>
         <div class="detail-meta"><span>{{ store.selectedMail.sender }}</span><span>{{ relativeTime(store.selectedMail.received_at) }}</span></div>
-        <div class="detail-body">{{ store.selectedMail.body }}</div>
-        <table class="extract-table" v-if="store.selectedMail.extracted_fields">
+        <div v-if="taskSummary" class="task-detail">
+          <div class="task-brief">
+            <div class="brief-grid">
+              <div class="brief-item">
+                <span>出货客户</span>
+                <strong>{{ taskSummary.brief.customer }}</strong>
+              </div>
+              <div class="brief-item">
+                <span>出货日期</span>
+                <strong>{{ taskSummary.brief.shipmentDate }}</strong>
+              </div>
+              <div class="brief-item owner" :class="{ muted: taskSummary.brief.salesOwnerMissing }">
+                <span>销售负责人</span>
+                <strong>{{ taskSummary.brief.salesOwner }}</strong>
+              </div>
+            </div>
+            <div v-if="taskSummary.brief.notes.length" class="brief-notes">
+              <span>注意事项</span>
+              <p v-for="note in taskSummary.brief.notes" :key="note">{{ note }}</p>
+            </div>
+          </div>
+
+          <div v-if="currentMaterial" class="material-card">
+            <div class="material-head">
+              <span>第 {{ currentMaterial.index }} / {{ currentMaterial.total }} 款</span>
+              <strong>{{ currentMaterial.title }}</strong>
+            </div>
+            <dl class="material-fields">
+              <div v-for="field in currentMaterial.fields" :key="field.key">
+                <dt>{{ field.label }}</dt>
+                <dd>
+                  <button
+                    type="button"
+                    class="copy-value"
+                    :class="{ missing: field.missing }"
+                    :disabled="!field.copyable"
+                    @click="copyMaterialValue(field)"
+                  >{{ field.value }}</button>
+                </dd>
+              </div>
+            </dl>
+            <div v-if="taskSummary.materials.length > 1" class="material-pager">
+              <button type="button" class="pager-btn" :disabled="materialPage === 0" @click="materialPage -= 1">上一款</button>
+              <span>{{ materialPage + 1 }} / {{ taskSummary.materials.length }}</span>
+              <button type="button" class="pager-btn" :disabled="materialPage >= taskSummary.materials.length - 1" @click="materialPage += 1">下一款</button>
+            </div>
+          </div>
+          <p v-if="copyToast" class="copy-toast">{{ copyToast }}</p>
+          <details v-if="sanitizedMailHtml || store.selectedMail.body" class="original-mail">
+            <summary>查看原文</summary>
+            <div v-if="sanitizedMailHtml" class="detail-body html-body" v-html="sanitizedMailHtml"></div>
+            <div v-else class="detail-body">{{ store.selectedMail.body }}</div>
+          </details>
+        </div>
+        <div
+          v-else-if="sanitizedMailHtml"
+          class="detail-body html-body"
+          v-html="sanitizedMailHtml"
+        ></div>
+        <div v-else class="detail-body">{{ store.selectedMail.body }}</div>
+        <table class="extract-table" v-if="!taskSummary && store.selectedMail.extracted_fields">
           <tbody><tr v-for="(v,k) in parseFields(store.selectedMail.extracted_fields)" :key="k"><td>{{ k }}</td><td @click="copyVal(v)">{{ v }}</td></tr></tbody>
         </table>
       </div>
@@ -93,16 +155,48 @@
 </template>
 
 <script setup>
-import { ref, onBeforeUnmount, onMounted } from 'vue'
+import { computed, ref, watch, onBeforeUnmount, onMounted } from 'vue'
+import DOMPurify from 'dompurify'
 import { AlertCircle, Mail, RefreshCw, Power, X } from 'lucide-vue-next'
 import { useMailStore } from '../stores/mail'
+import { buildMailTaskSummary } from '../lib/mail-detail-summary.mjs'
 
 const store = useMailStore()
 const DEFAULT_MAIL_DOMAIN = 'LSTECH'
 const DEFAULT_MAIL_SERVER = 'mail.lingyiitech.com'
 const form = ref({ server: DEFAULT_MAIL_SERVER, email: '', domainUser: '', domain: DEFAULT_MAIL_DOMAIN, password: '' })
 const connecting = ref(false)
+const materialPage = ref(0)
+const copyToast = ref('')
 let saveIdentityTimer = null
+let copyToastTimer = null
+
+const sanitizedMailHtml = computed(() => {
+  const raw = store.selectedMail?.html || ''
+  if (!raw || !/<[a-z][\s\S]*>/i.test(raw)) return ''
+  return DOMPurify.sanitize(raw, {
+    ALLOWED_TAGS: [
+      'a', 'b', 'br', 'blockquote', 'body', 'caption', 'col', 'colgroup', 'div', 'em',
+      'font', 'h1', 'h2', 'h3', 'h4', 'hr', 'html', 'i', 'li', 'ol', 'p', 'pre',
+      'span', 'strong', 'table', 'tbody', 'td', 'tfoot', 'th', 'thead', 'tr', 'u', 'ul'
+    ],
+    ALLOWED_ATTR: ['align', 'bgcolor', 'border', 'cellpadding', 'cellspacing', 'colspan', 'href', 'rowspan', 'style', 'target', 'valign', 'width'],
+    FORBID_TAGS: ['script', 'style', 'iframe', 'object', 'embed', 'form', 'input', 'button'],
+    FORBID_ATTR: ['onerror', 'onload', 'onclick', 'onmouseover']
+  })
+})
+
+const taskSummary = computed(() => buildMailTaskSummary(store.selectedMail, sanitizedMailHtml.value))
+const currentMaterial = computed(() => taskSummary.value?.materials?.[materialPage.value] || null)
+
+watch(() => store.selectedMail?.id, () => {
+  materialPage.value = 0
+  copyToast.value = ''
+})
+
+watch(materialPage, () => {
+  copyToast.value = ''
+})
 
 onMounted(async () => {
   await store.load()
@@ -165,11 +259,26 @@ function mailConfigPayload() {
 }
 onBeforeUnmount(() => {
   if (saveIdentityTimer) clearTimeout(saveIdentityTimer)
+  if (copyToastTimer) clearTimeout(copyToastTimer)
 })
 function parseFields(raw) {
   try { const f = typeof raw === 'string' ? JSON.parse(raw) : raw; return f && typeof f === 'object' ? f : {} } catch { return {} }
 }
 async function copyVal(v) { try { await navigator.clipboard.writeText(String(v)) } catch {} }
+async function copyMaterialValue(field) {
+  if (!field?.copyable || !field.copyValue) return
+  if (copyToastTimer) clearTimeout(copyToastTimer)
+  try {
+    await navigator.clipboard.writeText(field.copyValue)
+    copyToast.value = `已复制 ${field.label}`
+    copyToastTimer = setTimeout(() => {
+      copyToast.value = ''
+      copyToastTimer = null
+    }, 1200)
+  } catch {
+    copyToast.value = '复制失败'
+  }
+}
 function relativeTime(iso) {
   if (!iso) return ''
   const diff = Date.now() - new Date(iso).getTime()
@@ -178,6 +287,7 @@ function relativeTime(iso) {
   if (diff < 86400000) return `${Math.floor(diff / 3600000)} 小时前`
   return new Date(iso).toLocaleDateString('zh-CN')
 }
+
 </script>
 
 <style scoped>
@@ -312,11 +422,203 @@ function relativeTime(iso) {
 .detail-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
 .detail-header h3 { font-size: 15px; font-weight: 600; color: var(--text); }
 .detail-meta { font-size: 11px; color: var(--text-muted); display: flex; flex-direction: column; gap: 2px; margin-bottom: 10px; padding-bottom: 8px; border-bottom: 1px solid var(--border); }
+.task-detail { display: grid; gap: 10px; }
+.task-brief { display: grid; gap: 8px; }
+.brief-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 0.8fr); gap: 8px; }
+.brief-item {
+  display: grid;
+  gap: 3px;
+  padding: 9px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-input);
+}
+.brief-item span,
+.brief-notes span {
+  color: var(--text-muted);
+  font-size: 11px;
+}
+.brief-item strong {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--accent);
+  font-size: 13px;
+  font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.brief-item.owner { grid-column: 1 / -1; }
+.brief-item.owner.muted strong { color: var(--text-muted); font-weight: 600; }
+.brief-notes {
+  display: grid;
+  gap: 5px;
+  padding: 9px 10px;
+  border: 1px solid rgba(180, 135, 30, 0.22);
+  border-radius: 8px;
+  background: rgba(255, 193, 70, 0.12);
+}
+.brief-notes p {
+  margin: 0;
+  color: var(--text);
+  font-size: 12px;
+  line-height: 1.45;
+}
+.material-card {
+  display: grid;
+  gap: 10px;
+  padding: 11px;
+  border: 1px solid rgba(47, 125, 120, 0.24);
+  border-radius: 10px;
+  background: var(--bg-elevated);
+}
+.material-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.material-head span {
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 700;
+}
+.material-head strong {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.material-fields {
+  display: grid;
+  margin: 0;
+  border-top: 1px solid var(--border);
+}
+.material-fields div {
+  display: grid;
+  grid-template-columns: 72px minmax(0, 1fr);
+  gap: 10px;
+  align-items: center;
+  min-height: 32px;
+  border-bottom: 1px solid var(--border);
+}
+.material-fields dt,
+.material-fields dd {
+  margin: 0;
+  font-size: 12px;
+}
+.material-fields dt { color: var(--text-muted); }
+.material-fields dd {
+  min-width: 0;
+  text-align: right;
+}
+.copy-value {
+  max-width: 100%;
+  padding: 2px 5px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--accent);
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 800;
+  overflow: hidden;
+  text-align: right;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.copy-value:not(:disabled):hover { background: var(--accent-soft); }
+.copy-value.missing,
+.copy-value:disabled {
+  color: var(--text-muted);
+  cursor: default;
+  font-weight: 500;
+}
+.material-pager {
+  display: grid;
+  grid-template-columns: 64px minmax(0, 1fr) 64px;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-muted);
+  font-size: 11px;
+  text-align: center;
+}
+.pager-btn {
+  height: 28px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--bg-input);
+  color: var(--accent);
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.pager-btn:disabled {
+  cursor: default;
+  opacity: 0.42;
+}
+.pager-btn:not(:disabled):hover {
+  border-color: rgba(47, 125, 120, 0.35);
+  background: var(--accent-soft);
+}
+.copy-toast {
+  justify-self: center;
+  margin: -2px 0 0;
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 700;
+}
+.original-mail {
+  margin-top: 2px;
+  color: var(--text-muted);
+  font-size: 11px;
+}
+.original-mail summary {
+  cursor: pointer;
+  padding: 6px 0;
+  color: var(--text-muted);
+}
+.original-mail[open] summary { margin-bottom: 8px; }
 .detail-body { font-size: 12px; color: var(--text); line-height: 1.6; margin-bottom: 10px; white-space: pre-wrap; }
+.html-body {
+  max-width: 100%;
+  overflow: auto;
+  white-space: normal;
+}
+.html-body :deep(table) {
+  min-width: 680px;
+  max-width: none;
+  border-collapse: collapse;
+  background: var(--bg-elevated);
+}
+.html-body :deep(td),
+.html-body :deep(th) {
+  padding: 4px 6px;
+  border: 1px solid rgba(94, 112, 108, 0.35);
+  color: var(--text);
+  font-size: 11px;
+  line-height: 1.35;
+  vertical-align: top;
+  white-space: nowrap;
+}
+.html-body :deep(p),
+.html-body :deep(div) {
+  margin: 0 0 8px;
+}
+.html-body :deep(a) {
+  color: var(--accent);
+}
 .extract-table { width: 100%; border-collapse: collapse; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
 .extract-table td { padding: 6px 8px; font-size: 11px; border-bottom: 1px solid var(--border); }
 .extract-table td:first-child { color: var(--text-muted); }
 .extract-table td:last-child { text-align: right; font-weight: 600; color: var(--accent); cursor: pointer; }
-.extract-table td:last-child:hover { text-decoration: underline; }
+.extract-table td:last-child:hover { background: var(--accent-soft); }
 .extract-table tr:last-child td { border-bottom: none; }
 </style>

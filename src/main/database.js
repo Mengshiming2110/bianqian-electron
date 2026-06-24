@@ -32,11 +32,23 @@ export async function initDatabase() {
   db.run(`CREATE TABLE IF NOT EXISTS clipboard_items (id TEXT PRIMARY KEY, type TEXT NOT NULL DEFAULT 'text', content TEXT, preview TEXT, source_app TEXT DEFAULT '', hash TEXT NOT NULL, pinned INTEGER DEFAULT 0, copy_count INTEGER DEFAULT 1, created_at TEXT NOT NULL, last_copied_at TEXT NOT NULL)`)
   db.run('CREATE INDEX IF NOT EXISTS idx_clipboard_hash ON clipboard_items(hash)')
   db.run('CREATE INDEX IF NOT EXISTS idx_clipboard_created ON clipboard_items(created_at)')
-  db.run(`CREATE TABLE IF NOT EXISTS mail_items (id TEXT PRIMARY KEY, subject TEXT NOT NULL DEFAULT '', sender TEXT NOT NULL DEFAULT '', body TEXT DEFAULT '', received_at TEXT NOT NULL DEFAULT '', is_read INTEGER DEFAULT 0, extracted_fields TEXT DEFAULT '{}')`)
+  db.run(`CREATE TABLE IF NOT EXISTS mail_items (id TEXT PRIMARY KEY, subject TEXT NOT NULL DEFAULT '', sender TEXT NOT NULL DEFAULT '', body TEXT DEFAULT '', html TEXT DEFAULT '', received_at TEXT NOT NULL DEFAULT '', is_read INTEGER DEFAULT 0, extracted_fields TEXT DEFAULT '{}')`)
+  ensureColumn('mail_items', 'html', "TEXT DEFAULT ''")
   db.run('CREATE INDEX IF NOT EXISTS idx_mail_received ON mail_items(received_at)')
 
   persist()
   console.log('[database] 初始化, 路径:', dbPath)
+}
+
+function ensureColumn(table, column, definition) {
+  try {
+    const columns = queryAll(`PRAGMA table_info(${table})`)
+    if (!columns.some((item) => item.name === column)) {
+      db.run(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`)
+    }
+  } catch (err) {
+    console.error('[database] ensureColumn:', err.message)
+  }
 }
 
 function persist() {
