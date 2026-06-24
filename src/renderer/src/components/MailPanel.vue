@@ -84,37 +84,42 @@
     <!-- 详情 -->
     <div v-if="store.selectedMail" class="detail-overlay" @click.self="store.closeDetail()">
       <div class="detail-panel">
-        <div class="detail-header"><h3>{{ taskSummary?.title || store.selectedMail.subject }}</h3><button class="mini-btn" @click="store.closeDetail()"><X :size="14" /></button></div>
+        <div class="detail-header"><h3>{{ displaySummary?.title || store.selectedMail.subject }}</h3><button class="mini-btn" @click="store.closeDetail()"><X :size="14" /></button></div>
         <div class="detail-meta"><span>{{ store.selectedMail.sender }}</span><span>{{ relativeTime(store.selectedMail.received_at) }}</span></div>
-        <div v-if="taskSummary" class="task-detail">
+
+        <!-- Excel 加载中 -->
+        <div v-if="excelLoading" class="detail-body" style="text-align:center;padding:24px;color:var(--text-muted)">解析附件中...</div>
+
+        <!-- 任务卡片（正文 或 Excel 共用） -->
+        <div v-else-if="displaySummary" class="task-detail">
           <div class="task-brief">
             <div class="brief-grid">
               <div class="brief-item">
                 <span>出货客户</span>
-                <strong>{{ taskSummary.brief.customer }}</strong>
+                <strong>{{ displaySummary.brief.customer }}</strong>
               </div>
               <div class="brief-item">
                 <span>出货日期</span>
-                <strong>{{ taskSummary.brief.shipmentDate }}</strong>
+                <strong>{{ displaySummary.brief.shipmentDate }}</strong>
               </div>
-              <div class="brief-item owner" :class="{ muted: taskSummary.brief.salesOwnerMissing }">
+              <div class="brief-item owner" :class="{ muted: displaySummary.brief.salesOwnerMissing }">
                 <span>销售负责人</span>
-                <strong>{{ taskSummary.brief.salesOwner }}</strong>
+                <strong>{{ displaySummary.brief.salesOwner }}</strong>
               </div>
             </div>
-            <div v-if="taskSummary.brief.notes.length" class="brief-notes">
+            <div v-if="displaySummary.brief.notes?.length" class="brief-notes">
               <span>注意事项</span>
-              <p v-for="note in taskSummary.brief.notes" :key="note">{{ note }}</p>
+              <p v-for="note in displaySummary.brief.notes" :key="note">{{ note }}</p>
             </div>
           </div>
 
-          <div v-if="currentMaterial" class="material-card">
+          <div v-if="displayMaterial" class="material-card">
             <div class="material-head">
-              <span>第 {{ currentMaterial.index }} / {{ currentMaterial.total }} 款</span>
-              <strong>{{ currentMaterial.title }}</strong>
+              <span>第 {{ displayMaterial.index }} / {{ displayMaterial.total }} 款</span>
+              <strong>{{ displayMaterial.title }}</strong>
             </div>
             <dl class="material-fields">
-              <div v-for="field in currentMaterial.fields" :key="field.key">
+              <div v-for="field in displayMaterial.fields" :key="field.key">
                 <dt>{{ field.label }}</dt>
                 <dd>
                   <button
@@ -127,28 +132,58 @@
                 </dd>
               </div>
             </dl>
-            <div v-if="taskSummary.materials.length > 1" class="material-pager">
-              <button type="button" class="pager-btn" :disabled="materialPage === 0" @click="materialPage -= 1">上一款</button>
-              <span>{{ materialPage + 1 }} / {{ taskSummary.materials.length }}</span>
-              <button type="button" class="pager-btn" :disabled="materialPage >= taskSummary.materials.length - 1" @click="materialPage += 1">下一款</button>
+            <div v-if="displayMaterialTotal > 1" class="material-pager">
+              <button type="button" class="pager-btn" :disabled="displayMaterialPage === 0" @click="activeAttachment ? (excelMaterialPage -= 1) : (materialPage -= 1)">上一款</button>
+              <span>{{ displayMaterialPage + 1 }} / {{ displayMaterialTotal }}</span>
+              <button type="button" class="pager-btn" :disabled="displayMaterialPage >= displayMaterialTotal - 1" @click="activeAttachment ? (excelMaterialPage += 1) : (materialPage += 1)">下一款</button>
             </div>
           </div>
           <p v-if="copyToast" class="copy-toast">{{ copyToast }}</p>
-          <details v-if="sanitizedMailHtml || store.selectedMail.body" class="original-mail">
-            <summary>查看原文</summary>
-            <div v-if="sanitizedMailHtml" class="detail-body html-body" v-html="sanitizedMailHtml"></div>
-            <div v-else class="detail-body">{{ store.selectedMail.body }}</div>
-          </details>
+
+          <!-- 正文视图：查看原文 + 查看附件 -->
+          <div v-if="!activeAttachment">
+            <details v-if="sanitizedMailHtml || store.selectedMail.body" class="original-mail">
+              <summary>查看原文</summary>
+              <div v-if="sanitizedMailHtml" class="detail-body html-body" v-html="sanitizedMailHtml"></div>
+              <div v-else class="detail-body">{{ store.selectedMail.body }}</div>
+            </details>
+            <div v-if="excelAttachments.length" class="attachment-bar">
+              <button type="button" class="attach-btn"
+                @click="excelAttachments.length === 1 ? openAttachment(excelAttachments[0].filename) : (showAttachmentPicker = true)">
+                查看附件 ({{ excelAttachments.length }})
+              </button>
+            </div>
+          </div>
+
+          <!-- 附件视图：退回入口 -->
+          <div v-else class="attachment-bar">
+            <button type="button" class="attach-btn back" @click="backToHtml">退回正文</button>
+          </div>
         </div>
-        <div
-          v-else-if="sanitizedMailHtml"
-          class="detail-body html-body"
-          v-html="sanitizedMailHtml"
-        ></div>
+
+        <!-- 无表格时回退：原文 -->
+        <div v-else-if="sanitizedMailHtml" class="detail-body html-body" v-html="sanitizedMailHtml"></div>
         <div v-else class="detail-body">{{ store.selectedMail.body }}</div>
-        <table class="extract-table" v-if="!taskSummary && store.selectedMail.extracted_fields">
+
+        <table class="extract-table" v-if="!displaySummary && store.selectedMail.extracted_fields">
           <tbody><tr v-for="(v,k) in parseFields(store.selectedMail.extracted_fields)" :key="k"><td>{{ k }}</td><td @click="copyVal(v)">{{ v }}</td></tr></tbody>
         </table>
+
+        <!-- 多附件选择器 -->
+        <div v-if="showAttachmentPicker" class="picker-overlay" @click.self="showAttachmentPicker = false">
+          <div class="picker-list">
+            <div class="picker-title">选择附件</div>
+            <button
+              v-for="att in excelAttachments" :key="att.filename"
+              type="button" class="picker-item"
+              @click="openAttachment(att.filename)"
+            >
+              <span>{{ att.filename }}</span>
+              <span class="picker-size">{{ formatSize(att.size) }}</span>
+            </button>
+            <button type="button" class="picker-item muted" @click="showAttachmentPicker = false">取消</button>
+          </div>
+        </div>
       </div>
     </div>
   </section>
@@ -159,7 +194,7 @@ import { computed, ref, watch, onBeforeUnmount, onMounted } from 'vue'
 import DOMPurify from 'dompurify'
 import { AlertCircle, Mail, RefreshCw, Power, X } from 'lucide-vue-next'
 import { useMailStore } from '../stores/mail'
-import { buildMailTaskSummary } from '../lib/mail-detail-summary.mjs'
+import { buildMailTaskSummary, buildExcelTaskSummary } from '../lib/mail-detail-summary.mjs'
 
 const store = useMailStore()
 const DEFAULT_MAIL_DOMAIN = 'LSTECH'
@@ -189,10 +224,62 @@ const sanitizedMailHtml = computed(() => {
 const taskSummary = computed(() => buildMailTaskSummary(store.selectedMail, sanitizedMailHtml.value))
 const currentMaterial = computed(() => taskSummary.value?.materials?.[materialPage.value] || null)
 
-watch(() => store.selectedMail?.id, () => {
-  materialPage.value = 0
-  copyToast.value = ''
+// ===== 附件视图 =====
+const attachments = ref([])
+const excelAttachments = computed(() => attachments.value.filter((a) => /\.xlsx?$/i.test(a.filename)))
+const activeAttachment = ref(null)
+const excelSummary = ref(null)
+const excelLoading = ref(false)
+const showAttachmentPicker = ref(false)
+const excelMaterialPage = ref(0)
+
+const displaySummary = computed(() => (activeAttachment.value && excelSummary.value) ? excelSummary.value : taskSummary.value)
+const displayMaterial = computed(() => {
+  if (activeAttachment.value && excelSummary.value) {
+    return excelSummary.value.materials?.[excelMaterialPage.value] || null
+  }
+  return taskSummary.value?.materials?.[materialPage.value] || null
 })
+const displayMaterialPage = computed(() => activeAttachment.value ? excelMaterialPage.value : materialPage.value)
+const displayMaterialTotal = computed(() => displaySummary.value?.materials?.length || 0)
+
+watch(() => store.selectedMail?.id, async (id) => {
+  materialPage.value = 0
+  excelMaterialPage.value = 0
+  copyToast.value = ''
+  activeAttachment.value = null
+  excelSummary.value = null
+  attachments.value = []
+  if (id) {
+    const list = await window.api?.mail?.attachments(id) || []
+    attachments.value = list
+  }
+})
+
+async function openAttachment(filename) {
+  showAttachmentPicker.value = false
+  excelLoading.value = true
+  excelMaterialPage.value = 0
+  activeAttachment.value = filename
+  try {
+    const result = await window.api?.mail?.attachmentContent(store.selectedMail.id, filename)
+    if (result?.buffer) {
+      excelSummary.value = buildExcelTaskSummary(result.buffer, result.filename || filename)
+    } else {
+      activeAttachment.value = null
+    }
+  } catch (err) {
+    console.error('[attachment] 加载失败:', err)
+    activeAttachment.value = null
+  } finally {
+    excelLoading.value = false
+  }
+}
+
+function backToHtml() {
+  activeAttachment.value = null
+  excelSummary.value = null
+}
 
 watch(materialPage, () => {
   copyToast.value = ''
@@ -279,6 +366,13 @@ async function copyMaterialValue(field) {
     copyToast.value = '复制失败'
   }
 }
+function formatSize(bytes) {
+  if (!bytes) return ''
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1048576) return `${(bytes / 1024).toFixed(1)} KB`
+  return `${(bytes / 1048576).toFixed(1)} MB`
+}
+
 function relativeTime(iso) {
   if (!iso) return ''
   const diff = Date.now() - new Date(iso).getTime()
@@ -621,4 +715,39 @@ function relativeTime(iso) {
 .extract-table td:last-child { text-align: right; font-weight: 600; color: var(--accent); cursor: pointer; }
 .extract-table td:last-child:hover { background: var(--accent-soft); }
 .extract-table tr:last-child td { border-bottom: none; }
+
+/* ===== 附件控制 ===== */
+.attachment-bar { margin-top: 10px; display: flex; gap: 6px; }
+.attach-btn {
+  flex: 1; height: 32px; border: 1px solid var(--border); border-radius: 8px;
+  background: var(--bg-input); color: var(--text-muted); font-size: 11px; cursor: pointer;
+  font-family: inherit; transition: border-color 0.15s;
+}
+.attach-btn:hover { border-color: var(--accent); color: var(--accent); }
+.attach-btn.back { color: var(--accent); border-color: rgba(47,125,120,0.2); background: var(--accent-soft); }
+
+/* ===== 附件选择器 ===== */
+.picker-overlay {
+  position: fixed; inset: 0; z-index: 1100;
+  background: var(--bg-overlay); display: grid; place-items: center; padding: 20px;
+}
+.picker-list {
+  width: min(100%, 260px); padding: 12px;
+  border-radius: 12px; background: var(--bg-elevated);
+  border: 1px solid var(--border); box-shadow: var(--shadow);
+  display: grid; gap: 4px;
+}
+.picker-title {
+  font-size: 13px; font-weight: 600; color: var(--text);
+  padding-bottom: 6px; margin-bottom: 4px; border-bottom: 1px solid var(--border);
+}
+.picker-item {
+  display: flex; align-items: center; justify-content: space-between;
+  width: 100%; padding: 8px 10px; border: none; border-radius: 8px;
+  background: transparent; color: var(--text); font-size: 12px; cursor: pointer;
+  font-family: inherit; text-align: left;
+}
+.picker-item:hover { background: var(--accent-soft); color: var(--accent); }
+.picker-item.muted { color: var(--text-muted); justify-content: center; }
+.picker-size { font-size: 10px; color: var(--text-muted); }
 </style>

@@ -178,6 +178,26 @@ export class MailBridge {
     }
   }
 
+  async listAttachments(mailId) {
+    try {
+      return await this._fetch(`/mail/${mailId}/attachments`, { timeoutMs: 10000 })
+    } catch {
+      return []
+    }
+  }
+
+  async downloadAttachment(mailId, filename) {
+    try {
+      const res = await this._fetch(`/mail/${mailId}/attachments/${encodeURIComponent(filename)}`, {
+        timeoutMs: 30000,
+        responseType: 'arraybuffer'
+      })
+      return { buffer: res, filename }
+    } catch {
+      return null
+    }
+  }
+
   async doctor() {
     return await this._fetch('/doctor', { timeoutMs: 5000 })
   }

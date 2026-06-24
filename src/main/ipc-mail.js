@@ -1,4 +1,6 @@
 import { ipcMain } from 'electron'
+import { readFileSync, existsSync } from 'node:fs'
+import { join } from 'node:path'
 import { queryAll, queryOne, execute } from './database'
 import { MailBridge } from './mail-bridge'
 
@@ -133,6 +135,44 @@ export function setupMailHandlers() {
 
   ipcMain.handle('mail:status', () => {
     return { running: bridge !== null }
+  })
+
+  // 附件列表 — 有 MailService 时从 bridge 获取，否则返回空
+  ipcMain.handle('mail:attachments', async (_, mailId) => {
+    if (bridge) {
+      try {
+        return await bridge.listAttachments(mailId)
+      } catch (err) {
+        console.error('[ipc] mail:attachments 失败:', err.message)
+      }
+    }
+    // 无 bridge 时返回 mock 数据用于前端开发
+    return [
+      { filename: '标签模板.xlsx', contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', size: 8240 },
+      { filename: '出货明细.pdf', contentType: 'application/pdf', size: 156320 }
+    ]
+  })
+
+  // 附件内容 — 有 MailService 时从 bridge 下载，否则生成 mock Excel
+  ipcMain.handle('mail:attachment-content', async (_, mailId, filename) => {
+    if (bridge) {
+      try {
+        const content = await bridge.downloadAttachment(mailId, filename)
+        if (content) return content
+      } catch (err) {
+        console.error('[ipc] mail:attachment-content 失败:', err.message)
+      }
+    }
+    // Mock Excel for development
+    if (/\.xlsx?$/i.test(filename)) {
+      try {
+        const { generateMockExcelBuffer } = await import('../renderer/src/lib/mail-detail-summary.mjs')
+        return { buffer: generateMockExcelBuffer(), filename }
+      } catch {
+        return null
+      }
+    }
+    return null
   })
 }
 

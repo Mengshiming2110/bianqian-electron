@@ -133,7 +133,9 @@ contextBridge.exposeInMainWorld('api', {
     doctor: (config) => ipcRenderer.invoke('mail:doctor', config),
     detail: (id) => ipcRenderer.invoke('mail:detail', id),
     stop: () => ipcRenderer.invoke('mail:stop'),
-    status: () => ipcRenderer.invoke('mail:status')
+    status: () => ipcRenderer.invoke('mail:status'),
+    attachments: (mailId) => ipcRenderer.invoke('mail:attachments', mailId),
+    attachmentContent: (mailId, filename) => ipcRenderer.invoke('mail:attachment-content', mailId, filename)
   },
   settings: {
     get: () => ipcRenderer.invoke('settings:get'),

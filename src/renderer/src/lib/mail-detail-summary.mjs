@@ -267,3 +267,59 @@ function buildSummaryMessage(text, count) {
   const prefix = count > 0 ? `识别到 ${count} 条物料` : '未识别到物料明细'
   return clean ? `${prefix}。${clean.slice(0, 160)}` : prefix
 }
+
+// ===== Excel 附件解析 =====
+
+import * as XLSX from 'xlsx'
+
+export function buildExcelTaskSummary(buffer, fileName) {
+  if (!buffer || !XLSX) return null
+  try {
+    const workbook = XLSX.read(new Uint8Array(buffer), { type: 'array' })
+    const sheetName = workbook.SheetNames[0]
+    if (!sheetName) return null
+    const sheet = workbook.Sheets[sheetName]
+    const matrix = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' })
+    if (!matrix.length) return null
+
+    const headerRow = matrix[0].map((h) => cleanCell(String(h)))
+    const dataRows = matrix.slice(1).filter((row) => row.some((cell) => String(cell || '').trim()))
+
+    const materials = dataRows.map((row, i) =>
+      buildMaterial(row.map((c) => String(c ?? '')), headerRow, i + 1, dataRows.length)
+    )
+
+    return {
+      title: fileName ? `附件: ${fileName}` : 'Excel 附件',
+      source: 'excel',
+      brief: {
+        customer: '--',
+        shipmentDate: '--',
+        salesOwner: '--',
+        salesOwnerMissing: true,
+        notes: []
+      },
+      materials,
+      rawMessage: `从 ${fileName || 'Excel 附件'} 提取，共 ${materials.length} 行数据`
+    }
+  } catch (err) {
+    console.error('[excel] 解析失败:', err.message)
+    return null
+  }
+}
+
+export function generateMockExcelBuffer() {
+  // 生成示例 Excel 用于前端开发和测试
+  const data = [
+    ['APN', 'OEM PN', 'LY PN', '数量', 'Config', 'Buyer', 'PO Number'],
+    ['810-30095', '810-30095SLY02TONB', '882-AKZ805-02-00', '5120', 'CxB: Black7, PVD', 'John Lee', 'PO-2026-08472'],
+    ['810-30112', '810-30112SLY03TONC', '882-BKZ912-01-00', '2048', 'CxA: Silver, NCP', 'Sarah Wang', 'PO-2026-08473'],
+    ['810-40021', 'LV-40021-SLY03-A', '882-CLZ401-01-00', '3200', 'CxA: Space Gray', 'Mike Chen', 'PO-2026-08501'],
+    ['810-40022', 'LV-40022-SLY03-B', '882-CLZ402-01-00', '1600', 'CxB: Silver, PVD', 'John Lee', 'PO-2026-08501'],
+  ]
+  const ws = XLSX.utils.aoa_to_sheet(data)
+  const wb = XLSX.utils.book_new()
+  XLSX.utils.book_append_sheet(wb, ws, 'Sheet1')
+  const buf = XLSX.write(wb, { type: 'array', bookType: 'xlsx' })
+  return buf
+}
