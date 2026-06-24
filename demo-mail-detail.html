@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>邮件详情卡片 — 领益工作助手</title>
+<style>
+:root {
+  --accent: #2f7d78;
+  --accent-soft: rgba(47, 125, 120, 0.12);
+  --text: #243230;
+  --text-muted: #64736f;
+  --bg-elevated: rgba(255, 255, 255, 0.98);
+  --bg-input: #fff;
+  --bg-overlay: rgba(20, 28, 27, 0.32);
+  --border: rgba(38, 57, 54, 0.12);
+  --shadow: 0 18px 42px rgba(32, 44, 42, 0.18);
+  font-family: "Microsoft YaHei", "PingFang SC", "Segoe UI", sans-serif;
+}
+* { box-sizing: border-box; margin: 0; }
+body {
+  background: #f3f4f6;
+  color: var(--text);
+  display: grid;
+  place-items: center;
+  min-height: 100vh;
+  padding: 40px 20px;
+}
+
+/* ===== Detail Overlay & Panel ===== */
+.detail-panel {
+  width: min(100%, 380px);
+  max-height: 85vh;
+  padding: 16px;
+  border-radius: 14px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow);
+  overflow-y: auto;
+}
+.detail-header {
+  display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;
+}
+.detail-header h3 { font-size: 15px; font-weight: 600; color: var(--text); }
+.mini-btn {
+  width: 28px; height: 28px; border-radius: 6px; border: none; background: transparent;
+  color: var(--text-muted); cursor: pointer; display: grid; place-items: center; font-size: 16px;
+}
+.mini-btn:hover { background: var(--accent-soft); color: var(--text); }
+.detail-meta {
+  font-size: 11px; color: var(--text-muted); display: flex; flex-direction: column; gap: 2px;
+  margin-bottom: 10px; padding-bottom: 8px; border-bottom: 1px solid var(--border);
+}
+
+/* ===== Task Detail ===== */
+.task-detail { display: grid; gap: 10px; }
+.task-brief { display: grid; gap: 8px; }
+
+/* Brief Grid */
+.brief-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 0.8fr); gap: 8px; }
+.brief-item {
+  display: grid; gap: 3px; padding: 9px 10px;
+  border: 1px solid var(--border); border-radius: 8px; background: var(--bg-input);
+}
+.brief-item span { color: var(--text-muted); font-size: 11px; }
+.brief-item strong {
+  min-width: 0; overflow: hidden; color: var(--accent);
+  font-size: 13px; font-weight: 800; text-overflow: ellipsis; white-space: nowrap;
+}
+.brief-item.owner { grid-column: 1 / -1; }
+.brief-item.owner.muted strong { color: var(--text-muted); font-weight: 600; }
+
+/* Notes */
+.brief-notes {
+  display: grid; gap: 5px; padding: 9px 10px;
+  border: 1px solid rgba(180, 135, 30, 0.22); border-radius: 8px;
+  background: rgba(255, 193, 70, 0.12);
+}
+.brief-notes span { color: var(--text-muted); font-size: 11px; }
+.brief-notes p { margin: 0; color: var(--text); font-size: 12px; line-height: 1.45; }
+
+/* ===== Material Card ===== */
+.material-card {
+  display: grid; gap: 10px; padding: 11px;
+  border: 1px solid rgba(47, 125, 120, 0.24); border-radius: 10px;
+  background: var(--bg-elevated);
+}
+.material-head {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+}
+.material-head span { color: var(--text); font-size: 13px; font-weight: 700; }
+.material-head strong {
+  min-width: 0; overflow: hidden; color: var(--accent);
+  font-size: 12px; font-weight: 800; text-overflow: ellipsis; white-space: nowrap;
+}
+.material-fields {
+  display: grid; margin: 0; border-top: 1px solid var(--border);
+}
+.material-fields > div {
+  display: grid; grid-template-columns: 72px minmax(0, 1fr); gap: 10px; align-items: center;
+  min-height: 32px; border-bottom: 1px solid var(--border);
+}
+.material-fields dt { color: var(--text-muted); font-size: 12px; }
+.material-fields dd {
+  margin: 0; min-width: 0; text-align: right; font-size: 12px;
+}
+.copy-value {
+  max-width: 100%; padding: 2px 5px; border: 0; border-radius: 6px;
+  background: transparent; color: var(--accent); cursor: pointer;
+  font-family: inherit; font-size: 12px; font-weight: 800;
+  overflow: hidden; text-align: right; text-overflow: ellipsis; white-space: nowrap;
+}
+.copy-value:not(:disabled):hover { background: var(--accent-soft); }
+.copy-value.missing, .copy-value:disabled {
+  color: var(--text-muted); cursor: default; font-weight: 500;
+}
+
+/* Pager */
+.material-pager {
+  display: flex; align-items: center; justify-content: center; gap: 12px;
+  padding-top: 2px;
+}
+.material-pager span { font-size: 12px; color: var(--text-muted); }
+.pager-btn {
+  padding: 4px 12px; border: 1px solid var(--border); border-radius: 6px;
+  background: var(--bg-input); color: var(--text-muted); font-size: 11px; cursor: pointer;
+  font-family: inherit;
+}
+.pager-btn:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+.pager-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+
+/* Toast */
+.copy-toast {
+  margin: 0; text-align: center; color: var(--accent); font-size: 11px; font-weight: 600;
+  animation: toastFade 1.6s ease-out forwards;
+}
+@keyframes toastFade {
+  0% { opacity: 0; transform: translateY(4px); }
+  15% { opacity: 1; transform: translateY(0); }
+  70% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+/* Original mail */
+.original-mail { margin-top: 6px; font-size: 12px; }
+.original-mail summary {
+  color: var(--text-muted); cursor: pointer; padding: 4px 0;
+}
+.original-mail summary:hover { color: var(--text); }
+.html-body { font-size: 12px; line-height: 1.6; white-space: pre-wrap; color: var(--text-muted); margin-top: 8px; }
+
+/* Tabs to switch datasets */
+.data-tabs { display: flex; gap: 6px; margin-bottom: 16px; }
+.data-tab {
+  padding: 6px 14px; border: 1px solid var(--border); border-radius: 999px;
+  background: var(--bg-input); color: var(--text-muted); cursor: pointer;
+  font-size: 12px; font-family: inherit;
+}
+.data-tab.active { background: var(--accent-soft); color: var(--accent); border-color: rgba(47,125,120,0.2); font-weight: 600; }
+</style>
+</head>
+<body>
+
+<div>
+  <div class="data-tabs">
+    <button class="data-tab active" onclick="switchData(0)">场景1：完整出货单</button>
+    <button class="data-tab" onclick="switchData(1)">场景2：无销售负责人</button>
+    <button class="data-tab" onclick="switchData(2)">场景3：多款 + 注意事项</button>
+  </div>
+
+  <div id="card-container"></div>
+</div>
+
+<script>
+// Simulated task summaries matching Codex's buildMailTaskSummary output
+const datasets = [
+  // Scenario 1: Complete shipment
+  {
+    title: '出货任务 SO-2026-08472',
+    brief: {
+      customer: 'Foxconn (富士康)',
+      shipmentDate: '2026-06-28',
+      salesOwner: '张伟',
+      salesOwnerMissing: false,
+      notes: []
+    },
+    materials: [
+      {
+        index: 1, total: 1,
+        title: '810-30095',
+        fields: [
+          { key:'apn', label:'APN', value:'810-30095', copyValue:'810-30095', copyable:true, missing:false },
+          { key:'oemPn', label:'OEM PN', value:'810-30095SLY02TONB', copyValue:'810-30095SLY02TONB', copyable:true, missing:false },
+          { key:'lyPn', label:'LY PN', value:'882-AKZ805-02-00', copyValue:'882-AKZ805-02-00', copyable:true, missing:false },
+          { key:'quantity', label:'数量', value:'5,120', copyValue:'5120', copyable:true, missing:false },
+          { key:'config', label:'Config', value:'CxB: Black7, PVD (NF)', copyValue:'CxB: Black7, PVD (NF)', copyable:true, missing:false },
+          { key:'remark', label:'备注', value:'标签 vendor code 1000248', copyValue:'标签 vendor code 1000248', copyable:true, missing:false }
+        ]
+      }
+    ]
+  },
+  // Scenario 2: Missing sales owner
+  {
+    title: '出货任务 PO-88421',
+    brief: {
+      customer: 'Pegatron (和硕)',
+      shipmentDate: '2026-07-02',
+      salesOwner: '负责人待确认',
+      salesOwnerMissing: true,
+      notes: []
+    },
+    materials: [
+      {
+        index: 1, total: 1,
+        title: '810-30112',
+        fields: [
+          { key:'apn', label:'APN', value:'810-30112', copyValue:'810-30112', copyable:true, missing:false },
+          { key:'oemPn', label:'OEM PN', value:'', copyValue:'', copyable:false, missing:true },
+          { key:'lyPn', label:'LY PN', value:'882-BKZ912-01-00', copyValue:'882-BKZ912-01-00', copyable:true, missing:false },
+          { key:'quantity', label:'数量', value:'2,048', copyValue:'2048', copyable:true, missing:false },
+          { key:'config', label:'Config', value:'待确认', copyValue:'', copyable:false, missing:true },
+          { key:'remark', label:'备注', value:'待确认', copyValue:'', copyable:false, missing:true }
+        ]
+      }
+    ]
+  },
+  // Scenario 3: Multi-row + special notes
+  {
+    title: '出货任务 SO-2026-08501',
+    brief: {
+      customer: 'Luxshare (立讯精密)',
+      shipmentDate: '2026-07-05',
+      salesOwner: '李明',
+      salesOwnerMissing: false,
+      notes: [
+        '外箱标签需加印 BU: LV-A 标识',
+        '随货附送货单 2 份，盖章',
+        '标签系统内名称需与 SAP 一致'
+      ]
+    },
+    materials: [
+      {
+        index: 1, total: 3,
+        title: '810-40021',
+        fields: [
+          { key:'apn', label:'APN', value:'810-40021', copyValue:'810-40021', copyable:true, missing:false },
+          { key:'oemPn', label:'OEM PN', value:'LV-40021-SLY03-A', copyValue:'LV-40021-SLY03-A', copyable:true, missing:false },
+          { key:'lyPn', label:'LY PN', value:'882-CLZ401-01-00', copyValue:'882-CLZ401-01-00', copyable:true, missing:false },
+          { key:'quantity', label:'数量', value:'3,200', copyValue:'3200', copyable:true, missing:false },
+          { key:'config', label:'Config', value:'CxA: Space Gray, NCP', copyValue:'CxA: Space Gray, NCP', copyable:true, missing:false },
+          { key:'remark', label:'备注', value:'交期严格，不得延误', copyValue:'交期严格，不得延误', copyable:true, missing:false }
+        ]
+      },
+      {
+        index: 2, total: 3,
+        title: '810-40022',
+        fields: [
+          { key:'apn', label:'APN', value:'810-40022', copyValue:'810-40022', copyable:true, missing:false },
+          { key:'oemPn', label:'OEM PN', value:'LV-40022-SLY03-B', copyValue:'LV-40022-SLY03-B', copyable:true, missing:false },
+          { key:'lyPn', label:'LY PN', value:'882-CLZ402-01-00', copyValue:'882-CLZ402-01-00', copyable:true, missing:false },
+          { key:'quantity', label:'数量', value:'1,600', copyValue:'1600', copyable:true, missing:false },
+          { key:'config', label:'Config', value:'CxB: Silver, PVD (NF)', copyValue:'CxB: Silver, PVD (NF)', copyable:true, missing:false },
+          { key:'remark', label:'备注', value:'搭出货', copyValue:'搭出货', copyable:true, missing:false }
+        ]
+      },
+      {
+        index: 3, total: 3,
+        title: '810-40023',
+        fields: [
+          { key:'apn', label:'APN', value:'810-40023', copyValue:'810-40023', copyable:true, missing:false },
+          { key:'oemPn', label:'OEM PN', value:'LV-40023-SLY03-C', copyValue:'LV-40023-SLY03-C', copyable:true, missing:false },
+          { key:'lyPn', label:'LY PN', value:'882-CLZ403-01-00', copyValue:'882-CLZ403-01-00', copyable:true, missing:false },
+          { key:'quantity', label:'数量', value:'800', copyValue:'800', copyable:true, missing:false },
+          { key:'config', label:'Config', value:'CxA: Midnight, NCP+', copyValue:'CxA: Midnight, NCP+', copyable:true, missing:false },
+          { key:'remark', label:'备注', value:'待确认', copyValue:'', copyable:false, missing:true }
+        ]
+      }
+    ]
+  }
+];
+
+let currentData = datasets[0];
+let currentPage = 0;
+
+function switchData(i) {
+  document.querySelectorAll('.data-tab').forEach((t, j) => t.classList.toggle('active', j === i));
+  currentData = datasets[i];
+  currentPage = 0;
+  render();
+}
+
+function render() {
+  const d = currentData;
+  const mat = d.materials[currentPage];
+  const notes = d.brief.notes;
+
+  let fieldsHtml = '';
+  mat.fields.forEach(f => {
+    fieldsHtml += `<div><dt>${f.label}</dt><dd>
+      <button type="button" class="copy-value${f.missing ? ' missing' : ''}"
+        ${!f.copyable ? 'disabled' : ''}
+        onclick="doCopy('${f.copyValue.replace(/'/g, "\\'")}', '${f.label}', this)">${f.value}</button>
+    </dd></div>`;
+  });
+
+  const notesHtml = notes.length ? `
+    <div class="brief-notes">
+      <span>注意事项</span>
+      ${notes.map(n => `<p>${n}</p>`).join('')}
+    </div>` : '';
+
+  const pagerHtml = d.materials.length > 1 ? `
+    <div class="material-pager">
+      <button type="button" class="pager-btn" ${currentPage === 0 ? 'disabled' : ''} onclick="currentPage--;render()">上一款</button>
+      <span>${currentPage + 1} / ${d.materials.length}</span>
+      <button type="button" class="pager-btn" ${currentPage >= d.materials.length - 1 ? 'disabled' : ''} onclick="currentPage++;render()">下一款</button>
+    </div>` : '';
+
+  document.getElementById('card-container').innerHTML = `
+    <div class="detail-panel">
+      <div class="detail-header">
+        <h3>${d.title}</h3>
+        <button class="mini-btn" title="关闭">&times;</button>
+      </div>
+      <div class="detail-meta">
+        <span>zhang.wei@lingyiitech.com</span>
+        <span>6月24日 14:30</span>
+      </div>
+      <div class="task-detail">
+        <div class="task-brief">
+          <div class="brief-grid">
+            <div class="brief-item"><span>出货客户</span><strong>${d.brief.customer}</strong></div>
+            <div class="brief-item"><span>出货日期</span><strong>${d.brief.shipmentDate}</strong></div>
+            <div class="brief-item owner${d.brief.salesOwnerMissing ? ' muted' : ''}">
+              <span>销售负责人</span><strong>${d.brief.salesOwner}</strong>
+            </div>
+          </div>
+          ${notesHtml}
+        </div>
+
+        <div class="material-card">
+          <div class="material-head">
+            <span>第 ${mat.index} / ${mat.total} 款</span>
+            <strong>${mat.title}</strong>
+          </div>
+          <dl class="material-fields">${fieldsHtml}</dl>
+          ${pagerHtml}
+        </div>
+
+        <p id="copy-toast" class="copy-toast" style="display:none"></p>
+
+        <details class="original-mail">
+          <summary>查看原文</summary>
+          <div class="html-body" style="margin-top:8px">
+发件人: zhang.wei@lingyiitech.com
+发送时间: 2026年6月24日 14:30
+收件人: label-team@lingyiitech.com
+主题: 出货任务 SO-${d.title.includes('SO') ? d.title.split('SO-')[1].split(' ')[0] || '2026-08472' : '88421'}
+
+各位好，
+
+以下是本次出货明细，请按附件要求制作标签。
+
+出货客户: ${d.brief.customer}
+出货日期: ${d.brief.shipmentDate}
+${d.brief.salesOwnerMissing ? '' : '销售负责人: ' + d.brief.salesOwner}
+${notes.length ? notes.map(n => n).join('\n') : ''}
+
+谢谢
+          </div>
+        </details>
+      </div>
+    </div>`;
+}
+
+async function doCopy(value, label, btn) {
+  if (!value) return;
+  try {
+    await navigator.clipboard.writeText(value);
+    const toast = document.getElementById('copy-toast');
+    toast.textContent = '已复制 ' + label;
+    toast.style.display = 'block';
+    toast.style.animation = 'none';
+    toast.offsetHeight;
+    toast.style.animation = 'toastFade 1.6s ease-out forwards';
+    // Brief highlight
+    btn.style.background = 'var(--accent-soft)';
+    setTimeout(() => { btn.style.background = ''; }, 600);
+  } catch(e) {}
+}
+
+render();
+</script>
+</body>
+</html>
