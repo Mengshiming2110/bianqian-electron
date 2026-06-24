@@ -1,11 +1,9 @@
 import { screen } from 'electron'
 
-const EDGE_THRESHOLD = 28
-const EDGE_EXPOSED = 6
-const EDGE_HIDE_DELAY = 500
-const EDGE_ANIMATION_MS = 180
-const ANIMATION_FRAME_MS = 16
-const BOUNDS_WATCH_MS = 250
+const EDGE_THRESHOLD = 28        // 吸附判定距离
+const EDGE_EXPOSED = 6           // 隐藏时露出像素
+const EDGE_HIDE_DELAY = 500      // 鼠标离开后延迟隐藏
+const MOUSE_POLL_MS = 100        // 鼠标轮询间隔
 
 export const EDGE_STATE = {
   NORMAL: 'normal',
@@ -26,28 +24,19 @@ export class EdgeDockController {
     this.isPinned = false
     this.isEditing = false
 
-    this._snapTimer = null
+    this._visibleX = null           // dock/hidden 时的可见 X
+    this._mouseTimer = null
     this._hideTimer = null
-    this._animFrame = null
-    this._animating = false
-    this._visibleX = null
-    this._pointerTimer = null
-    this._boundsTimer = null
-    this._lastBoundsKey = ''
-    this._mouseVisitedSinceShow = false
+    this._snapTimer = null
+    this._mouseInside = false
   }
 
   get window() { return this._getWindow() }
 
-  isDocked() {
-    return this.state === EDGE_STATE.DOCKED_LEFT ||
-           this.state === EDGE_STATE.DOCKED_RIGHT
-  }
+  isDocked() { return this.state === EDGE_STATE.DOCKED_LEFT || this.state === EDGE_STATE.DOCKED_RIGHT }
+  isHidden() { return this.state === EDGE_STATE.HIDDEN_LEFT || this.state === EDGE_STATE.HIDDEN_RIGHT }
 
-  isHidden() {
-    return this.state === EDGE_STATE.HIDDEN_LEFT ||
-           this.state === EDGE_STATE.HIDDEN_RIGHT
-  }
+  // ===== 位置计算 =====
 
   getWorkArea() {
     const win = this.window
@@ -55,37 +44,30 @@ export class EdgeDockController {
     return screen.getDisplayMatching(win.getBounds()).workArea
   }
 
-  onWindowMoved() {
-    if (this._animating || this.isHidden()) return
-    clearTimeout(this._snapTimer)
-    this._snapTimer = setTimeout(() => this.checkSnap(), 80)
-  }
-
-  startBoundsWatcher() {
-    this.stopBoundsWatcher()
-    this._lastBoundsKey = ''
-    this._boundsTimer = setInterval(() => {
-      const win = this.window
-      if (!win || win.isDestroyed() || !win.isVisible() || this._animating || this.isHidden()) return
-      const bounds = win.getBounds()
-      const key = `${bounds.x},${bounds.y},${bounds.width},${bounds.height}`
-      if (key === this._lastBoundsKey) return
-      this._lastBoundsKey = key
-      this.onWindowMoved()
-    }, BOUNDS_WATCH_MS)
-  }
-
-  stopBoundsWatcher() {
-    if (this._boundsTimer) {
-      clearInterval(this._boundsTimer)
-      this._boundsTimer = null
+  _xForState(state, bounds, area) {
+    switch (state) {
+      case EDGE_STATE.DOCKED_LEFT:  return area.x
+      case EDGE_STATE.DOCKED_RIGHT: return area.x + area.width - bounds.width
+      case EDGE_STATE.HIDDEN_LEFT:  return area.x - bounds.width + EDGE_EXPOSED
+      case EDGE_STATE.HIDDEN_RIGHT: return area.x + area.width - EDGE_EXPOSED
+      default: return bounds.x
     }
+  }
+
+  // ===== moved 事件：驱动 NORMAL↔DOCKED =====
+
+  onWindowMoved() {
+    clearTimeout(this._snapTimer)
+    this._snapTimer = setTimeout(() => this.checkSnap(), 100)
   }
 
   checkSnap() {
     const win = this.window
-    if (!win || win.isDestroyed() || this._animating) return
-    if (this.isPinned || this.isHidden()) return
+    if (!win || win.isDestroyed()) return
+    if (this.isPinned) return
+
+    // 只在 NORMAL 或 DOCKED 时响应移动
+    if (this.isHidden()) return
 
     const bounds = win.getBounds()
     const area = this.getWorkArea()
@@ -93,158 +75,130 @@ export class EdgeDockController {
     const distRight = Math.abs(bounds.x + bounds.width - (area.x + area.width))
 
     if (distLeft <= EDGE_THRESHOLD && distLeft <= distRight) {
-      this._dockLeft()
+      this._setState(EDGE_STATE.DOCKED_LEFT, bounds, area)
     } else if (distRight <= EDGE_THRESHOLD) {
-      this._dockRight()
-    } else {
-      this.state = EDGE_STATE.NORMAL
-      this._visibleX = null
-      this.stopBoundsWatcher()
-      this.onStateChange()
+      this._setState(EDGE_STATE.DOCKED_RIGHT, bounds, area)
+    } else if (this.isDocked()) {
+      // 从 DOCKED 拖离边缘
+      this._setState(EDGE_STATE.NORMAL, bounds, area)
     }
   }
 
-  _dockLeft() {
+  // ===== 鼠标轮询：驱动 HIDDEN↔DOCKED 和 DOCKED→HIDDEN =====
+
+  startMouseWatcher() {
+    this.stopMouseWatcher()
+    this._mouseTimer = setInterval(() => this._pollMouse(), MOUSE_POLL_MS)
+  }
+
+  stopMouseWatcher() {
+    if (this._mouseTimer) { clearInterval(this._mouseTimer); this._mouseTimer = null }
+    this._clearHideTimer()
+  }
+
+  _pollMouse() {
     const win = this.window
-    if (!win || win.isDestroyed()) return
-    const bounds = win.getBounds()
+    if (!win || win.isDestroyed() || !win.isVisible()) return
+
+    const cursor = screen.getCursorScreenPoint()
     const area = this.getWorkArea()
-    const targetX = area.x
-    if (bounds.x === targetX && this.state === EDGE_STATE.DOCKED_LEFT) return
-    win.setBounds({ ...bounds, x: targetX })
-    this.state = EDGE_STATE.DOCKED_LEFT
-    this._visibleX = targetX
-    this.stopBoundsWatcher()
-    this.onStateChange()
-  }
-
-  _dockRight() {
-    const win = this.window
-    if (!win || win.isDestroyed()) return
     const bounds = win.getBounds()
-    const area = this.getWorkArea()
-    const targetX = area.x + area.width - bounds.width
-    if (bounds.x === targetX && this.state === EDGE_STATE.DOCKED_RIGHT) return
-    win.setBounds({ ...bounds, x: targetX })
-    this.state = EDGE_STATE.DOCKED_RIGHT
-    this._visibleX = targetX
-    this.stopBoundsWatcher()
-    this.onStateChange()
+
+    // 隐藏状态：鼠标靠近边缘就显示
+    if (this.isHidden()) {
+      const reveal = EDGE_EXPOSED + 12
+      const triggered =
+        (this.state === EDGE_STATE.HIDDEN_LEFT  && cursor.x <= area.x + reveal) ||
+        (this.state === EDGE_STATE.HIDDEN_RIGHT && cursor.x >= area.x + area.width - reveal)
+      if (triggered) {
+        const newState = this.state === EDGE_STATE.HIDDEN_LEFT ? EDGE_STATE.DOCKED_LEFT : EDGE_STATE.DOCKED_RIGHT
+        this._setState(newState, bounds, area)
+        return
+      }
+      return
+    }
+
+    // 停靠状态 + 自动隐藏：检测鼠标进出
+    if (!this.autoHide || !this.isDocked()) return
+
+    const inside = cursor.x >= bounds.x && cursor.x <= bounds.x + bounds.width &&
+                   cursor.y >= bounds.y && cursor.y <= bounds.y + bounds.height
+
+    if (inside && !this._mouseInside) {
+      this._mouseInside = true
+      this._clearHideTimer()
+    } else if (!inside && this._mouseInside) {
+      this._mouseInside = false
+      this._scheduleHide()
+    }
   }
 
-  onMouseLeave() {
-    if (!this.autoHide || !this.isDocked() || this.isPinned || this.isEditing || this.isHidden()) return
-    this.scheduleHide()
-  }
-
-  onMouseEnter() {
-    this.clearHideTimer()
-  }
-
-  scheduleHide() {
-    if (!this.autoHide || this.isHidden() || this._animating) return
-    if (!this._mouseVisitedSinceShow) return  // 还没进过窗口，不隐藏
-    this.clearHideTimer()
-    this._hideTimer = setTimeout(() => this.hide(), EDGE_HIDE_DELAY)
-  }
-
-  clearHideTimer() {
-    if (this._hideTimer) {
-      clearTimeout(this._hideTimer)
+  _scheduleHide() {
+    if (this._hideTimer) return
+    this._hideTimer = setTimeout(() => {
       this._hideTimer = null
-    }
+      this.hide()
+    }, EDGE_HIDE_DELAY)
   }
+
+  _clearHideTimer() {
+    if (this._hideTimer) { clearTimeout(this._hideTimer); this._hideTimer = null }
+  }
+
+  // ===== show/hide (入口：托盘点击 / 快捷键) =====
 
   hide() {
     const win = this.window
-    if (!this.autoHide || !this.isDocked() || this._animating) return
+    if (!this.autoHide || !this.isDocked()) return
     if (!win || win.isDestroyed()) return
 
     const bounds = win.getBounds()
     const area = this.getWorkArea()
-
-    if (this.state === EDGE_STATE.DOCKED_LEFT) {
-      this.state = EDGE_STATE.HIDDEN_LEFT
-      this._animateTo(area.x - bounds.width + EDGE_EXPOSED)
-    } else if (this.state === EDGE_STATE.DOCKED_RIGHT) {
-      this.state = EDGE_STATE.HIDDEN_RIGHT
-      this._animateTo(area.x + area.width - EDGE_EXPOSED)
-    }
-
-    this.onInteractionChange()
-    this.onStateChange()
+    const newState = this.state === EDGE_STATE.DOCKED_LEFT ? EDGE_STATE.HIDDEN_LEFT : EDGE_STATE.HIDDEN_RIGHT
+    this._setState(newState, bounds, area)
   }
 
   show() {
     const win = this.window
-    if (!this.isHidden() || this._animating) return
+    if (!this.isHidden()) return
     if (!win || win.isDestroyed()) return
 
-    this._mouseVisitedSinceShow = false
-    this.clearHideTimer()
+    this._clearHideTimer()
+    const bounds = win.getBounds()
     const area = this.getWorkArea()
+    const newState = this.state === EDGE_STATE.HIDDEN_LEFT ? EDGE_STATE.DOCKED_LEFT : EDGE_STATE.DOCKED_RIGHT
+    this._setState(newState, bounds, area)
+  }
 
-    if (this.state === EDGE_STATE.HIDDEN_LEFT) {
-      this.state = EDGE_STATE.DOCKED_LEFT
-      this._animateTo(area.x)
-    } else if (this.state === EDGE_STATE.HIDDEN_RIGHT) {
-      const bounds = win.getBounds()
-      this.state = EDGE_STATE.DOCKED_RIGHT
-      this._animateTo(area.x + area.width - bounds.width)
+  // ===== 核心：状态切换 + 窗口定位 =====
+
+  _setState(newState, bounds, area) {
+    if (this.state === newState) return
+
+    const targetX = this._xForState(newState, bounds, area)
+    const win = this.window
+
+    this.state = newState
+    this._visibleX = this.isDocked() ? targetX : (this.isHidden() ? targetX : null)
+
+    // 仅当 X 真的需要变时才 setBounds（避免触发多余的 moved 事件）
+    if (win && !win.isDestroyed() && bounds.x !== targetX) {
+      win.setBounds({ ...bounds, x: targetX })
     }
 
     this.onInteractionChange()
     this.onStateChange()
   }
 
-  _animateTo(targetX) {
-    if (this._animating) return
-    this._animating = true
-
-    const win = this.window
-    const bounds = win.getBounds()
-    const startX = bounds.x
-    const startTime = Date.now()
-
-    const tick = () => {
-      if (!win || win.isDestroyed()) {
-        this._animating = false
-        return
-      }
-
-      const elapsed = Date.now() - startTime
-      const t = Math.min(elapsed / EDGE_ANIMATION_MS, 1)
-      const eased = 1 - Math.pow(1 - t, 3)
-      const x = Math.round(startX + (targetX - startX) * eased)
-
-      win.setBounds({ ...bounds, x })
-
-      if (t < 1) {
-        this._animFrame = setTimeout(tick, ANIMATION_FRAME_MS)
-      } else {
-        win.setBounds({ ...bounds, x: targetX })
-        this._animating = false
-        this._animFrame = null
-        this._visibleX = this.isDocked() ? targetX : this._visibleX
-        this.onInteractionChange()
-        this.onStateChange()
-      }
-    }
-
-    tick()
-  }
+  // ===== 恢复（窗口切换/关闭时用） =====
 
   restoreImmediate({ keepDock = false } = {}) {
-    this.clearHideTimer()
-
-    if (this._animFrame) {
-      clearTimeout(this._animFrame)
-      this._animFrame = null
-      this._animating = false
-    }
+    this._clearHideTimer()
 
     const win = this.window
-    if (this.isHidden() && this._visibleX != null && win && !win.isDestroyed()) {
+    if (!win || win.isDestroyed()) return
+
+    if (this.isHidden() && this._visibleX != null) {
       const bounds = win.getBounds()
       win.setBounds({ ...bounds, x: this._visibleX })
     }
@@ -253,63 +207,20 @@ export class EdgeDockController {
       this.state = EDGE_STATE.NORMAL
       this._visibleX = null
     } else if (this.isHidden()) {
-      this.state = this.state === EDGE_STATE.HIDDEN_LEFT
-        ? EDGE_STATE.DOCKED_LEFT
-        : EDGE_STATE.DOCKED_RIGHT
+      this.state = this.state === EDGE_STATE.HIDDEN_LEFT ? EDGE_STATE.DOCKED_LEFT : EDGE_STATE.DOCKED_RIGHT
     }
     this.onInteractionChange()
   }
 
-  startMouseWatcher() {
-    this.stopMouseWatcher()
-    this._pointerTimer = setInterval(() => this._checkMouse(), 50)
-  }
+  // ===== 清理 =====
 
-  stopMouseWatcher() {
-    if (this._pointerTimer) {
-      clearInterval(this._pointerTimer)
-      this._pointerTimer = null
-    }
-    this.clearHideTimer()
-  }
-
-  _checkMouse() {
-    const win = this.window
-    if (!win || win.isDestroyed() || !win.isVisible()) return
-
-    const cursor = screen.getCursorScreenPoint()
-    const area = this.getWorkArea()
-
-    if (this.isHidden() && !this._animating) {
-      const revealZone = EDGE_EXPOSED + 10
-      if (this.state === EDGE_STATE.HIDDEN_LEFT && cursor.x <= area.x + revealZone) {
-        this.show()
-        return
-      }
-      if (this.state === EDGE_STATE.HIDDEN_RIGHT && cursor.x >= area.x + area.width - revealZone) {
-        this.show()
-        return
-      }
-    }
-
-    if (this.autoHide && this.isDocked() && !this._animating && !this.isPinned && !this.isEditing) {
-      const bounds = win.getBounds()
-      const inside = cursor.x >= bounds.x && cursor.x <= bounds.x + bounds.width &&
-          cursor.y >= bounds.y && cursor.y <= bounds.y + bounds.height
-      if (inside) {
-        this._mouseVisitedSinceShow = true
-        this.clearHideTimer()
-      } else if (!this._hideTimer) {
-        this.scheduleHide()
-      }
-    }
+  getDockedX() {
+    if (!this.isDocked()) return null
+    return this._visibleX
   }
 
   destroy() {
     this.stopMouseWatcher()
-    if (this._snapTimer) {
-      clearTimeout(this._snapTimer)
-      this._snapTimer = null
-    }
+    clearTimeout(this._snapTimer)
   }
 }

@@ -104,7 +104,6 @@ export class WindowManager {
 
     this.window.on('closed', () => {
       this.edge.stopMouseWatcher()
-      this.edge.stopBoundsWatcher()
       this.window = null
     })
 
@@ -143,7 +142,6 @@ export class WindowManager {
     }
 
     this.edge.startMouseWatcher()
-    this.edge.startBoundsWatcher()
     this.applyWindowMode()
     this.applyInteractionState()
     return this.window
@@ -464,41 +462,32 @@ export class WindowManager {
 
     const bounds = this.window.getBounds()
     const edgeState = this.edge.state
+    const edgeManaged = this.edge.isDocked() || this.edge.isHidden()
+
+    // 边缘管理窗口：X 由 EdgeDockController 控制，这里只调整 Y/height
+    if (edgeManaged) {
+      const workArea = screen.getDisplayMatching(bounds).workArea
+      const height = Math.min(Math.max(bounds.height, NORMAL_WINDOW_HEIGHT), workArea.height - 24)
+      const y = Math.max(workArea.y + 12, Math.min(bounds.y, workArea.y + workArea.height - height - 12))
+      if (bounds.y !== y || bounds.height !== height) {
+        this.window.setBounds({ x: bounds.x, y, width: bounds.width, height })
+      }
+      return
+    }
+
+    // 非边缘管理窗口：完整约束
     const isOffscreenCoord = bounds.x < -10000 || bounds.y < -10000
     const workArea = isOffscreenCoord
       ? screen.getPrimaryDisplay().workArea
       : screen.getDisplayMatching(bounds).workArea
-    const width = Math.min(
-      Math.max(bounds.width, NORMAL_WINDOW_MIN_WIDTH),
-      workArea.width - 24
-    )
-    const height = Math.min(
-      Math.max(bounds.height, NORMAL_WINDOW_HEIGHT),
-      workArea.height - 24
-    )
-    const isEdgeManaged =
-      edgeState === EDGE_STATE.DOCKED_LEFT ||
-      edgeState === EDGE_STATE.DOCKED_RIGHT ||
-      edgeState === EDGE_STATE.HIDDEN_LEFT ||
-      edgeState === EDGE_STATE.HIDDEN_RIGHT
-    const offscreen =
-      isOffscreenCoord ||
-      (!isEdgeManaged && bounds.x + width < workArea.x + 24) ||
-      (!isEdgeManaged && bounds.x > workArea.x + workArea.width - 24) ||
-      bounds.y + height < workArea.y + 24 ||
-      bounds.y > workArea.y + workArea.height - 24
-    let x = offscreen
-      ? workArea.x + workArea.width - width - 20
-      : Math.max(workArea.x + 12, Math.min(bounds.x, workArea.x + workArea.width - width - 12))
-    if (!offscreen) {
-      if (edgeState === EDGE_STATE.DOCKED_LEFT) x = workArea.x
-      if (edgeState === EDGE_STATE.DOCKED_RIGHT) x = workArea.x + workArea.width - width
-      if (edgeState === EDGE_STATE.HIDDEN_LEFT) x = workArea.x - width + 6
-      if (edgeState === EDGE_STATE.HIDDEN_RIGHT) x = workArea.x + workArea.width - 6
-    }
-    const y = offscreen
+    const width = Math.min(Math.max(bounds.width, NORMAL_WINDOW_MIN_WIDTH), workArea.width - 24)
+    const height = Math.min(Math.max(bounds.height, NORMAL_WINDOW_HEIGHT), workArea.height - 24)
+    const y = isOffscreenCoord
       ? workArea.y + 20
       : Math.max(workArea.y + 12, Math.min(bounds.y, workArea.y + workArea.height - height - 12))
+    const x = isOffscreenCoord
+      ? workArea.x + workArea.width - width - 20
+      : Math.max(workArea.x + 12, Math.min(bounds.x, workArea.x + workArea.width - width - 12))
 
     this.window.setBounds({ x, y, width, height })
   }
