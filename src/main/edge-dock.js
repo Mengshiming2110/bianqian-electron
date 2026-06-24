@@ -84,7 +84,7 @@ export class EdgeDockController {
   checkSnap() {
     const win = this.window
     if (!win || win.isDestroyed() || this._animating) return
-    if (this.isPinned) return
+    if (this.isPinned || this.isHidden()) return
 
     const bounds = win.getBounds()
     const area = this.getWorkArea()
@@ -98,6 +98,7 @@ export class EdgeDockController {
     } else {
       this.state = EDGE_STATE.NORMAL
       this._visibleX = null
+      this.stopBoundsWatcher()
       this.onStateChange()
     }
   }
@@ -107,9 +108,12 @@ export class EdgeDockController {
     if (!win || win.isDestroyed()) return
     const bounds = win.getBounds()
     const area = this.getWorkArea()
-    win.setBounds({ ...bounds, x: area.x })
+    const targetX = area.x
+    if (bounds.x === targetX && this.state === EDGE_STATE.DOCKED_LEFT) return
+    win.setBounds({ ...bounds, x: targetX })
     this.state = EDGE_STATE.DOCKED_LEFT
-    this._visibleX = area.x
+    this._visibleX = targetX
+    this.stopBoundsWatcher()
     this.onStateChange()
   }
 
@@ -118,9 +122,12 @@ export class EdgeDockController {
     if (!win || win.isDestroyed()) return
     const bounds = win.getBounds()
     const area = this.getWorkArea()
-    win.setBounds({ ...bounds, x: area.x + area.width - bounds.width })
+    const targetX = area.x + area.width - bounds.width
+    if (bounds.x === targetX && this.state === EDGE_STATE.DOCKED_RIGHT) return
+    win.setBounds({ ...bounds, x: targetX })
     this.state = EDGE_STATE.DOCKED_RIGHT
-    this._visibleX = area.x + area.width - bounds.width
+    this._visibleX = targetX
+    this.stopBoundsWatcher()
     this.onStateChange()
   }
 
