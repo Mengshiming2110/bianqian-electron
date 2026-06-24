@@ -145,6 +145,22 @@ export class EdgeDockController {
     if (this._hideTimer) { clearTimeout(this._hideTimer); this._hideTimer = null }
   }
 
+  onMouseEnter() {
+    this._mouseInside = true
+    this._clearHideTimer()
+  }
+
+  onMouseLeave() {
+    if (!this.autoHide || !this.isDocked() || this.isPinned || this.isEditing) return
+    this._mouseInside = false
+    this._scheduleHide()
+  }
+
+  // Public alias for window-manager
+  clearHideTimer() {
+    this._clearHideTimer()
+  }
+
   // ===== show/hide (入口：托盘点击 / 快捷键) =====
 
   hide() {
