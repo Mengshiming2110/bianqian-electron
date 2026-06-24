@@ -345,6 +345,10 @@ export function registerIpc(windowManager, trayController) {
     return stopRecord(windowManager)
   })
 
+  ipcMain.handle('shortcut-editor:open', () => {
+    if (windowManager) windowManager.openShortcutEditor()
+  })
+
   ipcMain.handle('settings:get', () => {
     try { return getSettings() }
     catch (err) { console.error('[ipc] settings:get 失败:', err.message); return {} }

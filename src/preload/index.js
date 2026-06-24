@@ -110,6 +110,7 @@ contextBridge.exposeInMainWorld('api', {
     reset: () => ipcRenderer.invoke('shortcuts:reset'),
     startRecord: () => ipcRenderer.invoke('shortcuts:start-record'),
     stopRecord: () => ipcRenderer.invoke('shortcuts:stop-record'),
+    openEditor: () => ipcRenderer.invoke('shortcut-editor:open'),
     onKeydown: (callback) => on('shortcut-editor:keydown', callback)
   },
   notify: {

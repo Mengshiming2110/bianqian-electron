@@ -84,6 +84,12 @@
           </div>
         </div>
 
+        <button class="settings-menu-row" type="button" @click="openShortcutEditor">
+          <span>快捷键设置</span>
+          <small>F3 / Esc / Ctrl+Shift+P ...</small>
+          <ChevronRight :size="15" />
+        </button>
+
         <!-- 版本号 -->
         <div style="text-align:center;color:var(--text-tertiary);font-size:10px;margin-top:12px;padding-top:10px;border-top:1px solid var(--border)">
           v1.0.0
@@ -315,6 +321,10 @@ function onKeydown(e) {
       close()
     }
   }
+}
+
+function openShortcutEditor() {
+  window.api?.shortcuts?.openEditor()
 }
 
 function close() {
