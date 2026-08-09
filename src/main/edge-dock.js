@@ -118,19 +118,8 @@ export class EdgeDockController {
       return
     }
 
-    // 停靠状态 + 自动隐藏：检测鼠标进出
+    // 停靠状态 + 自动隐藏：鼠标进出由 onMouseEnter/onMouseLeave 事件处理（单一数据源）
     if (!this.autoHide || !this.isDocked()) return
-
-    const inside = cursor.x >= bounds.x && cursor.x <= bounds.x + bounds.width &&
-                   cursor.y >= bounds.y && cursor.y <= bounds.y + bounds.height
-
-    if (inside && !this._mouseInside) {
-      this._mouseInside = true
-      this._clearHideTimer()
-    } else if (!inside && this._mouseInside) {
-      this._mouseInside = false
-      this._scheduleHide()
-    }
   }
 
   _scheduleHide() {
@@ -214,9 +203,13 @@ export class EdgeDockController {
     const win = this.window
     if (!win || win.isDestroyed()) return
 
-    if (this.isHidden() && this._visibleX != null) {
+    if (this.isHidden()) {
       const bounds = win.getBounds()
-      win.setBounds({ ...bounds, x: this._visibleX })
+      const area = this.getWorkArea()
+      // 恢复时使用 DOCKED 位置，而非隐藏时记录的离屏 _visibleX
+      const dockedState = this.state === EDGE_STATE.HIDDEN_LEFT ? EDGE_STATE.DOCKED_LEFT : EDGE_STATE.DOCKED_RIGHT
+      const targetX = this._xForState(dockedState, bounds, area)
+      win.setBounds({ ...bounds, x: targetX })
     }
 
     if (!keepDock) {

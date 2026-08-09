@@ -1,6 +1,6 @@
 import { Menu, Tray, app, nativeImage } from 'electron'
 import { join } from 'node:path'
-import { ALL_CATEGORY, CATEGORIES } from './categories.js'
+import { CATEGORIES } from './categories.js'
 
 const APP_NAME = '领益工作助手'
 
@@ -76,7 +76,7 @@ export class TrayController {
       { type: 'separator' },
       {
         label: '分类筛选',
-        submenu: CATEGORIES.filter((category) => category !== ALL_CATEGORY).map((category) => ({
+        submenu: CATEGORIES.map((category) => ({
           label: category,
           click: () => {
             const win = getWin()
@@ -131,7 +131,8 @@ export class TrayController {
       },
       {
         label: '退出',
-        click: () => { app.exit(0) }
+        // 用 app.quit() 而非 app.exit()：退出前必须触发 before-quit 持久化数据库、停止 MailService
+        click: () => { app.quit() }
       }
     ]
 

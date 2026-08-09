@@ -11,3 +11,6 @@ docs/superpowers/
 test-*.cjs
 test-*.mjs
 electron-main-wrapper.cjs
+
+__pycache__/
+.zcode/

@@ -15,7 +15,7 @@
       >
         <div class="popover-header">
           <span>附件 ({{ attachments.length }})</span>
-          <button class="popover-close" type="button" @click="closePanel">&#10005;</button>
+          <button class="popover-close" type="button" aria-label="关闭" @click="closePanel"><X :size="11" /></button>
         </div>
 
         <div class="popover-files">
@@ -24,14 +24,14 @@
             :key="`${file}-${index}`"
             class="popover-file-row"
           >
-            <span class="file-emoji">📄</span>
+            <FileText :size="13" class="file-icon" />
             <span class="file-name" :title="file" @click="$emit('open', file)">{{ fileName(file) }}</span>
-            <button class="file-remove" type="button" @click="$emit('remove', file)">&#10005;</button>
+            <button class="file-remove" type="button" :aria-label="`移除 ${fileName(file)}`" @click="$emit('remove', file)"><X :size="10" /></button>
           </div>
         </div>
 
         <div class="popover-footer">
-          <button class="popover-add-btn" type="button" @click="pickFiles">+ 添加附件</button>
+          <button class="popover-add-btn" type="button" @click="pickFiles"><Plus :size="12" /> 添加附件</button>
         </div>
       </div>
     </div>
@@ -40,6 +40,7 @@
 
 <script setup>
 import { ref, watch, onMounted, onUnmounted, nextTick } from 'vue'
+import { FileText, Plus, X } from 'lucide-vue-next'
 
 const props = defineProps({
   attachments: { type: Array, default: () => [] },
@@ -180,6 +181,7 @@ function fileName(path) {
 }
 
 function closePanel() {
+  if (closeTimer) clearTimeout(closeTimer)
   isClosing.value = true
   closeTimer = setTimeout(() => {
     isClosing.value = false
@@ -230,7 +232,7 @@ async function onDrop(e) {
   background: var(--bg-elevated);
   border: 1px solid var(--border);
   border-radius: 10px;
-  box-shadow: var(--shadow);
+  box-shadow: var(--shadow-pop);
   overflow: hidden;
   display: flex;
   flex-direction: column;
@@ -265,13 +267,22 @@ async function onDrop(e) {
 }
 
 .popover-close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
   color: var(--text-muted);
-  background: none;
+  background: transparent;
   border: 0;
+  border-radius: 5px;
   cursor: pointer;
-  font-size: 11px;
-  line-height: 1;
   padding: 0;
+}
+
+.popover-close:hover {
+  color: var(--text);
+  background: var(--accent-soft);
 }
 
 .popover-files {
@@ -287,12 +298,15 @@ async function onDrop(e) {
   padding: 4px 5px;
   border-radius: 4px;
   font-size: 11px;
-  gap: 5px;
+  gap: 6px;
 }
 
 .popover-file-row:hover { background: var(--accent-soft); }
 
-.file-emoji { font-size: 12px; flex-shrink: 0; }
+.file-icon {
+  flex-shrink: 0;
+  color: var(--text-muted);
+}
 
 .file-name {
   flex: 1;
@@ -307,17 +321,21 @@ async function onDrop(e) {
 .file-name:hover { color: var(--accent); }
 
 .file-remove {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
   color: var(--text-muted);
   background: none;
   border: 0;
+  border-radius: 4px;
   cursor: pointer;
-  font-size: 10px;
   flex-shrink: 0;
   padding: 0;
-  line-height: 1;
 }
 
-.file-remove:hover { color: var(--danger); }
+.file-remove:hover { color: var(--danger); background: var(--accent-soft); }
 
 .popover-footer {
   border-top: 1px solid var(--border);
@@ -325,10 +343,14 @@ async function onDrop(e) {
 }
 
 .popover-add-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
   width: 100%;
   border: 0;
   border-radius: 5px;
-  padding: 5px;
+  padding: 6px;
   background: var(--accent-soft);
   color: var(--accent);
   font-size: 11px;
@@ -336,5 +358,8 @@ async function onDrop(e) {
   font-weight: 600;
 }
 
-.popover-add-btn:hover { filter: brightness(0.92); }
+.popover-add-btn:hover {
+  background: var(--accent);
+  color: #fff;
+}
 </style>

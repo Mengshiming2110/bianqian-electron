@@ -26,7 +26,6 @@ export async function initDatabase() {
     db = new SQL.Database()
   }
 
-  db.run('PRAGMA journal_mode = WAL')
   db.run('PRAGMA synchronous = NORMAL')
 
   db.run(`CREATE TABLE IF NOT EXISTS clipboard_items (id TEXT PRIMARY KEY, type TEXT NOT NULL DEFAULT 'text', content TEXT, preview TEXT, source_app TEXT DEFAULT '', hash TEXT NOT NULL, pinned INTEGER DEFAULT 0, copy_count INTEGER DEFAULT 1, created_at TEXT NOT NULL, last_copied_at TEXT NOT NULL)`)
@@ -57,18 +56,19 @@ function persist() {
   writeFileSync(dbPath, Buffer.from(data))
 }
 
-export function getDatabase() { return db }
-
 export function queryAll(sql, params = []) {
   if (!db) return []
+  let stmt
   try {
-    const stmt = db.prepare(sql)
+    stmt = db.prepare(sql)
     if (params.length) stmt.bind(params)
     const rows = []
     while (stmt.step()) rows.push(stmt.getAsObject())
-    stmt.free()
     return rows
   } catch (err) { console.error('[db] queryAll:', err.message); return [] }
+  finally {
+    if (stmt) stmt.free()
+  }
 }
 
 export function queryOne(sql, params = []) {

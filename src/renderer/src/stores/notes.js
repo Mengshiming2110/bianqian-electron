@@ -1,13 +1,15 @@
 import { defineStore } from 'pinia'
+import { reactive } from 'vue'
 
 const api = window.api
 const localStorageKey = 'bianqian-notes'
 const MAX_ATTACHMENTS_PER_NOTE = 10
+const REMINDER_HISTORY_LIMIT = 100
 
-let CATEGORIES = ['工作', '生活', '学习', '会议', '其他']
+export const CATEGORIES = reactive(['工作', '生活', '学习', '会议', '其他'])
 let ALL_CATEGORY = '全部'
 
-export { CATEGORIES, ALL_CATEGORY, MAX_ATTACHMENTS_PER_NOTE }
+export { ALL_CATEGORY, MAX_ATTACHMENTS_PER_NOTE }
 
 export async function loadCategories() {
   if (!api?.categories) return
@@ -16,8 +18,15 @@ export async function loadCategories() {
     if (result?.categories?.length) {
       CATEGORIES.splice(0, CATEGORIES.length, ...result.categories)
     }
-    if (result?.allCategory) {
+    if (result?.allCategory && result.allCategory !== ALL_CATEGORY) {
+      const oldAll = ALL_CATEGORY
       ALL_CATEGORY = result.allCategory
+      try {
+        const store = useNotesStore()
+        if (store.activeCategory === oldAll) {
+          store.activeCategory = ALL_CATEGORY
+        }
+      } catch {}
     }
   } catch {}
 }
@@ -98,7 +107,12 @@ export const useNotesStore = defineStore('notes', {
   },
   actions: {
     async load() {
-      this.notes = api ? await api.notes.list() : fallbackLoad()
+      try {
+        this.notes = api ? (await api.notes.list()).map(normalizeNote) : fallbackLoad()
+      } catch (err) {
+        console.error('[notes] load failed:', err?.message || err)
+        this.notes = fallbackLoad()
+      }
       this.syncTrayCounts()
     },
     setFilter(category) {
@@ -109,14 +123,26 @@ export const useNotesStore = defineStore('notes', {
     },
     async create(note) {
       const payload = normalizeNote(note)
-      const saved = api ? await api.notes.create(payload) : { ...payload, id: Date.now().toString() }
+      let saved
+      try {
+        saved = api ? await api.notes.create(payload) : { ...payload, id: Date.now().toString() }
+      } catch (err) {
+        console.error('[notes] create failed:', err?.message || err)
+        throw err
+      }
       this.notes.unshift(normalizeNote(saved))
       this.persistFallback()
       this.syncTrayCounts()
       return saved
     },
     async update(id, patch) {
-      const updated = api ? await api.notes.update(id, patch) : normalizeNote({ ...this.notes.find((note) => note.id === id), ...patch })
+      let updated
+      try {
+        updated = api ? await api.notes.update(id, patch) : normalizeNote({ ...this.notes.find((note) => note.id === id), ...patch })
+      } catch (err) {
+        console.error('[notes] update failed:', err?.message || err)
+        throw err
+      }
       const index = this.notes.findIndex((note) => note.id === String(id))
 
       if (index !== -1) {
@@ -128,8 +154,13 @@ export const useNotesStore = defineStore('notes', {
       return updated
     },
     async delete(id) {
-      if (api) {
-        await api.notes.delete(id)
+      try {
+        if (api) {
+          await api.notes.delete(id)
+        }
+      } catch (err) {
+        console.error('[notes] delete failed:', err?.message || err)
+        throw err
       }
 
       this.notes = this.notes.filter((note) => note.id !== String(id))
@@ -137,12 +168,18 @@ export const useNotesStore = defineStore('notes', {
       this.syncTrayCounts()
     },
     async toggleCompleted(id) {
-      const updated = api
-        ? await api.notes.toggle(id)
-        : normalizeNote({
-            ...this.notes.find((note) => note.id === id),
-            completed: !this.notes.find((note) => note.id === id)?.completed
-          })
+      let updated
+      try {
+        updated = api
+          ? await api.notes.toggle(id)
+          : normalizeNote({
+              ...this.notes.find((note) => note.id === id),
+              completed: !this.notes.find((note) => note.id === id)?.completed
+            })
+      } catch (err) {
+        console.error('[notes] toggleCompleted failed:', err?.message || err)
+        throw err
+      }
 
       const index = this.notes.findIndex((note) => note.id === String(id))
 
@@ -180,8 +217,12 @@ export const useNotesStore = defineStore('notes', {
       }
 
       if (api) {
-        for (const u of updates) {
-          await api.notes.update(u.id, { order: u.order })
+        try {
+          for (const u of updates) {
+            await api.notes.update(u.id, { order: u.order })
+          }
+        } catch (err) {
+          console.error('[notes] reorderNote sync failed:', err?.message || err)
         }
       }
       this.persistFallback()
@@ -205,9 +246,6 @@ export const useNotesStore = defineStore('notes', {
         await api.files.openPath(path)
       }
     },
-    async requestNotificationPermission() {
-      // Electron 主进程 Notification 不需要浏览器权限
-    },
     checkReminders() {
       const now = Date.now()
 
@@ -220,6 +258,10 @@ export const useNotesStore = defineStore('notes', {
 
           if (diff <= 0 && !this.reminderHistory.has(key)) {
             this.reminderHistory.add(key)
+            if (this.reminderHistory.size > REMINDER_HISTORY_LIMIT) {
+              const oldest = this.reminderHistory.values().next().value
+              if (oldest !== undefined) this.reminderHistory.delete(oldest)
+            }
             const body = note.content || `${note.category} · ${note.time}`
             if (api) {
               api.notify.trigger({ title: note.title, body, noteId: note.id })

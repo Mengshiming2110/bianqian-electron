@@ -229,9 +229,14 @@ function normalizeMailConfig(config) {
 }
 
 export function updateSettings(patch = {}) {
+  const current = getSettings()
   const nextSettings = {
-    ...getSettings(),
+    ...current,
     ...patch
+  }
+
+  if (patch.mailConfig && current.mailConfig) {
+    nextSettings.mailConfig = { ...current.mailConfig, ...patch.mailConfig }
   }
 
   nextSettings.opacity = clampOpacity(nextSettings.opacity)
@@ -245,14 +250,17 @@ export function getShortcuts() {
 
 export function setShortcut(id, binding) {
   const shortcuts = { ...getShortcuts() }
+  const conflicts = []
+  const nextBinding = typeof binding === 'string' ? binding.trim() : ''
   for (const [key, value] of Object.entries(shortcuts)) {
-    if (value === binding && key !== id) {
+    if (nextBinding && value === nextBinding && key !== id) {
       shortcuts[key] = ''
+      conflicts.push(key)
     }
   }
-  shortcuts[id] = binding
+  shortcuts[id] = nextBinding
   updateSettings({ shortcuts })
-  return getShortcuts()
+  return { shortcuts: getShortcuts(), conflicts }
 }
 
 export function resetShortcuts() {

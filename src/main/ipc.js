@@ -16,7 +16,6 @@ import {
   updateSettings
 } from './store.js'
 import {
-  reregisterShortcut,
   registerAllShortcuts,
   startRecord,
   stopRecord,
@@ -24,6 +23,7 @@ import {
 } from './shortcuts.js'
 import { ALL_CATEGORY, CATEGORIES } from './categories.js'
 import { sendNotification } from './notify.js'
+import { setClipboardLimit } from './clipboard-monitor.js'
 
 const ATTACHMENTS_DIR = () => join(app.getPath('userData'), 'attachments')
 const MAX_ATTACHMENTS_PER_NOTE = 10
@@ -140,25 +140,20 @@ export function registerIpc(windowManager, trayController) {
   ipcMain.handle('notes:save-all', (_event, notes) => withLock(() => saveNotes(notes)))
 
   ipcMain.handle('dialog:select-attachments', async (event, limit) => {
-    console.log('[attachments] select requested', { limit })
     const parent = BrowserWindow.fromWebContents(event.sender)
     const result = await dialog.showOpenDialog(parent, {
       title: '选择附件',
       properties: ['openFile', 'multiSelections']
     })
 
-    console.log('[attachments] select result', { canceled: result.canceled, count: result.filePaths.length })
     if (result.canceled || !result.filePaths.length) return []
 
     const copied = copyAttachments(result.filePaths, limit)
-    console.log('[attachments] select copied', { count: copied.length })
     return copied
   })
 
   ipcMain.handle('files:import-attachments', (_event, paths, limit) => {
-    console.log('[attachments] import requested', { count: Array.isArray(paths) ? paths.length : 0, limit })
     const copied = copyAttachments(paths, limit)
-    console.log('[attachments] import copied', { count: copied.length })
     return copied
   })
 
@@ -171,13 +166,13 @@ export function registerIpc(windowManager, trayController) {
     return MAX_ATTACHMENTS_PER_NOTE
   })
 
-  ipcMain.handle('shell:open-path', (_event, path) => {
+  ipcMain.handle('shell:open-path', async (_event, path) => {
     if (!path || !isAttachmentPath(path)) {
       return false
     }
 
-    shell.openPath(path)
-    return true
+    const err = await shell.openPath(path)
+    return !err
   })
 
   ipcMain.handle('window:hide', () => windowManager.hide())
@@ -217,7 +212,8 @@ export function registerIpc(windowManager, trayController) {
   ipcMain.on('window:resize-to-content', (_event, height) => windowManager.resizeToContent(height))
 
   ipcMain.handle('note-window:open', (_event, noteId, noteData) => {
-    return windowManager.openNoteWindow(noteId, noteData)
+    windowManager.openNoteWindow(noteId, noteData)
+    return true
   })
   ipcMain.handle('note-window:close', (_event, noteId) => {
     windowManager.closeNoteWindow(noteId)
@@ -227,6 +223,7 @@ export function registerIpc(windowManager, trayController) {
   })
 
   ipcMain.handle('context-menu:show', (event, noteData) => {
+    if (!noteData || !noteData.id) return
     const win = BrowserWindow.fromWebContents(event.sender)
     if (!win) return
 
@@ -304,27 +301,33 @@ export function registerIpc(windowManager, trayController) {
   ipcMain.handle('shortcuts:list', () => getShortcuts())
 
   ipcMain.handle('shortcuts:update', (_event, id, binding) => {
-    const validation = validateShortcutUpdate(id, binding)
-    if (!validation.ok) {
-      return { ok: false, error: validation.error, shortcuts: getShortcuts() }
-    }
-
-    const previousShortcuts = getShortcuts()
-    const result = setShortcut(id, binding)
-    const registration = reregisterShortcut(id, binding, windowManager)
-    if (!registration?.ok) {
-      const failure = registration?.failures?.[0]
-      updateSettings({ shortcuts: previousShortcuts })
-      registerAllShortcuts(windowManager)
-      return {
-        ok: false,
-        error: failure?.reason === 'invalid-accelerator'
-          ? '快捷键格式无效'
-          : '快捷键注册失败，可能已被系统或其他应用占用',
-        shortcuts: previousShortcuts
+    try {
+      const validation = validateShortcutUpdate(id, binding)
+      if (!validation.ok) {
+        return { ok: false, error: validation.error, shortcuts: getShortcuts(), conflicts: [] }
       }
+
+      const previousShortcuts = getShortcuts()
+      const result = setShortcut(id, binding)
+      const registration = registerAllShortcuts(windowManager)
+      if (!registration?.ok) {
+        const failure = registration?.failures?.[0]
+        updateSettings({ shortcuts: previousShortcuts })
+        registerAllShortcuts(windowManager)
+        return {
+          ok: false,
+          error: failure?.reason === 'invalid-accelerator'
+            ? '快捷键格式无效'
+            : '快捷键注册失败，可能已被系统或其他应用占用',
+          shortcuts: previousShortcuts,
+          conflicts: []
+        }
+      }
+      return { ok: true, shortcuts: result.shortcuts, conflicts: result.conflicts }
+    } catch (err) {
+      console.error('[ipc] shortcuts:update 失败:', err?.message || err)
+      return { ok: false, error: '快捷键更新失败', shortcuts: getShortcuts(), conflicts: [] }
     }
-    return { ok: true, shortcuts: result }
   })
 
   ipcMain.handle('shortcuts:reset', () => {
@@ -338,15 +341,11 @@ export function registerIpc(windowManager, trayController) {
   })
 
   ipcMain.handle('shortcuts:start-record', () => {
-    return startRecord(windowManager)
+    return startRecord()
   })
 
   ipcMain.handle('shortcuts:stop-record', () => {
     return stopRecord(windowManager)
-  })
-
-  ipcMain.handle('shortcut-editor:open', () => {
-    if (windowManager) windowManager.openShortcutEditor()
   })
 
   ipcMain.handle('settings:get', () => {
@@ -359,6 +358,9 @@ export function registerIpc(windowManager, trayController) {
       const settings = updateSettings(s)
       if (Object.prototype.hasOwnProperty.call(s || {}, 'autoStart')) {
         applyAutoStart(settings.autoStart)
+      }
+      if (Object.prototype.hasOwnProperty.call(s || {}, 'clipboardLimit')) {
+        setClipboardLimit(settings.clipboardLimit ?? 50)
       }
       return true
     } catch (err) {

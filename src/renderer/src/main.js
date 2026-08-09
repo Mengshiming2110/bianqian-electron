@@ -5,15 +5,13 @@ import Root from './Root.vue'
 import App from './App.vue'
 import NotePopout from './components/NotePopout.vue'
 import SettingsWindow from './components/SettingsWindow.vue'
-import ShortcutEditor from './components/ShortcutEditor.vue'
 import './assets/styles/variables.css'
 import './assets/styles/global.css'
 
 const routes = [
   { path: '/', component: App },
   { path: '/note/:id', component: NotePopout, props: route => ({ noteId: route.params.id }) },
-  { path: '/settings', component: SettingsWindow },
-  { path: '/shortcut-editor', component: ShortcutEditor }
+  { path: '/settings', component: SettingsWindow }
 ]
 
 const router = createRouter({

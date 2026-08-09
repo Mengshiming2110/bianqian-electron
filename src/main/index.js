@@ -36,7 +36,7 @@ if (!gotLock) {
 
     // 加载设置，应用剪切板上限
     const settings = getSettings()
-    setClipboardLimit(settings.clipboardLimit || 50)
+    setClipboardLimit(settings.clipboardLimit ?? 50)
     try {
       app.setLoginItemSettings({
         openAtLogin: Boolean(settings.autoStart),
@@ -70,15 +70,6 @@ if (!gotLock) {
       }
     }
 
-    // 最小化时隐藏到托盘
-    const win = windowManager.getWindow()
-    if (win && !win.isDestroyed()) {
-      win.on('minimize', (e) => {
-        e.preventDefault()
-        win.hide()
-      })
-    }
-
     trayController.create()
     registerAllShortcuts(windowManager)
 
@@ -95,18 +86,20 @@ if (!gotLock) {
 
   app.on('before-quit', () => {
     app.isQuitting = true
-    unregisterAllShortcuts()
-    stopClipboardMonitor()
-    stopMailBridge()
-    closeDatabase()
+    try { unregisterAllShortcuts() } catch (err) { console.error('[quit] unregisterAllShortcuts:', err?.message || err) }
+    try { stopClipboardMonitor() } catch (err) { console.error('[quit] stopClipboardMonitor:', err?.message || err) }
+    try { stopMailBridge() } catch (err) { console.error('[quit] stopMailBridge:', err?.message || err) }
+    try { closeDatabase() } catch (err) { console.error('[quit] closeDatabase:', err?.message || err) }
 
     // 保存窗口位置
-    const win = windowManager?.getWindow()
-    if (win && !win.isDestroyed()) {
-      const bounds = win.getBounds()
-      updateSettings({ ...getSettings(), windowBounds: bounds })
-    }
-    trayController?.destroy()
+    try {
+      const win = windowManager?.getWindow()
+      if (win && !win.isDestroyed()) {
+        const bounds = win.getBounds()
+        updateSettings({ ...getSettings(), windowBounds: bounds })
+      }
+    } catch (err) { console.error('[quit] save window bounds:', err?.message || err) }
+    try { trayController?.destroy() } catch (err) { console.error('[quit] tray destroy:', err?.message || err) }
   })
 
   app.on('window-all-closed', () => {

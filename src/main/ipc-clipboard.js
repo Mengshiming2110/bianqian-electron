@@ -5,13 +5,15 @@ import { writeToClipboard } from './clipboard-monitor'
 export function setupClipboardHandlers() {
   ipcMain.handle('clipboard:list', (_, limit = 50, offset = 0) => {
     try {
-      return queryAll('SELECT * FROM clipboard_items ORDER BY pinned DESC, last_copied_at DESC LIMIT ? OFFSET ?', [limit, offset])
+      const lim = Number.isFinite(Number(limit)) ? Number(limit) : 50
+      const off = Number.isFinite(Number(offset)) ? Number(offset) : 0
+      return queryAll('SELECT * FROM clipboard_items ORDER BY pinned DESC, last_copied_at DESC LIMIT ? OFFSET ?', [lim, off])
     } catch (err) { console.error('[ipc] clipboard:list 失败:', err.message); return [] }
   })
 
   ipcMain.handle('clipboard:search', (_, query) => {
     try {
-      const q = `%${query}%`
+      const q = `%${query == null ? '' : query}%`
       return queryAll('SELECT * FROM clipboard_items WHERE content LIKE ? OR preview LIKE ? ORDER BY pinned DESC, last_copied_at DESC LIMIT 100', [q, q])
     } catch (err) { console.error('[ipc] clipboard:search 失败:', err.message); return [] }
   })

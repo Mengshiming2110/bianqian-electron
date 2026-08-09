@@ -5,7 +5,6 @@ import { ALL_CATEGORY, CATEGORIES } from './categories.js'
 let registeredBindings = {}
 let beforeInputWindowId = null
 let cachedShortcuts = null
-let isRecording = false
 
 const GLOBAL_SHORTCUT_IDS = new Set(['toggle-window', 'toggle-passthrough'])
 
@@ -33,7 +32,7 @@ export function registerAllShortcuts(windowManager) {
   if (window) {
     if (beforeInputWindowId !== null && beforeInputWindowId !== window.id) {
       const oldWindow = BrowserWindow?.fromId?.(beforeInputWindowId)
-      if (oldWindow && !oldWindow.isDestroyed()) {
+      if (oldWindow && !oldWindow.isDestroyed() && !oldWindow.webContents.isDestroyed()) {
         oldWindow.webContents.removeListener('before-input-event', handleBeforeInput)
       }
     }
@@ -84,9 +83,6 @@ function registerBinding(id, accelerator, callback, failures = []) {
   if (!accelerator) return true
   try {
     const ok = globalShortcut.register(accelerator, callback)
-    if (!ok && !isRecording) {
-      console.error('[shortcuts] registration failed:', accelerator)
-    }
     if (!ok) {
       failures.push({ id, binding: accelerator, reason: 'registration-failed' })
     }
@@ -96,16 +92,16 @@ function registerBinding(id, accelerator, callback, failures = []) {
   return false
 }
 
-export function reregisterShortcut(id, newBinding, windowManager) {
-  loadShortcuts()
-  globalShortcut.unregisterAll()
-  const wm = windowManager || registeredBindings._wm
-  return registerAllShortcuts(wm)
-}
-
 export function validateShortcutUpdate(id, binding) {
-  if (!binding || typeof binding !== 'string') {
-    return { ok: false, error: '快捷键不能为空' }
+  if (binding === null || binding === undefined) {
+    return { ok: false, error: '快捷键参数无效' }
+  }
+
+  const trimmed = typeof binding === 'string' ? binding.trim() : ''
+
+  // 允许清空快捷键
+  if (trimmed === '') {
+    return { ok: true }
   }
 
   if (!GLOBAL_SHORTCUT_IDS.has(id)) {
@@ -113,9 +109,9 @@ export function validateShortcutUpdate(id, binding) {
   }
 
   try {
-    const ok = globalShortcut.register(binding, () => {})
+    const ok = globalShortcut.register(trimmed, () => {})
     if (ok) {
-      globalShortcut.unregister(binding)
+      globalShortcut.unregister(trimmed)
       return { ok: true }
     }
 
@@ -127,21 +123,21 @@ export function validateShortcutUpdate(id, binding) {
 
 export function unregisterAllShortcuts() {
   globalShortcut.unregisterAll()
+  if (registeredBindings._wm && !registeredBindings._wm.isDestroyed()) {
+    try {
+      registeredBindings._wm.webContents.removeListener('before-input-event', handleBeforeInput)
+    } catch {}
+  }
   registeredBindings = {}
   cachedShortcuts = null
   beforeInputWindowId = null
 }
 
-export function startRecord(windowManager) {
-  isRecording = true
+export function startRecord() {
   globalShortcut.unregisterAll()
   return true
 }
 
 export function stopRecord(windowManager) {
-  try {
-    return registerAllShortcuts(windowManager)
-  } finally {
-    isRecording = false
-  }
+  return registerAllShortcuts(windowManager)
 }

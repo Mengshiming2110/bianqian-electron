@@ -11,5 +11,6 @@ export function sendNotification({ title, body, noteId, silent }, onActivate) {
     if (onActivate) onActivate(noteId)
   })
 
+  n.show()
   return n
 }

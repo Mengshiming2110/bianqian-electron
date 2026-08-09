@@ -17,7 +17,9 @@ from urllib.parse import parse_qs, unquote, urlparse
 
 ACCOUNT = None
 ACCOUNT_LOCK = threading.Lock()
+ACCOUNT_CREATED_AT = None
 LAST_ERROR = ''
+LAST_OK_AT = None
 MAIL_INDEX = {}
 SERVER = None
 MAIL_ENV_KEYS = {'MAIL_SMTP', 'MAIL_DOMAIN_USER', 'MAIL_PASS', 'MAIL_DOMAIN', 'MAIL_SERVER'}
@@ -25,6 +27,11 @@ SKILL_ALIASES = ('ly_outlook_mail', '领益Outlook邮件', '领益 Outlook 邮�
 DEFAULT_DOMAIN = 'LSTECH'
 DEFAULT_SERVER = 'mail.lingyiitech.com'
 DEFAULT_EWS_PORT = 443
+
+# 网络抖动自愈参数
+EWS_TIMEOUT_SECONDS = 20        # 单次 EWS 请求超时
+EWS_RETRY_MAX_WAIT = 180        # FaultTolerance 策略最长重试窗口（秒）
+RECONNECT_COOLDOWN_SECONDS = 10  # 连接失效后重建账号的冷却期，避免断网时高频重连
 
 
 def _json(handler, status, payload):
@@ -148,18 +155,98 @@ def _apply_openclaw_env():
 
 
 def _reset_account():
-    global ACCOUNT, LAST_ERROR, MAIL_INDEX
+    global ACCOUNT, LAST_ERROR, MAIL_INDEX, ACCOUNT_CREATED_AT, LAST_OK_AT
     with ACCOUNT_LOCK:
         ACCOUNT = None
+        ACCOUNT_CREATED_AT = None
         LAST_ERROR = ''
+        LAST_OK_AT = None
         MAIL_INDEX = {}
 
 
-def _account():
+def _invalidate_account(reason):
+    """作废缓存账号：网络瞬时故障后丢弃死连接，让下一次请求用全新账号重连。"""
     global ACCOUNT, LAST_ERROR
     with ACCOUNT_LOCK:
         if ACCOUNT is not None:
+            ACCOUNT = None
+        if reason:
+            LAST_ERROR = f'连接已断开，等待自动重连: {reason}'
+
+
+def _mark_ok():
+    global LAST_ERROR, LAST_OK_AT
+    LAST_ERROR = ''
+    LAST_OK_AT = datetime.now(timezone.utc).isoformat()
+
+
+_TRANSIENT_ERROR_TYPES = None
+_NON_TRANSIENT_ERROR_TYPES = None
+
+
+def _is_transient(exc):
+    """判断是否为瞬时网络/服务错误（可重连重试），认证类错误不算。
+
+    懒加载 exchangelib 错误类型：exchangelib 缺失时（/doctor 场景）退化为消息关键字判断。
+    """
+    global _TRANSIENT_ERROR_TYPES, _NON_TRANSIENT_ERROR_TYPES
+    if _TRANSIENT_ERROR_TYPES is None:
+        try:
+            from exchangelib.errors import (
+                ErrorServerBusy,
+                ErrorInternalServerTransientError,
+                RateLimitError,
+                RedirectError,
+                TransportError,
+                UnauthorizedError,
+            )
+            _TRANSIENT_ERROR_TYPES = (
+                ErrorServerBusy, ErrorInternalServerTransientError,
+                RateLimitError, RedirectError, TransportError,
+            )
+            _NON_TRANSIENT_ERROR_TYPES = (UnauthorizedError,)
+        except Exception:
+            _TRANSIENT_ERROR_TYPES = ()
+            _NON_TRANSIENT_ERROR_TYPES = ()
+    if isinstance(exc, _NON_TRANSIENT_ERROR_TYPES):
+        return False
+    if isinstance(exc, _TRANSIENT_ERROR_TYPES):
+        return True
+    if isinstance(exc, (TimeoutError, ConnectionError, socket.timeout, socket.error)):
+        return True
+    text = str(exc or '').lower()
+    return any(k in text for k in (
+        'timed out', 'timeout', 'connection', 'eof', 'reset by peer',
+        'broken pipe', 'read error', 'http 503', 'server busy',
+        'cas error', 'rate limit', 'transient', 'back off',
+        'getaddrinfo', 'name or service not known', 'dns'
+    ))
+
+
+def _run_with_reconnect(fn, *args, **kwargs):
+    """请求级自愈：瞬时故障时作废账号并重试一次（冷却期内直接抛错，由调用方处理）。"""
+    try:
+        result = fn(_account(), *args, **kwargs)
+        _mark_ok()
+        return result
+    except Exception as exc:
+        if not _is_transient(exc):
+            raise
+        _invalidate_account(str(exc))
+        result = fn(_account(), *args, **kwargs)
+        _mark_ok()
+        return result
+
+
+def _account():
+    global ACCOUNT, LAST_ERROR, ACCOUNT_CREATED_AT
+    with ACCOUNT_LOCK:
+        if ACCOUNT is not None:
             return ACCOUNT
+
+        # 冷却期内不立即重建，避免断网时反复重连打爆 Exchange
+        if ACCOUNT_CREATED_AT is not None and time.time() - ACCOUNT_CREATED_AT < RECONNECT_COOLDOWN_SECONDS:
+            raise RuntimeError(LAST_ERROR or 'Exchange 连接断开，正在等待重连')
 
         _apply_openclaw_env()
         smtp = os.getenv('MAIL_SMTP') or os.getenv('MAIL_EMAIL')
@@ -174,11 +261,17 @@ def _account():
 
         try:
             from exchangelib import Account, Configuration, Credentials, DELEGATE
-            from exchangelib.protocol import BaseProtocol
+            from exchangelib.protocol import BaseProtocol, FaultTolerance
 
-            BaseProtocol.TIMEOUT = 15
+            BaseProtocol.TIMEOUT = EWS_TIMEOUT_SECONDS
             credentials = Credentials(username=f'{domain}\\{domain_user}', password=password)
-            config = Configuration(server=server, credentials=credentials)
+            config = Configuration(
+                server=server,
+                credentials=credentials,
+                # 默认 FailFast 遇瞬时错误立即失败；FaultTolerance 做指数退避重试，
+                # 显著提升公司网络抖动场景下的稳定性
+                retry_policy=FaultTolerance(max_wait=EWS_RETRY_MAX_WAIT),
+            )
             ACCOUNT = Account(
                 primary_smtp_address=smtp,
                 config=config,
@@ -186,6 +279,7 @@ def _account():
                 access_type=DELEGATE,
             )
             _ = ACCOUNT.inbox.name
+            ACCOUNT_CREATED_AT = time.time()
             LAST_ERROR = ''
             return ACCOUNT
         except Exception as exc:
@@ -314,26 +408,25 @@ def _summary(item):
     }
 
 
-def _list_mails(since=None, limit=50):
+def _list_mails(account, since=None, limit=50):
     from exchangelib import Q
 
-    account = _account()
     if since:
-      try:
-          start = datetime.fromisoformat(since.replace('Z', '+00:00'))
-      except Exception:
-          start = datetime.now(timezone.utc) - timedelta(days=7)
+        try:
+            start = datetime.fromisoformat(since.replace('Z', '+00:00'))
+        except Exception:
+            start = datetime.now(timezone.utc) - timedelta(days=7)
     else:
-      start = datetime.now(timezone.utc) - timedelta(days=7)
+        start = datetime.now(timezone.utc) - timedelta(days=7)
 
     qs = account.inbox.filter(Q(datetime_received__gte=start)).order_by('-datetime_received')
     return [_summary(item) for item in qs[:limit]]
 
 
-def _detail(mail_id):
+def _detail(account, mail_id):
     item = MAIL_INDEX.get(mail_id)
     if item is None:
-        item = _account().inbox.get(id=unquote(mail_id))
+        item = account.inbox.get(id=unquote(mail_id))
         MAIL_INDEX[mail_id] = item
     data = _summary(item)
     data['body'] = _body_text(item)
@@ -351,7 +444,12 @@ class Handler(BaseHTTPRequestHandler):
         try:
             parsed = urlparse(self.path)
             if parsed.path == '/health':
-                _json(self, 200, {'ok': True, 'error': LAST_ERROR})
+                _json(self, 200, {
+                    'ok': True,
+                    'connected': ACCOUNT is not None,
+                    'error': LAST_ERROR,
+                    'last_ok_at': LAST_OK_AT,
+                })
                 return
             if parsed.path == '/doctor':
                 _json(self, 200, _doctor())
@@ -360,11 +458,11 @@ class Handler(BaseHTTPRequestHandler):
                 query = parse_qs(parsed.query)
                 since = (query.get('since') or [None])[0]
                 limit = int((query.get('limit') or ['50'])[0])
-                _json(self, 200, _list_mails(since=since, limit=limit))
+                _json(self, 200, _run_with_reconnect(_list_mails, since=since, limit=limit))
                 return
             if parsed.path.startswith('/mail/'):
                 mail_id = parsed.path[len('/mail/'):]
-                _json(self, 200, _detail(mail_id))
+                _json(self, 200, _run_with_reconnect(_detail, mail_id))
                 return
             _json(self, 404, {'ok': False, 'error': 'not found'})
         except Exception as exc:

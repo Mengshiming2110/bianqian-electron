@@ -109,9 +109,7 @@ contextBridge.exposeInMainWorld('api', {
     update: (id, binding) => ipcRenderer.invoke('shortcuts:update', id, binding),
     reset: () => ipcRenderer.invoke('shortcuts:reset'),
     startRecord: () => ipcRenderer.invoke('shortcuts:start-record'),
-    stopRecord: () => ipcRenderer.invoke('shortcuts:stop-record'),
-    openEditor: () => ipcRenderer.invoke('shortcut-editor:open'),
-    onKeydown: (callback) => on('shortcut-editor:keydown', callback)
+    stopRecord: () => ipcRenderer.invoke('shortcuts:stop-record')
   },
   notify: {
     trigger: (opts) => ipcRenderer.invoke('notify:trigger', opts),
@@ -143,10 +141,6 @@ contextBridge.exposeInMainWorld('api', {
     save: (s) => ipcRenderer.invoke('settings:save', s)
   },
   events: {
-    on: on,
-    off: (channel, callback) => {
-      const listener = (_event, payload) => callback(payload)
-      ipcRenderer.removeListener(channel, listener)
-    }
+    on: on
   }
 })

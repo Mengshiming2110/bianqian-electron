@@ -273,7 +273,7 @@ function buildSummaryMessage(text, count) {
 import * as XLSX from 'xlsx'
 
 export function buildExcelTaskSummary(buffer, fileName) {
-  if (!buffer || !XLSX) return null
+  if (!buffer) return null
   try {
     const workbook = XLSX.read(new Uint8Array(buffer), { type: 'array' })
     const sheetName = workbook.SheetNames[0]
@@ -303,7 +303,7 @@ export function buildExcelTaskSummary(buffer, fileName) {
       rawMessage: `从 ${fileName || 'Excel 附件'} 提取，共 ${materials.length} 行数据`
     }
   } catch (err) {
-    console.error('[excel] 解析失败:', err.message)
+    console.error('[excel] 解析失败:', err?.message || String(err))
     return null
   }
 }

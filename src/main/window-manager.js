@@ -4,7 +4,6 @@ import { dirname, join } from 'node:path'
 import { ALL_CATEGORY } from './categories.js'
 import { getSettings, updateSettings } from './store.js'
 import { EdgeDockController, EDGE_STATE } from './edge-dock.js'
-import { stopRecord } from './shortcuts.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const NORMAL_WINDOW_WIDTH = 280
@@ -25,7 +24,6 @@ export class WindowManager {
     const settings = getSettings()
     this.opacity = settings.opacity
     this.windowMode = settings.windowMode
-    this.shortcutEditor = null
     this.interactionStateListener = null
     this.noteWindows = new Map()
     this.settingsWin = null
@@ -69,6 +67,20 @@ export class WindowManager {
       return this.window
     }
 
+    // Windows 上透明窗口的 skipTaskbar 不可靠，用一个隐藏 owner 窗口让主窗口成为 owned window，
+    // owned window 不会出现在任务栏
+    if (process.platform === 'win32' && (!this.ownerWin || this.ownerWin.isDestroyed())) {
+      this.ownerWin = new BrowserWindow({
+        show: false,
+        skipTaskbar: true,
+        width: 0,
+        height: 0,
+        frame: false,
+        transparent: true,
+        webPreferences: { sandbox: true }
+      })
+    }
+
     this.window = new BrowserWindow({
       ...this.getInitialBounds(),
       minWidth: NORMAL_WINDOW_MIN_WIDTH,
@@ -81,6 +93,7 @@ export class WindowManager {
       show: false,
       icon: APP_ICON_PATH,
       backgroundColor: '#00000000',
+      parent: process.platform === 'win32' ? this.ownerWin : undefined,
       webPreferences: {
         preload: join(__dirname, '../preload/index.js'),
         contextIsolation: true,
@@ -93,6 +106,17 @@ export class WindowManager {
     this.applyAlwaysOnTop()
     this.applyOpacity()
 
+    // Windows 上 show()/focus() 会反复把窗口塞回任务栏，每次都重新清理
+    const reapplySkipTaskbar = () => {
+      if (this.window && !this.window.isDestroyed()) {
+        this.window.setSkipTaskbar(true)
+      }
+    }
+    this.window.on('show', reapplySkipTaskbar)
+    this.window.on('focus', reapplySkipTaskbar)
+    this.window.on('restore', reapplySkipTaskbar)
+    this.window.on('show', () => setTimeout(reapplySkipTaskbar, 80))
+
     this.window.on('close', (event) => {
       if (!app.isQuitting) {
         event.preventDefault()
@@ -103,6 +127,10 @@ export class WindowManager {
     this.window.on('closed', () => {
       this.edge.stopMouseWatcher()
       this.window = null
+      if (this.ownerWin && !this.ownerWin.isDestroyed()) {
+        this.ownerWin.destroy()
+        this.ownerWin = null
+      }
     })
 
     this.window.on('minimize', (e) => {
@@ -124,7 +152,8 @@ export class WindowManager {
     })
 
     this.window.webContents.on('console-message', (_event, level, message, line, sourceId) => {
-      console.log(`[renderer:${level}] ${message} (${sourceId}:${line})`)
+      const d = typeof level === 'object' && level !== null ? level : { level, message, lineNumber: line, sourceId }
+      console.log(`[renderer:${d.level}] ${d.message} (${d.sourceId}:${d.lineNumber})`)
     })
 
     if (process.env.ELECTRON_RENDERER_URL) {
@@ -162,13 +191,21 @@ export class WindowManager {
       this.placeNearTopRight()
     }
     if (this.passThroughMode) {
+      this.window.setSkipTaskbar(true)
       this.window.showInactive()
     } else {
       this._setClickThrough(false, false)
+      this.window.setSkipTaskbar(true)
       this.window.show()
       this.window.focus()
     }
     this.window.setSkipTaskbar(true)
+    // Windows 上 show()/focus() 可能重新加入任务栏，延迟再清理一次
+    setTimeout(() => {
+      if (this.window && !this.window.isDestroyed()) {
+        this.window.setSkipTaskbar(true)
+      }
+    }, 60)
     this.applyFilter(this.pendingFilter)
     this.applyAlwaysOnTop()
     this.applyInteractionState()
@@ -374,71 +411,6 @@ export class WindowManager {
     }
   }
 
-  openShortcutEditor() {
-    if (this.shortcutEditor && !this.shortcutEditor.isDestroyed()) {
-      this.shortcutEditor.show()
-      this.shortcutEditor.focus()
-      return
-    }
-
-    this.shortcutEditor = new BrowserWindow({
-      width: 340,
-      height: 420,
-      resizable: false,
-      frame: false,
-      parent: this.window,
-      show: false,
-      icon: APP_ICON_PATH,
-      focusable: true,
-      backgroundColor: '#ffffff',
-      webPreferences: {
-        preload: join(__dirname, '../preload/index.js'),
-        contextIsolation: true,
-        nodeIntegration: false,
-        sandbox: false
-      }
-    })
-
-    this.shortcutEditor.webContents.on('before-input-event', (event, input) => {
-      if (input.type !== 'keyDown') return
-      const parts = []
-      if (input.control) parts.push('Ctrl')
-      if (input.alt) parts.push('Alt')
-      if (input.shift) parts.push('Shift')
-      if (input.meta) parts.push('Meta')
-      const key = input.key.length === 1 ? input.key.toUpperCase() : input.key
-      parts.push(key)
-      this.shortcutEditor.webContents.send('shortcut-editor:keydown', {
-        binding: parts.join('+'),
-        key: input.key
-      })
-    })
-
-    this.shortcutEditor.on('close', (event) => {
-      stopRecord(this)
-      if (!app.isQuitting) {
-        event.preventDefault()
-        this.shortcutEditor.hide()
-      }
-    })
-
-    this.shortcutEditor.on('closed', () => {
-      stopRecord(this)
-      this.shortcutEditor = null
-    })
-
-    if (process.env.ELECTRON_RENDERER_URL) {
-      this.shortcutEditor.loadURL(process.env.ELECTRON_RENDERER_URL + '#/shortcut-editor')
-    } else {
-      this.shortcutEditor.loadFile(join(__dirname, '../renderer/index.html'), { hash: '/shortcut-editor' })
-    }
-
-    this.shortcutEditor.once('ready-to-show', () => {
-      this.shortcutEditor.show()
-      this.shortcutEditor.focus()
-    })
-  }
-
   placeNearTopRight() {
     if (!this.window || this.window.isDestroyed()) {
       return
@@ -596,8 +568,14 @@ export class WindowManager {
 
   openSettingsWindow(screenX, screenY) {
     if (this.settingsWin && !this.settingsWin.isDestroyed()) {
+      this.settingsWin.setSkipTaskbar(true)
       this.settingsWin.show()
       this.settingsWin.focus()
+      setTimeout(() => {
+        if (this.settingsWin && !this.settingsWin.isDestroyed()) {
+          this.settingsWin.setSkipTaskbar(true)
+        }
+      }, 60)
       return
     }
 
@@ -645,15 +623,21 @@ export class WindowManager {
     })
 
     if (process.env.ELECTRON_RENDERER_URL) {
-      this.settingsWin.loadURL(process.env.ELECTRON_RENDERER_URL + '#/settings')
+      this.settingsWin.loadURL(process.env.ELECTRON_RENDERER_URL + '/#/settings')
     } else {
       this.settingsWin.loadFile(join(__dirname, '../renderer/index.html'), { hash: '/settings' })
     }
 
     this.settingsWin.once('ready-to-show', () => {
       if (this.settingsWin && !this.settingsWin.isDestroyed()) {
+        this.settingsWin.setSkipTaskbar(true)
         this.settingsWin.show()
         this.settingsWin.focus()
+        setTimeout(() => {
+          if (this.settingsWin && !this.settingsWin.isDestroyed()) {
+            this.settingsWin.setSkipTaskbar(true)
+          }
+        }, 60)
       }
     })
   }

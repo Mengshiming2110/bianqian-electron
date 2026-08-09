@@ -4,7 +4,7 @@
       <h3>领益工作助手</h3>
       <p class="about-ver">版本 1.0.0</p>
       <p class="about-desc">备忘、剪切板、邮件工具</p>
-      <button class="confirm-btn" @click="visible = false" style="margin-top:8px">关闭</button>
+      <button class="confirm-btn" @click="visible = false">关闭</button>
     </div>
   </div>
 </template>
@@ -17,11 +17,13 @@ defineExpose({ show })
 </script>
 
 <style scoped>
-.about-overlay { position: fixed; inset: 0; z-index: 2000; overflow: hidden; border-radius: var(--radius-window); background: var(--bg-overlay); backdrop-filter: blur(4px); clip-path: inset(0 round var(--radius-window)); display: grid; place-items: center; padding: 20px; }
-.about-card { width: min(100%, 280px); padding: 24px 20px; text-align: center; border: 1px solid var(--border); border-radius: 14px; background: var(--bg-elevated); box-shadow: var(--shadow); }
+.about-overlay { position: fixed; inset: 0; z-index: 2000; overflow: hidden; border-radius: var(--radius-window); background: var(--bg-overlay); backdrop-filter: blur(4px); clip-path: inset(0 round var(--radius-window)); display: grid; place-items: center; padding: 20px; animation: overlay-in var(--dur-base) var(--ease-out); }
+@keyframes overlay-in { from { opacity: 0; } to { opacity: 1; } }
+.about-card { width: min(100%, 280px); padding: 24px 20px; text-align: center; border: 1px solid var(--border); border-radius: 14px; background: var(--bg-elevated); box-shadow: var(--shadow-pop); animation: card-in var(--dur-base) var(--ease-spring); }
+@keyframes card-in { from { opacity: 0; transform: scale(0.96) translateY(6px); } to { opacity: 1; transform: scale(1) translateY(0); } }
 .about-card h3 { font-size: 18px; font-weight: 700; color: var(--text); margin-bottom: 4px; }
 .about-ver { font-size: 13px; color: var(--accent); font-weight: 600; margin-bottom: 8px; }
 .about-desc { font-size: 12px; color: var(--text-muted); margin-bottom: 6px; }
-.confirm-btn { width: 100%; height: 38px; border: none; border-radius: 8px; background: var(--accent); color: #fff; font-size: 14px; font-weight: 600; cursor: pointer; font-family: inherit; }
-.confirm-btn:hover { opacity: 0.9; }
+.confirm-btn { width: 100%; height: 38px; margin-top: 8px; border: none; border-radius: 8px; background: var(--accent); color: #fff; font-size: 14px; font-weight: 600; cursor: pointer; font-family: inherit; }
+.confirm-btn:hover { background: var(--accent-strong); }
 </style>

@@ -1,6 +1,4 @@
 import { ipcMain } from 'electron'
-import { readFileSync, existsSync } from 'node:fs'
-import { join } from 'node:path'
 import { queryAll, queryOne, execute } from './database'
 import { MailBridge } from './mail-bridge'
 
@@ -30,10 +28,15 @@ function normalizeMailConfig(config = {}) {
 export function setupMailHandlers() {
   ipcMain.handle('mail:configure', async (_, config) => {
     try {
-      if (bridge) bridge.stop()
+      if (bridge) await bridge.stop()
       bridge = new MailBridge()
       await bridge.start(normalizeMailConfig(config))
-      await bridge.fetchMails(null, { throwOnError: true })
+      // 预热拉取：/start 已校验账号密码，此处失败基本是瞬时网络问题，不阻断配置成功
+      try {
+        await bridge.fetchMails(null, { throwOnError: true })
+      } catch (err) {
+        console.warn('[ipc] mail:configure 预热拉取失败（稍后自动重试）:', err.message)
+      }
       return { ok: true }
     } catch (err) {
       if (bridge) { bridge.stop(); bridge = null }
@@ -60,7 +63,9 @@ export function setupMailHandlers() {
              subject = excluded.subject,
              sender = excluded.sender,
              body = excluded.body,
-             received_at = excluded.received_at`,
+             html = excluded.html,
+             received_at = excluded.received_at,
+             is_read = excluded.is_read`,
           [m.id, m.subject || '', m.sender || '', m.body || m.preview || '', m.html || '', m.received_at || '', m.is_read ? 1 : 0]
         )
       }
@@ -134,7 +139,7 @@ export function setupMailHandlers() {
   })
 
   ipcMain.handle('mail:status', () => {
-    return { running: bridge !== null }
+    return bridge ? bridge.getStatus() : { running: false, connected: false, error: '邮件服务未启动' }
   })
 
   // 附件列表 — 有 MailService 时从 bridge 获取，否则返回空
@@ -146,14 +151,10 @@ export function setupMailHandlers() {
         console.error('[ipc] mail:attachments 失败:', err.message)
       }
     }
-    // 无 bridge 时返回 mock 数据用于前端开发
-    return [
-      { filename: '标签模板.xlsx', contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', size: 8240 },
-      { filename: '出货明细.pdf', contentType: 'application/pdf', size: 156320 }
-    ]
+    return []
   })
 
-  // 附件内容 — 有 MailService 时从 bridge 下载，否则生成 mock Excel
+  // 附件内容 — 有 MailService 时从 bridge 下载，否则返回 null
   ipcMain.handle('mail:attachment-content', async (_, mailId, filename) => {
     if (bridge) {
       try {
@@ -161,15 +162,6 @@ export function setupMailHandlers() {
         if (content) return content
       } catch (err) {
         console.error('[ipc] mail:attachment-content 失败:', err.message)
-      }
-    }
-    // Mock Excel for development
-    if (/\.xlsx?$/i.test(filename)) {
-      try {
-        const { generateMockExcelBuffer } = await import('../renderer/src/lib/mail-detail-summary.mjs')
-        return { buffer: generateMockExcelBuffer(), filename }
-      } catch {
-        return null
       }
     }
     return null

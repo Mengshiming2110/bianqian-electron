@@ -1,6 +1,5 @@
 <template>
-  <ShortcutEditor v-if="isShortcutEditor" />
-  <main v-else-if="!hasError" ref="appShellRef" class="app-shell" :class="{ 'pass-through-mode': passThroughMode }">
+  <main v-if="!hasError" ref="appShellRef" class="app-shell" :class="{ 'pass-through-mode': passThroughMode }">
     <header class="app-header">
       <div class="header-title">
         <p class="eyebrow">{{ tabEyebrow }}</p>
@@ -244,13 +243,11 @@ import { computed, onErrorCaptured, onBeforeUnmount, onMounted, reactive, ref, w
 import {
   Bell,
   BellOff,
-  Check,
   CheckCircle,
   Circle,
   ClipboardList,
   Mail,
   Minus,
-  Moon,
   Paperclip,
   Pin,
   Plus,
@@ -258,14 +255,12 @@ import {
   Search,
   Settings,
   StickyNote,
-  Sun,
   Trash2,
   X
 } from 'lucide-vue-next'
 import AttachmentPopover from './components/AttachmentPopover.vue'
 import MarkdownPreview from './components/MarkdownPreview.vue'
-import ShortcutEditor from './components/ShortcutEditor.vue'
-import { ALL_CATEGORY, CATEGORIES, MAX_ATTACHMENTS_PER_NOTE, loadCategories, useNotesStore } from './stores/notes'
+import { CATEGORIES, MAX_ATTACHMENTS_PER_NOTE, loadCategories, useNotesStore } from './stores/notes'
 import { useClipboardStore } from './stores/clipboard'
 import { useMailStore } from './stores/mail'
 import ClipboardPanel from './components/ClipboardPanel.vue'
@@ -273,26 +268,22 @@ import MailPanel from './components/MailPanel.vue'
 import WelcomeCard from './components/WelcomeCard.vue'
 import AboutCard from './components/AboutCard.vue'
 
-const isShortcutEditor = window.location.hash === '#shortcut-editor'
-
 const notes = useNotesStore()
 const clipboardStore = useClipboardStore()
 const mailStore = useMailStore()
 
 const activeTab = ref('notes')
-const tabs = [{ id: 'notes', label: '备忘', icon: 'StickyNote' }, { id: 'clipboard', label: '剪切板', icon: 'ClipboardList' }, { id: 'mail', label: '邮件', icon: 'Mail' }]
+const tabs = [{ id: 'notes', label: '备忘' }, { id: 'clipboard', label: '剪切板' }, { id: 'mail', label: '邮件' }]
 const tabIcons = { notes: StickyNote, clipboard: ClipboardList, mail: Mail }
 const aboutRef = ref(null)
 const welcomeSeen = ref(false)
 
-const tabTitle = computed(() => ({ notes: '备忘', clipboard: '剪切板', mail: '邮件' }[activeTab.value] || '备忘'))
 const searchPlaceholder = computed(() => ({ notes: '搜索，或输入：明天9点交报告 #工作', clipboard: '搜索剪切板历史...', mail: '搜索邮件...' }[activeTab.value] || '搜索...'))
 
 function switchTab(id) { activeTab.value = id }
 function onNavigateTab(tab) { activeTab.value = tab }
 function onShowAbout() { aboutRef.value?.show() }
 function onTogglePassThrough() { togglePassThrough() }
-function onToggleClipboardMonitor() { /* TODO */ }
 const categories = CATEGORIES
 const noteColors = [
   { value: '', label: '默认' },
@@ -303,7 +294,6 @@ const noteColors = [
   { value: 'blue', label: '蓝色' },
   { value: 'purple', label: '紫色' }
 ]
-const visibleCategories = [ALL_CATEGORY, ...CATEGORIES]
 const editorOpen = ref(false)
 const settingsOpen = ref(false)
 const settingsButtonRef = ref(null)
@@ -325,11 +315,6 @@ const resolvedTheme = computed(() => {
 watch(resolvedTheme, (theme) => {
   document.documentElement.setAttribute('data-theme', theme)
 }, { immediate: true })
-
-const themeLabel = computed(() => {
-  const map = { system: '跟随系统', light: '浅色', dark: '深色' }
-  return map[themePreference.value] || '跟随系统'
-})
 
 const animatingCardIds = reactive(new Map())
 const hasError = ref(false)
@@ -359,6 +344,9 @@ let resizeDebounce = null
 let lastFileDropKey = ''
 let lastFileDropAt = 0
 let originalDraftAttachments = []
+let sortDragJustEndedTimer = null
+let sortDragSettlingTimer = null
+let toggleCompletedTimer = null
 
 const draft = reactive(defaultDraft())
 
@@ -374,11 +362,6 @@ const tabEyebrow = computed(() => {
   if (activeTab.value === 'clipboard') return '剪切板工具'
   return '邮件工具'
 })
-const modePresets = [
-  { id: 'default', label: '常规', opacity: 0.92, passThrough: false, mode: 'normal' },
-  { id: 'focus', label: '专注', opacity: 1, passThrough: false, mode: 'normal' },
-  { id: 'meeting', label: '会议', opacity: 0.72, passThrough: true, mode: 'normal' }
-]
 
 let skipNextResize = false
 const NORMAL_WINDOW_HEIGHT = 680
@@ -567,38 +550,44 @@ async function onSortMouseUp() {
   document.removeEventListener('mouseup', onSortMouseUp)
 
   if (sortDragStarted) {
-    const list = document.querySelector('.note-list')
-    const cards = list ? list.querySelectorAll('.note-card') : []
-    const dragIndex = Array.from(cards).findIndex((c) => c.dataset.noteId === sortDrag.noteId)
-    const step = sortDrag.cardHeight + sortDrag.cardGap
-    const shiftCount = Math.round(sortDrag.deltaY / step)
+    try {
+      const list = document.querySelector('.note-list')
+      const cards = list ? list.querySelectorAll('.note-card') : []
+      const dragIndex = Array.from(cards).findIndex((c) => c.dataset.noteId === sortDrag.noteId)
+      const step = sortDrag.cardHeight + sortDrag.cardGap
+      const shiftCount = Math.round(sortDrag.deltaY / step)
 
-    if (dragIndex !== -1 && shiftCount !== 0) {
-      const targetIndex = dragIndex + shiftCount
-      if (targetIndex >= 0 && targetIndex < cards.length) {
-        const targetId = cards[targetIndex].dataset.noteId
-        const position = shiftCount > 0 ? 'after' : 'before'
-        skipNextResize = true
-        await notes.reorderNote(sortDrag.noteId, targetId, position)
+      if (dragIndex !== -1 && shiftCount !== 0) {
+        const targetIndex = dragIndex + shiftCount
+        if (targetIndex >= 0 && targetIndex < cards.length) {
+          const targetId = cards[targetIndex].dataset.noteId
+          const position = shiftCount > 0 ? 'after' : 'before'
+          skipNextResize = true
+          await notes.reorderNote(sortDrag.noteId, targetId, position)
+        }
       }
-    }
+    } catch (err) {
+      console.error('[App] sort reorder failed:', err)
+    } finally {
+      sortDragJustEnded.value = true
+      clearTimeout(sortDragJustEndedTimer)
+      sortDragJustEndedTimer = setTimeout(() => { sortDragJustEnded.value = false }, 100)
 
-    sortDragJustEnded.value = true
-    setTimeout(() => { sortDragJustEnded.value = false }, 100)
-
-    sortDrag.settling = true
-    sortDrag.shifts = {}
-    sortDrag.pulsed = {}
-    Object.values(pulseCleanupTimers).forEach(clearTimeout)
-    pulseCleanupTimers = {}
-    setTimeout(() => {
-      sortDrag.active = false
-      sortDrag.settling = false
-      sortDrag.noteId = ''
+      sortDrag.settling = true
       sortDrag.shifts = {}
-      sortDrag.deltaY = 0
-      sortDragStarted = false
-    }, 280)
+      sortDrag.pulsed = {}
+      Object.values(pulseCleanupTimers).forEach(clearTimeout)
+      pulseCleanupTimers = {}
+      clearTimeout(sortDragSettlingTimer)
+      sortDragSettlingTimer = setTimeout(() => {
+        sortDrag.active = false
+        sortDrag.settling = false
+        sortDrag.noteId = ''
+        sortDrag.shifts = {}
+        sortDrag.deltaY = 0
+        sortDragStarted = false
+      }, 280)
+    }
     return
   }
 
@@ -683,41 +672,45 @@ async function onPreloadFileDrop(event) {
 }
 
 function openContextMenu(note, event) {
-  window.api?.contextMenu?.show({
-    id: note.id,
-    title: note.title,
-    content: note.content,
-    category: note.category,
-    color: note.color,
-    pinned: note.pinned,
-    completed: note.completed
-  })
-}
-
-function handleContextMenuAction({ action, noteId, value }) {
-  switch (action) {
-    case 'edit': {
-      const note = notes.notes.find(n => n.id === noteId)
-      if (note) openEditor(note)
-      break
-    }
-    case 'togglePin': notes.togglePinned(noteId); break
-    case 'toggleComplete': handleToggleCompleted(noteId); break
-    case 'changeCategory': notes.update(noteId, { category: value }); break
-    case 'changeColor': notes.update(noteId, { color: value }); break
-    case 'popOut': {
-      const note = notes.notes.find(n => n.id === noteId)
-      if (note) popOutNote(note)
-      break
-    }
-    case 'delete':
-      notes.delete(noteId)
-      break
+  try {
+    window.api?.contextMenu?.show({
+      id: note.id,
+      title: note.title,
+      content: note.content,
+      category: note.category,
+      color: note.color,
+      pinned: note.pinned,
+      completed: note.completed
+    })
+  } catch (err) {
+    console.error('[App] openContextMenu failed:', err)
   }
 }
 
-function delay(ms) {
-  return new Promise(resolve => setTimeout(resolve, ms))
+function handleContextMenuAction({ action, noteId, value }) {
+  try {
+    switch (action) {
+      case 'edit': {
+        const note = notes.notes.find(n => n.id === noteId)
+        if (note) openEditor(note)
+        break
+      }
+      case 'togglePin': notes.togglePinned(noteId); break
+      case 'toggleComplete': handleToggleCompleted(noteId); break
+      case 'changeCategory': notes.update(noteId, { category: value }); break
+      case 'changeColor': notes.update(noteId, { color: value }); break
+      case 'popOut': {
+        const note = notes.notes.find(n => n.id === noteId)
+        if (note) popOutNote(note)
+        break
+      }
+      case 'delete':
+        notes.delete(noteId)
+        break
+    }
+  } catch (err) {
+    console.error('[App] handleContextMenuAction failed:', err)
+  }
 }
 
 function cancelSortDrag() {
@@ -741,26 +734,25 @@ async function handleToggleCompleted(noteId) {
   const wasCompleted = note.completed
   const animKey = wasCompleted ? 'incompleting' : 'completing'
   animatingCardIds.set(noteId, animKey)
-  await notes.toggleCompleted(noteId)
-  await nextTick()
-  setTimeout(() => {
-    if (animatingCardIds.get(noteId) === animKey) animatingCardIds.delete(noteId)
-  }, 500)
-}
-
-async function setTheme(value) {
-  themePreference.value = value
-  if (!window.api) {
-    try { localStorage.setItem('bianqian-theme', value) } catch {}
-    return
+  try {
+    await notes.toggleCompleted(noteId)
+    await nextTick()
+  } catch (err) {
+    console.error('[App] toggleCompleted failed:', err)
+  } finally {
+    clearTimeout(toggleCompletedTimer)
+    toggleCompletedTimer = setTimeout(() => {
+      if (animatingCardIds.get(noteId) === animKey) animatingCardIds.delete(noteId)
+    }, 500)
   }
-  await window.api.window.setTheme(value)
 }
 
+let onDarkModeChange = null
 function setupSystemThemeListener() {
   darkModeMq = window.matchMedia('(prefers-color-scheme: dark)')
   systemDark.value = darkModeMq.matches
-  darkModeMq.addEventListener('change', (e) => { systemDark.value = e.matches })
+  onDarkModeChange = (e) => { systemDark.value = e.matches }
+  darkModeMq.addEventListener('change', onDarkModeChange)
 }
 
 async function handleAttachAdd(paths) {
@@ -853,12 +845,17 @@ function openEditor(note) {
 }
 
 async function closeEditor(options = {}) {
-  if (options?.cleanup !== false) {
-    await cleanupUnusedCopies(draft.attachments, originalDraftAttachments)
+  try {
+    if (options?.cleanup !== false) {
+      await cleanupUnusedCopies(draft.attachments, originalDraftAttachments)
+    }
+  } catch (err) {
+    console.error('[App] closeEditor cleanup failed:', err)
+  } finally {
+    editorOpen.value = false
+    Object.assign(draft, defaultDraft())
+    originalDraftAttachments = []
   }
-  editorOpen.value = false
-  Object.assign(draft, defaultDraft())
-  originalDraftAttachments = []
 }
 
 async function saveEditor() {
@@ -868,12 +865,17 @@ async function saveEditor() {
 
   const payload = JSON.parse(JSON.stringify(draft))
 
-  if (draft.id) {
-    const saved = await notes.update(draft.id, payload)
-    await cleanupUnusedCopies([...originalDraftAttachments, ...payload.attachments], saved.attachments)
-  } else {
-    const saved = await notes.create(payload)
-    await cleanupUnusedCopies(payload.attachments, saved.attachments)
+  try {
+    if (draft.id) {
+      const saved = await notes.update(draft.id, payload)
+      await cleanupUnusedCopies([...originalDraftAttachments, ...payload.attachments], saved.attachments)
+    } else {
+      const saved = await notes.create(payload)
+      await cleanupUnusedCopies(payload.attachments, saved.attachments)
+    }
+  } catch (err) {
+    console.error('[App] saveEditor failed:', err)
+    return
   }
 
   await closeEditor({ cleanup: false })
@@ -884,7 +886,12 @@ async function deleteEditorNote() {
     return
   }
 
-  await notes.delete(draft.id)
+  try {
+    await notes.delete(draft.id)
+  } catch (err) {
+    console.error('[App] deleteEditorNote failed:', err)
+    return
+  }
   await closeEditor({ cleanup: false })
 }
 
@@ -893,10 +900,14 @@ async function pickAttachments() {
   console.info('[attachments] editor pick click', { remaining, hasApi: Boolean(window.api?.files?.selectAttachments) })
   if (remaining <= 0) return
 
-  const files = await notes.chooseAttachments(remaining)
-  console.info('[attachments] editor pick result', { count: files?.length || 0, files })
-  draft.attachments = mergeAttachments(draft.attachments, files)
-  await cleanupUnusedCopies(files, draft.attachments)
+  try {
+    const files = await notes.chooseAttachments(remaining)
+    console.info('[attachments] editor pick result', { count: files?.length || 0, files })
+    draft.attachments = mergeAttachments(draft.attachments, files)
+    await cleanupUnusedCopies(files, draft.attachments)
+  } catch (err) {
+    console.error('[App] pickAttachments failed:', err)
+  }
 }
 
 async function removeAttachment(file) {
@@ -908,14 +919,6 @@ async function removeAttachment(file) {
 
 function fileName(path) {
   return path.split(/[\\/]/).pop()
-}
-
-function categoryCount(category) {
-  if (category === ALL_CATEGORY) {
-    return notes.notes.length
-  }
-
-  return notes.categoryCounts[category] || 0
 }
 
 function hideWindow() {
@@ -936,45 +939,6 @@ async function togglePassThrough() {
   passThroughMode.value = Boolean(state?.passThrough)
   windowOpacity.value = Number(state?.opacity || windowOpacity.value)
   edgeAutoHide.value = Boolean(state?.edgeAutoHide)
-}
-
-async function setWindowOpacity(value) {
-  const opacity = Number(value) / 100
-  windowOpacity.value = opacity
-
-  const state = await window.api?.window.setOpacity?.(opacity)
-
-  if (state?.opacity) {
-    windowOpacity.value = Number(state.opacity)
-  }
-}
-
-async function setMode(mode) {
-  if (sortDrag.active || sortDrag.settling) cancelSortDrag()
-  if (settingsOpen.value) closeSettings()
-
-  const state = await window.api?.window.setMode?.('normal')
-  edgeAutoHide.value = Boolean(state?.edgeAutoHide)
-  await nextTick()
-
-  syncContentHeight()
-}
-
-async function toggleEdgeAutoHide() {
-  const state = await window.api?.window.setEdgeAutoHide?.(!edgeAutoHide.value)
-  edgeAutoHide.value = Boolean(state?.edgeAutoHide)
-}
-
-async function applyPreset(preset) {
-  if (preset.passThrough && settingsOpen.value) closeSettings()
-  const modeState = await window.api?.window.setMode?.('normal')
-  const opacityState = await window.api?.window.setOpacity?.(preset.opacity)
-  const passState = await window.api?.window.setPassThrough?.(preset.passThrough)
-  const state = passState || opacityState || modeState
-  passThroughMode.value = Boolean(state?.passThrough ?? preset.passThrough)
-  windowOpacity.value = Number(state?.opacity || preset.opacity)
-  edgeAutoHide.value = Boolean(state?.edgeAutoHide)
-  setTimeout(syncContentHeight, 80)
 }
 
 function handleSearchEnter(event) {
@@ -1108,10 +1072,21 @@ function onVisibilityChange() {
 
 onMounted(async () => {
   setupSystemThemeListener()
-  await loadCategories()
-  await notes.load()
-  await refreshInteractionState()
-  await notes.requestNotificationPermission()
+  try {
+    await loadCategories()
+  } catch (err) {
+    console.error('[App] loadCategories failed:', err)
+  }
+  try {
+    await notes.load()
+  } catch (err) {
+    console.error('[App] notes.load failed:', err)
+  }
+  try {
+    await refreshInteractionState()
+  } catch (err) {
+    console.error('[App] refreshInteractionState failed:', err)
+  }
   checkRemindersOnResume()
   reminderTimer = setInterval(checkRemindersOnResume, 60000)
 
@@ -1169,7 +1144,6 @@ onMounted(async () => {
     unsubscribeHandlers.push(window.api.events.on('navigate-tab', onNavigateTab))
     unsubscribeHandlers.push(window.api.events.on('show-about', onShowAbout))
     unsubscribeHandlers.push(window.api.events.on('toggle-pass-through', onTogglePassThrough))
-    unsubscribeHandlers.push(window.api.events.on('toggle-clipboard-monitor', onToggleClipboardMonitor))
   }
 
   // Load clipboard + mail on mount
@@ -1189,8 +1163,12 @@ onMounted(async () => {
 onBeforeUnmount(() => {
   unsubscribeHandlers.forEach((unsubscribe) => unsubscribe())
   clearInterval(reminderTimer)
-  if (darkModeMq) darkModeMq.removeEventListener('change', () => {})
+  if (darkModeMq && onDarkModeChange) darkModeMq.removeEventListener('change', onDarkModeChange)
+  cancelSortDrag()
   clearTimeout(resizeDebounce)
+  clearTimeout(sortDragJustEndedTimer)
+  clearTimeout(sortDragSettlingTimer)
+  clearTimeout(toggleCompletedTimer)
   if (resizeObserver) {
     resizeObserver.disconnect()
     resizeObserver = null
@@ -1299,6 +1277,7 @@ onBeforeUnmount(() => {
 .icon-button:hover {
   color: var(--accent-strong);
   background: var(--accent-soft);
+  transform: scale(1.06);
 }
 
 .icon-button.active {
@@ -1333,6 +1312,12 @@ onBeforeUnmount(() => {
   font-size: 13px;
 }
 
+.search-box:focus-within {
+  border-color: rgba(47, 125, 120, 0.42);
+  box-shadow: var(--focus-ring);
+  background: var(--bg-input);
+}
+
 .note-list {
   display: flex;
   flex-direction: column;
@@ -1348,11 +1333,19 @@ onBeforeUnmount(() => {
   border: 1px solid var(--border);
   border-radius: var(--radius-control);
   background: var(--bg-card);
+  transition:
+    background-color var(--dur-base) var(--ease-out),
+    border-color var(--dur-base) var(--ease-out),
+    box-shadow var(--dur-base) var(--ease-out),
+    transform var(--dur-fast) var(--ease-out),
+    opacity var(--dur-base) var(--ease-out);
 }
 
 .note-card:hover {
-  filter: brightness(1.04);
   background: var(--bg-card-hover);
+  border-color: rgba(47, 125, 120, 0.22);
+  box-shadow: var(--shadow-sm);
+  transform: translateY(-1px);
 }
 .note-card:active {
   transform: scale(0.99);
@@ -1431,8 +1424,8 @@ onBeforeUnmount(() => {
 }
 
 .pass-through-mode .note-card:hover {
-  filter: none;
-  background: var(--bg-card);
+  transform: none;
+  box-shadow: none;
   background: var(--bg-card);
 }
 
@@ -1468,6 +1461,15 @@ onBeforeUnmount(() => {
   border-radius: 999px;
   color: var(--accent);
   background: transparent;
+  transition:
+    background-color var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out),
+    transform var(--dur-fast) var(--ease-out);
+}
+
+.check-button:hover {
+  background: var(--accent-soft);
+  transform: scale(1.08);
 }
 
 .pin-button {
@@ -1535,7 +1537,7 @@ onBeforeUnmount(() => {
 }
 
 .attach-pill:hover {
-  background: rgba(47, 125, 120, 0.2);
+  background: var(--accent-soft);
 }
 
 .empty-state {
@@ -1579,6 +1581,12 @@ onBeforeUnmount(() => {
   border-radius: var(--radius-window);
   background: var(--bg-overlay);
   clip-path: inset(0 round var(--radius-window));
+  animation: overlay-in var(--dur-base) var(--ease-out);
+}
+
+@keyframes overlay-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
 }
 
 .editor-panel {
@@ -1590,7 +1598,13 @@ onBeforeUnmount(() => {
   padding: 14px;
   border-radius: var(--radius-panel);
   background: var(--bg-elevated);
-  box-shadow: var(--shadow);
+  box-shadow: var(--shadow-pop);
+  animation: panel-in var(--dur-base) var(--ease-spring);
+}
+
+@keyframes panel-in {
+  from { opacity: 0; transform: scale(0.96) translateY(6px); }
+  to   { opacity: 1; transform: scale(1) translateY(0); }
 }
 
 .editor-header {
@@ -1774,62 +1788,6 @@ onBeforeUnmount(() => {
   background: var(--danger);
 }
 
-.opacity-control {
-  display: none;
-}
-
-.opacity-control input {
-  width: 100%;
-  accent-color: var(--accent);
-}
-
-.opacity-control span {
-  font-size: 12px;
-  text-align: right;
-}
-
-.preset-grid,
-.category-grid,
-.mode-switch {
-  display: none;
-}
-
-.mode-switch button {
-  height: 30px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-control);
-  color: var(--text-muted);
-  background: rgba(255, 255, 255, 0.62);
-  font-size: 12px;
-}
-
-.mode-switch button.active {
-  border-color: rgba(47, 125, 120, 0.42);
-  color: var(--accent-strong);
-  background: var(--accent-soft);
-  font-weight: 700;
-}
-
-.edge-toggle {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-top: 8px;
-  height: 30px;
-  padding: 0 10px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-control);
-  color: var(--text-muted);
-  background: rgba(255, 255, 255, 0.62);
-  font-size: 12px;
-}
-
-.edge-toggle input {
-  width: 15px;
-  height: 15px;
-  accent-color: var(--accent);
-}
-
 .error-fallback {
   position: relative;
   display: grid;
@@ -1843,7 +1801,6 @@ onBeforeUnmount(() => {
   color: var(--text);
   background: var(--bg-window);
   box-shadow: var(--shadow);
-  backdrop-filter: blur(8px);
   clip-path: inset(0 round var(--radius-window));
 }
 
@@ -1945,14 +1902,6 @@ onBeforeUnmount(() => {
   box-shadow: inset 0 0 0 1px var(--accent);
 }
 
-.mode-switch button {
-  background: var(--bg-input);
-}
-
-.edge-toggle {
-  background: var(--bg-input);
-}
-
 /* ===== 拖拽排序脉冲 ===== */
 
 @keyframes sort-pulse {
@@ -2052,7 +2001,10 @@ onBeforeUnmount(() => {
   font-weight: 500;
   font-family: inherit;
   cursor: pointer;
-  transition: all 0.15s;
+  transition:
+    color var(--dur-fast) var(--ease-out),
+    background-color var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out);
 }
 .tab-btn:hover { color: var(--text); background: var(--bg-card); }
 .tab-btn.active { color: var(--accent-strong); background: var(--accent-soft); border-color: rgba(47,125,120,0.15); font-weight: 600; }

@@ -26,7 +26,12 @@ export const useClipboardStore = defineStore('clipboard', {
 
   actions: {
     async load() {
-      this.items = await window.api.clipboard.list(100, 0) || []
+      try {
+        this.items = await window.api.clipboard.list(100, 0) || []
+      } catch (err) {
+        console.error('[clipboard] load failed:', err?.message || err)
+        this.items = []
+      }
     },
 
     async search(query) {
@@ -34,25 +39,45 @@ export const useClipboardStore = defineStore('clipboard', {
     },
 
     async deleteItem(id) {
-      await window.api.clipboard.delete(id)
+      try {
+        await window.api.clipboard.delete(id)
+      } catch (err) {
+        console.error('[clipboard] deleteItem failed:', err?.message || err)
+        throw err
+      }
       this.items = this.items.filter(item => item.id !== id)
       this.selectedIds.delete(id)
     },
 
     async togglePin(id) {
-      await window.api.clipboard.togglePin(id)
+      try {
+        await window.api.clipboard.togglePin(id)
+      } catch (err) {
+        console.error('[clipboard] togglePin failed:', err?.message || err)
+        throw err
+      }
       const item = this.items.find(item => item.id === id)
       if (item) item.pinned = item.pinned ? 0 : 1
     },
 
     async clearAll() {
-      await window.api.clipboard.clearAll()
+      try {
+        await window.api.clipboard.clearAll()
+      } catch (err) {
+        console.error('[clipboard] clearAll failed:', err?.message || err)
+        throw err
+      }
       this.items = this.items.filter(item => item.pinned)
       this.selectedIds.clear()
     },
 
     async paste(id) {
-      await window.api.clipboard.paste(id)
+      try {
+        await window.api.clipboard.paste(id)
+      } catch (err) {
+        console.error('[clipboard] paste failed:', err?.message || err)
+        throw err
+      }
     },
 
     addItem(item) {
@@ -87,10 +112,16 @@ export const useClipboardStore = defineStore('clipboard', {
 
     async deleteSelected() {
       const ids = [...this.selectedIds]
+      const deleted = new Set()
       for (const id of ids) {
-        await window.api.clipboard.delete(id)
+        try {
+          await window.api.clipboard.delete(id)
+          deleted.add(id)
+        } catch (err) {
+          console.error('[clipboard] deleteSelected item failed:', err?.message || err)
+        }
       }
-      this.items = this.items.filter(item => !this.selectedIds.has(item.id))
+      this.items = this.items.filter(item => !deleted.has(item.id))
       this.exitSelectMode()
     }
   }

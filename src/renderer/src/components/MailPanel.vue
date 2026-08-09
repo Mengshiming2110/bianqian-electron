@@ -57,11 +57,11 @@
     </div>
 
     <!-- 已连接 -->
-    <div v-else style="flex:1;min-height:0;display:flex;flex-direction:column">
+    <div v-else class="mail-connected">
       <div class="mail-toolbar">
         <span>{{ store.mails.length }} 封邮件</span>
         <div style="display:flex;align-items:center;gap:4px">
-          <span class="status-dot" :class="store.isRunning ? 'on' : 'off'"></span>
+          <span class="status-dot" :class="store.connected ? 'on' : 'off'" :title="store.connected ? '已连接' : '连接中断，自动重连中'"></span>
           <button class="mini-btn" title="拉取" @click="handleFetch"><RefreshCw :size="14" /></button>
           <button class="mini-btn" title="断开" @click="handleStop"><Power :size="14" /></button>
         </div>
@@ -222,7 +222,6 @@ const sanitizedMailHtml = computed(() => {
 })
 
 const taskSummary = computed(() => buildMailTaskSummary(store.selectedMail, sanitizedMailHtml.value))
-const currentMaterial = computed(() => taskSummary.value?.materials?.[materialPage.value] || null)
 
 // ===== 附件视图 =====
 const attachments = ref([])
@@ -243,6 +242,7 @@ const displayMaterial = computed(() => {
 const displayMaterialPage = computed(() => activeAttachment.value ? excelMaterialPage.value : materialPage.value)
 const displayMaterialTotal = computed(() => displaySummary.value?.materials?.length || 0)
 
+let attachReqId = 0
 watch(() => store.selectedMail?.id, async (id) => {
   materialPage.value = 0
   excelMaterialPage.value = 0
@@ -250,9 +250,12 @@ watch(() => store.selectedMail?.id, async (id) => {
   activeAttachment.value = null
   excelSummary.value = null
   attachments.value = []
+  const reqId = ++attachReqId
   if (id) {
-    const list = await window.api?.mail?.attachments(id) || []
-    attachments.value = list
+    try {
+      const list = await window.api?.mail?.attachments(id) || []
+      if (reqId === attachReqId) attachments.value = list
+    } catch (err) { console.error('[MailPanel] attachments:', err) }
   }
 })
 
@@ -282,6 +285,10 @@ function backToHtml() {
 }
 
 watch(materialPage, () => {
+  copyToast.value = ''
+})
+
+watch(excelMaterialPage, () => {
   copyToast.value = ''
 })
 
@@ -316,7 +323,9 @@ async function handleDoctor() {
   await store.doctor(mailConfigPayload())
 }
 async function handleFetch() { await store.fetch() }
-async function handleStop() { await store.stop() }
+async function handleStop() {
+  try { await store.stop() } catch (err) { console.error('[MailPanel] handleStop failed:', err) }
+}
 function scheduleSaveMailIdentity() {
   if (saveIdentityTimer) clearTimeout(saveIdentityTimer)
   saveIdentityTimer = setTimeout(() => {
@@ -328,12 +337,16 @@ async function saveMailIdentity() {
     clearTimeout(saveIdentityTimer)
     saveIdentityTimer = null
   }
-  await window.api?.settings?.save({
-    mailConfig: {
-      ...mailConfigPayload(),
-      password: ''
-    }
-  })
+  try {
+    await window.api?.settings?.save({
+      mailConfig: {
+        ...mailConfigPayload(),
+        password: ''
+      }
+    })
+  } catch (err) {
+    console.error('[MailPanel] saveMailIdentity failed:', err)
+  }
 }
 function mailConfigPayload() {
   return {
@@ -396,11 +409,15 @@ function relativeTime(iso) {
 .field { display: grid; gap: 4px; }
 .field span { font-size: 11px; color: var(--text-muted); }
 .field input { box-sizing: border-box; width: 100%; height: 36px; padding: 0 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg-input); color: var(--text); font-size: 12px; font-family: inherit; outline: 0; }
-.field input:focus { border-color: var(--accent); }
+.field input:focus {
+  border-color: var(--accent);
+  box-shadow: var(--focus-ring);
+}
 .mail-actions { display: grid; grid-template-columns: minmax(0, 1fr) 72px; gap: 8px; }
 .save-btn { height: 38px; border: none; border-radius: 8px; background: var(--accent); color: #fff; font-size: 13px; font-weight: 600; cursor: pointer; font-family: inherit; }
 .save-btn.compact { height: 34px; margin-top: 6px; padding: 0 18px; }
-.save-btn:hover { opacity: 0.9; }
+.save-btn:hover { background: var(--accent-strong); }
+.save-btn:disabled { opacity: 0.6; cursor: default; }
 .diagnose-btn { height: 38px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg-input); color: var(--text); font-size: 12px; font-weight: 600; cursor: pointer; font-family: inherit; }
 .diagnose-btn:hover { background: var(--accent-soft); color: var(--accent-strong); }
 .login-help { font-size: 11px; color: var(--text-muted); margin-top: 9px; }
@@ -411,6 +428,12 @@ function relativeTime(iso) {
   border: 1px solid var(--border);
   border-radius: 8px;
   background: var(--bg-input);
+  animation: reveal-in var(--dur-base) var(--ease-out);
+}
+
+@keyframes reveal-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
 }
 .doctor-title {
   display: flex;
@@ -455,6 +478,7 @@ function relativeTime(iso) {
   border-radius: 8px;
   background: rgba(226, 74, 74, 0.07);
   color: var(--text);
+  animation: reveal-in var(--dur-base) var(--ease-out);
 }
 .mail-error-title {
   display: flex;
@@ -497,8 +521,8 @@ function relativeTime(iso) {
 .status-dot.on { background: var(--accent); }
 .status-dot.off { background: var(--text-muted); }
 .mail-list { flex: 1; overflow-y: auto; padding: 0 12px; display: flex; flex-direction: column; gap: 6px; }
-.mail-card { padding: 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg-card); cursor: pointer; transition: filter 0.15s, background 0.15s; }
-.mail-card:hover { filter: brightness(1.04); background: var(--bg-card-hover); }
+.mail-card { padding: 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg-card); cursor: pointer; transition: background-color var(--dur-base) var(--ease-out), border-color var(--dur-base) var(--ease-out), box-shadow var(--dur-base) var(--ease-out), transform var(--dur-fast) var(--ease-out); }
+.mail-card:hover { background: var(--bg-card-hover); border-color: rgba(47, 125, 120, 0.22); box-shadow: var(--shadow-sm); transform: translateY(-1px); }
 .mail-card:active { transform: scale(0.99); }
 .mail-card.unread { border-left: 2px solid var(--accent); }
 .mail-top { display: flex; justify-content: space-between; margin-bottom: 3px; }
@@ -511,8 +535,10 @@ function relativeTime(iso) {
 .empty-state { display: grid; place-items: center; align-content: center; min-height: 180px; padding: 14px 26px; color: var(--text-muted); font-size: 13px; gap: 5px; text-align: center; }
 .empty-state p { margin: 0; color: var(--text); font-weight: 600; }
 .empty-state small { color: var(--text-muted); font-size: 11px; line-height: 1.45; }
-.detail-overlay { position: fixed; inset: 0; z-index: 1000; overflow: hidden; border-radius: var(--radius-window); background: var(--bg-overlay); clip-path: inset(0 round var(--radius-window)); display: grid; place-items: center; padding: 12px; }
-.detail-panel { width: 100%; max-height: 80vh; padding: 14px; border-radius: 12px; background: var(--bg-elevated); border: 1px solid var(--border); box-shadow: var(--shadow); overflow-y: auto; }
+.detail-overlay { position: fixed; inset: 0; z-index: 1000; overflow: hidden; border-radius: var(--radius-window); background: var(--bg-overlay); clip-path: inset(0 round var(--radius-window)); display: grid; place-items: center; padding: 12px; animation: overlay-in var(--dur-base) var(--ease-out); }
+@keyframes overlay-in { from { opacity: 0; } to { opacity: 1; } }
+.detail-panel { width: 100%; max-height: 80vh; padding: 14px; border-radius: 12px; background: var(--bg-elevated); border: 1px solid var(--border); box-shadow: var(--shadow-pop); overflow-y: auto; animation: panel-in var(--dur-base) var(--ease-spring); }
+@keyframes panel-in { from { opacity: 0; transform: scale(0.96) translateY(6px); } to { opacity: 1; transform: scale(1) translateY(0); } }
 .detail-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
 .detail-header h3 { font-size: 15px; font-weight: 600; color: var(--text); }
 .detail-meta { font-size: 11px; color: var(--text-muted); display: flex; flex-direction: column; gap: 2px; margin-bottom: 10px; padding-bottom: 8px; border-bottom: 1px solid var(--border); }

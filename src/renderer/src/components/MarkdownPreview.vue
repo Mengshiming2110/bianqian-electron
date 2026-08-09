@@ -14,8 +14,6 @@ import { computed } from 'vue'
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
 
-marked.setOptions({ breaks: true, gfm: true })
-
 const props = defineProps({
   content: { type: String, default: '' },
   isMini: { type: Boolean, default: false }
@@ -27,13 +25,13 @@ const renderedHtml = computed(() => {
   const text = (props.content || '').trim()
   if (!text || props.isMini) return ''
 
-  const raw = marked.parse(text, { async: false })
+  const raw = marked.parse(text, { breaks: true, gfm: true, async: false })
   return DOMPurify.sanitize(raw, {
     ALLOWED_TAGS: ['p', 'br', 'hr', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
       'strong', 'b', 'em', 'i', 'u', 's', 'del', 'ins',
       'a', 'ul', 'ol', 'li', 'blockquote', 'pre', 'code',
       'table', 'thead', 'tbody', 'tr', 'th', 'td', 'input'],
-    ALLOW_ATTR: ['href', 'target', 'rel', 'src', 'alt', 'checked', 'type']
+    ALLOW_ATTR: ['href', 'target', 'rel', 'checked', 'type']
   })
 })
 

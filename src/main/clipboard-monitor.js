@@ -114,6 +114,7 @@ export function startClipboardMonitor(onNewItem) {
 
 export function stopClipboardMonitor() {
   if (pollTimer) { clearInterval(pollTimer); pollTimer = null }
+  lastSelfPasteHash = ''
 }
 
 export function writeToClipboard(id) {
@@ -123,7 +124,7 @@ export function writeToClipboard(id) {
     clipboard.writeImage(nativeImage.createFromDataURL(item.content))
     lastSelfPasteHash = item.hash
   } else {
-    const text = item.type === 'html' ? (item.preview || htmlToPlainText(item.content)) : (item.content || '')
+    const text = item.content || ''
     clipboard.writeText(text)
     lastSelfPasteHash = hashContent(text)
   }

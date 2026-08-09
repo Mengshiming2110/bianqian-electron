@@ -10,8 +10,11 @@
   --bg-elevated: rgba(255, 255, 255, 0.98);
   --bg-input: #fff;
   --bg-overlay: rgba(20, 28, 27, 0.32);
-  --border: rgba(38, 57, 54, 0.12);
+  --border: rgba(38, 57, 54, 0.14);
+  --shadow-sm: 0 1px 2px rgba(32, 44, 42, 0.06);
   --shadow: 0 18px 42px rgba(32, 44, 42, 0.18);
+  --shadow-md: 0 6px 20px rgba(32, 44, 42, 0.14);
+  --shadow-pop: 0 12px 32px rgba(32, 44, 42, 0.2);
   --shadow-drag: 0 12px 32px rgba(0, 0, 0, 0.18), 0 4px 12px rgba(0, 0, 0, 0.1);
   --danger: #ba4b4b;
   --warning: #c58a25;
@@ -19,6 +22,12 @@
   --radius-panel: 12px;
   --radius-control: 8px;
   --radius-small: 6px;
+  --dur-fast: 120ms;
+  --dur-base: 180ms;
+  --dur-slow: 280ms;
+  --ease-out: cubic-bezier(0.32, 0.72, 0, 1);
+  --ease-spring: cubic-bezier(0.22, 1, 0.36, 1);
+  --focus-ring: 0 0 0 3px var(--accent-soft);
 }
 
 [data-theme="dark"] {
@@ -33,9 +42,13 @@
   --bg-elevated: rgba(42, 54, 49, 0.96);
   --bg-input: rgba(30, 40, 36, 0.90);
   --bg-overlay: rgba(0, 0, 0, 0.45);
-  --border: rgba(140, 185, 168, 0.12);
+  --border: rgba(140, 185, 168, 0.14);
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.28);
   --shadow: 0 18px 42px rgba(0, 0, 0, 0.50);
+  --shadow-md: 0 6px 20px rgba(0, 0, 0, 0.42);
+  --shadow-pop: 0 12px 32px rgba(0, 0, 0, 0.55);
   --shadow-drag: 0 12px 32px rgba(0, 0, 0, 0.40), 0 4px 12px rgba(0, 0, 0, 0.25);
   --danger: #d97a7a;
   --warning: #dba040;
+  --focus-ring: 0 0 0 3px rgba(94, 191, 158, 0.18);
 }

@@ -53,33 +53,13 @@ onMounted(async () => {
       if (found) {
         Object.assign(note, found)
       }
-    } catch {}
+    } catch (err) { console.error('[NotePopout] load failed:', err) }
   }
 })
 
 onBeforeUnmount(() => {
   if (unsubNoteData) unsubNoteData()
 })
-
-function startDrag(e) {
-  if (e.target.closest('button')) return
-  e.preventDefault()
-  let startX = e.screenX
-  let startY = e.screenY
-  const { x, y } = window.electron?.remote?.getCurrentWindow()?.getBounds() || { x: 0, y: 0 }
-
-  function onMove(ev) {
-    window.moveBy(ev.screenX - startX, ev.screenY - startY)
-    startX = ev.screenX
-    startY = ev.screenY
-  }
-  function onUp() {
-    document.removeEventListener('mousemove', onMove)
-    document.removeEventListener('mouseup', onUp)
-  }
-  document.addEventListener('mousemove', onMove)
-  document.addEventListener('mouseup', onUp)
-}
 
 function close() {
   window.close()
@@ -119,7 +99,7 @@ function onEnterEnd(e) {
   flex-direction: column;
   height: 100vh;
   background: var(--bg-elevated, #fff);
-  border-radius: 10px;
+  border-radius: var(--radius-panel);
   overflow: hidden;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
   transform-origin: top center;
