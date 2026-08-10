@@ -8,7 +8,6 @@ import {
   getNotes,
   getSettings,
   getShortcuts,
-  saveNotes,
   setShortcut,
   resetShortcuts,
   toggleNote,
@@ -30,7 +29,7 @@ const MAX_ATTACHMENTS_PER_NOTE = 10
 
 let storeLock = Promise.resolve()
 
-function applyAutoStart(enabled) {
+export function applyAutoStart(enabled) {
   if (!app.isPackaged && process.platform === 'win32') {
     return
   }
@@ -137,7 +136,6 @@ export function registerIpc(windowManager, trayController) {
     return result
   }))
   ipcMain.handle('notes:toggle', (_event, id) => withLock(() => toggleNote(id)))
-  ipcMain.handle('notes:save-all', (_event, notes) => withLock(() => saveNotes(notes)))
 
   ipcMain.handle('dialog:select-attachments', async (event, limit) => {
     const parent = BrowserWindow.fromWebContents(event.sender)
@@ -162,10 +160,6 @@ export function registerIpc(windowManager, trayController) {
     return true
   }))
 
-  ipcMain.handle('files:max-attachments-per-note', () => {
-    return MAX_ATTACHMENTS_PER_NOTE
-  })
-
   ipcMain.handle('shell:open-path', async (_event, path) => {
     if (!path || !isAttachmentPath(path)) {
       return false
@@ -175,9 +169,16 @@ export function registerIpc(windowManager, trayController) {
     return !err
   })
 
+  ipcMain.handle('shell:open-external', async (_event, url) => {
+    if (typeof url !== 'string' || !/^https?:\/\//i.test(url)) {
+      return false
+    }
+    await shell.openExternal(url)
+    return true
+  })
+
   ipcMain.handle('window:hide', () => windowManager.hide())
   ipcMain.handle('window:show', (_event, category) => windowManager.show(category))
-  ipcMain.handle('window:new-note', () => windowManager.openNewNote())
   ipcMain.handle('window:get-interaction-state', () => windowManager.getInteractionState())
   ipcMain.handle('window:set-pass-through', (_event, enabled) => {
     const state = windowManager.setPassThroughMode(enabled)
@@ -186,11 +187,6 @@ export function registerIpc(windowManager, trayController) {
   })
   ipcMain.handle('window:set-opacity', (_event, opacity) => {
     const state = windowManager.setOpacity(opacity)
-    return state
-  })
-  ipcMain.handle('window:set-mode', (_event, mode) => {
-    const state = windowManager.setWindowMode(mode)
-    trayController.rebuildMenu(trayController.counts)
     return state
   })
   ipcMain.handle('window:set-edge-auto-hide', (_event, enabled) => {
@@ -208,18 +204,10 @@ export function registerIpc(windowManager, trayController) {
   ipcMain.on('window:mouse-leave', () => windowManager.onMouseLeave())
   ipcMain.on('window:mouse-enter', () => windowManager.onMouseEnter())
   ipcMain.on('window:set-editing', (_event, editing) => windowManager.setEditing(editing))
-  ipcMain.on('window:set-pinned', (_event, pinned) => windowManager.setPinned(pinned))
-  ipcMain.on('window:resize-to-content', (_event, height) => windowManager.resizeToContent(height))
 
   ipcMain.handle('note-window:open', (_event, noteId, noteData) => {
     windowManager.openNoteWindow(noteId, noteData)
     return true
-  })
-  ipcMain.handle('note-window:close', (_event, noteId) => {
-    windowManager.closeNoteWindow(noteId)
-  })
-  ipcMain.handle('note-window:close-all', () => {
-    windowManager.closeAllNoteWindows()
   })
 
   ipcMain.handle('context-menu:show', (event, noteData) => {
@@ -277,14 +265,6 @@ export function registerIpc(windowManager, trayController) {
     ])
 
     menu.popup({ window: win })
-  })
-
-  ipcMain.handle('settings-window:open', (event, screenX, screenY) => {
-    windowManager.openSettingsWindow(screenX, screenY)
-  })
-
-  ipcMain.handle('settings-window:close', () => {
-    windowManager.closeSettingsWindow()
   })
 
   ipcMain.handle('notify:trigger', (_event, { title, body, noteId, silent }) => {

@@ -1,5 +1,6 @@
 import { spawn } from 'node:child_process'
-import { existsSync } from 'node:fs'
+import { existsSync, writeFileSync } from 'node:fs'
+import { randomBytes } from 'node:crypto'
 import { join } from 'node:path'
 import { app } from 'electron'
 
@@ -11,10 +12,27 @@ const MAIL_REQUEST_TIMEOUT_MS = 30000
 const HEALTH_CHECK_INTERVAL_MS = 30000
 const HEALTH_FAIL_LIMIT = 3
 
+/**
+ * Zcode / 外部自动化操作邮件服务的入口：
+ * - 状态文件：app.getPath('userData')/mail-service.json，含 port + token + 运行状态
+ * - 读取状态文件后，用 X-Mail-Token 头直接调用服务 HTTP API：
+ *   GET  /health            服务健康状态
+ *   GET  /doctor            完整诊断（依赖/DNS/TCP/EWS 认证 + fixes 修复建议）
+ *   GET  /mails?since=&limit=  邮件列表
+ *   GET  /mail/{id}         邮件详情
+ *   GET  /mail/{id}/attachments          附件列表
+ *   GET  /mail/{id}/attachments/{name}   下载附件
+ *   POST /start             body=完整配置，配置并连接（重连 = 用原配置再 POST）
+ *   POST /stop              停止服务
+ * - 也可通过 window.api.mail.*（IPC）或 mail:fix 触发修复
+ */
+const MAIL_STATUS_FILE = () => join(app.getPath('userData'), 'mail-service.json')
+
 export class MailBridge {
   constructor() {
     this.process = null
     this.baseUrl = ''
+    this.token = ''
     this.retryCount = 0
     this.healthTimer = null
     this.retryTimer = null
@@ -46,12 +64,14 @@ export class MailBridge {
     try {
       const port = String(9800 + Math.floor(Math.random() * 200))
       this.baseUrl = `http://127.0.0.1:${port}`
+      this.token = randomBytes(16).toString('hex')
 
       this.process = spawn(exePath, [port], {
         stdio: ['pipe', 'pipe', 'pipe'],
         windowsHide: true,
         env: {
           ...process.env,
+          MAIL_SERVICE_TOKEN: this.token,
           MAIL_SERVER: config.server || '',
           MAIL_SMTP: config.email || '',
           MAIL_EMAIL: config.email || '',
@@ -88,10 +108,39 @@ export class MailBridge {
         this.lastError = ''
       }
       this.unhealthyCount = 0
+      this._writeStatus()
       return true
     } catch (err) {
       console.error('[mail-bridge] 启动失败:', err.message)
       throw err
+    }
+  }
+
+  /** 状态文件：Zcode/外部工具发现服务端口与令牌的唯一入口 */
+  _writeStatus() {
+    try {
+      const running = this.process != null && !this.stopping
+      writeFileSync(MAIL_STATUS_FILE(), JSON.stringify({
+        port: Number(this.baseUrl.replace('http://127.0.0.1:', '')) || null,
+        token: this.token,
+        pid: running ? this.process?.pid : null,
+        running,
+        connected: running && this.connected,
+        lastError: this.lastError,
+        updatedAt: new Date().toISOString(),
+        endpoints: {
+          'GET /health': '服务健康状态',
+          'GET /doctor': '完整诊断（依赖/DNS/TCP/EWS 认证 + 修复建议）',
+          'GET /mails?since=&limit=': '邮件列表',
+          'GET /mail/{id}': '邮件详情',
+          'GET /mail/{id}/attachments': '附件列表',
+          'GET /mail/{id}/attachments/{name}': '下载附件',
+          'POST /start': '配置并连接（body 为完整配置；重连 = 用原配置再 POST）',
+          'POST /stop': '停止服务'
+        }
+      }, null, 2), 'utf-8')
+    } catch (err) {
+      console.warn('[mail-bridge] 状态文件写入失败:', err.message)
     }
   }
 
@@ -134,23 +183,55 @@ export class MailBridge {
     if (this.unhealthyCount >= HEALTH_FAIL_LIMIT) {
       console.warn(`[mail-bridge] 连续 ${HEALTH_FAIL_LIMIT} 次健康检查失败，重启邮件服务`)
       this.unhealthyCount = 0
-      this._restart()
+      this._restart().catch(() => {})
     }
+    this._writeStatus()
+  }
+
+  /** 诊断后修复：reconnect=用现有配置重置账号重连（不重启进程）；restart=整进程重启 */
+  async fix(action) {
+    if (action === 'reconnect') {
+      if (!this.process) return { ok: false, error: '邮件服务未运行' }
+      try {
+        await this._sendConfig()
+        this.connected = true
+        this.lastError = ''
+        this.unhealthyCount = 0
+        this._writeStatus()
+        return { ok: true }
+      } catch (err) {
+        console.error('[mail-bridge] 重连失败:', err.message)
+        return { ok: false, error: err.message }
+      }
+    }
+    if (action === 'restart') {
+      if (!this.process) return { ok: false, error: '邮件服务未运行' }
+      try {
+        await this._restart()
+        return { ok: true }
+      } catch (err) {
+        console.error('[mail-bridge] 重启失败:', err.message)
+        return { ok: false, error: err.message }
+      }
+    }
+    return { ok: false, error: `未知修复动作: ${action}` }
   }
 
   _restart() {
-    if (this.stopping || this.restarting) return
+    if (this.stopping || this.restarting) return Promise.reject(new Error('服务正在重启或停止中'))
     this.restarting = true
     this._killProcess()
-    this.start(this.config)
+    return this.start(this.config)
       .then(() => {
         this.restarting = false
         console.log('[mail-bridge] 重启成功')
+        return { ok: true }
       })
       .catch((err) => {
         this.restarting = false
         console.error('[mail-bridge] 重启失败:', err.message)
         this._retry()
+        throw err
       })
   }
 
@@ -220,7 +301,11 @@ export class MailBridge {
       const res = await fetch(url, {
         ...fetchOptions,
         signal: controller.signal,
-        headers: { 'Content-Type': 'application/json', ...fetchOptions.headers }
+        headers: {
+          'Content-Type': 'application/json',
+          ...(this.token ? { 'X-Mail-Token': this.token } : {}),
+          ...fetchOptions.headers
+        }
       })
       if (options.responseType === 'arraybuffer') {
         const buf = await res.arrayBuffer()
@@ -288,14 +373,16 @@ export class MailBridge {
   }
 
   async doctor() {
-    return await this._fetch('/doctor', { timeoutMs: 5000 })
+    // 诊断含 EWS 认证测试（quick 模式 ~10s 有界），超时放宽到 20s
+    return await this._fetch('/doctor', { timeoutMs: 20000 })
   }
 
   getStatus() {
+    const running = this.process != null && !this.stopping
     return {
-      running: this.process != null,
-      connected: this.process != null && this.connected,
-      error: this.process ? this.lastError : '邮件服务未启动'
+      running,
+      connected: running && this.connected,
+      error: running ? this.lastError : '邮件服务未启动'
     }
   }
 
@@ -317,5 +404,6 @@ export class MailBridge {
     if (this.process) {
       this._killProcess()
     }
+    this._writeStatus()
   }
 }

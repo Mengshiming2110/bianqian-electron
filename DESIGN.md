@@ -309,7 +309,45 @@ api.window.{hide, show, newNote, getInteractionState, setPassThrough,
             mouseLeave, mouseEnter, setEditing, setPinned,
             onFilterCategory, onCreateNote, onInteractionState}
 api.shortcuts.{list, update, reset, startRecord, stopRecord, onKeydown}
+api.mail.{configure, list, fetch, doctor, fix, config, detail, stop,
+          status, attachments, attachmentContent}
 ```
+
+### 4.5 邮件服务 API 契约（Zcode / 外部自动化入口）
+
+MailService（`resources/MailService.exe`，Python http.server）监听 `127.0.0.1` 随机端口。
+**发现方式**：读取 `app.getPath('userData')/mail-service.json`（桥接层每次启动/健康检查/停止时刷新），
+内容含 `port`、`token`、`pid`、`running`、`connected`、`lastError`、`endpoints` 说明。
+
+**鉴权**：所有请求需带 `X-Mail-Token: <token>` 头（token 仅在状态文件中；环境变量未设置时免鉴权）。
+
+```
+GET  /health              → { ok, version, connected, error, last_ok_at }
+GET  /doctor              → { ok, version, probed_at, dependency, network,
+                              config, ews(真实认证测试), fixes(修复建议), connected, last_error }
+GET  /mails?since=&limit= → 邮件列表 [{ id, subject, sender, preview, received_at, is_read, ... }]
+GET  /mail/{id}           → 邮件详情（含 body/html）
+GET  /mail/{id}/attachments                  → 附件列表
+GET  /mail/{id}/attachments/{filename}       → 附件二进制
+POST /start               → body=完整配置 { server, email, domain, domainUser, password }，
+                             重置账号并连接（"重连" = 用原配置再 POST 一次）
+POST /stop                → 优雅停机
+```
+
+**IPC（渲染层 / Zcode 通过 preload 调用）**：
+
+```
+mail:configure(config)  配置并连接（失败自动清理，不影响下次诊断）
+mail:doctor(config)     诊断——服务运行中直接诊断现有实例（不打断连接）；
+                        未运行时临时拉起诊断后即停
+mail:fix(action)        诊断后修复：'reconnect'=重置账号重连（不重启进程）；
+                        'restart'=整进程重启（自动重新配置连接）
+mail:config()           当前连接配置（不含密码）
+mail:status() / list() / fetch() / detail(id) / stop() / attachments(id)
+```
+
+诊断 `fixes` 数组结构：`[{ action: 'config'|'network'|'credentials'|'reconnect', label }]`，
+界面展示为修复建议；`reconnect`/`restart` 可直接触发 `mail:fix`。
 
 ---
 

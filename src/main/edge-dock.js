@@ -24,11 +24,9 @@ export class EdgeDockController {
     this.isPinned = false
     this.isEditing = false
 
-    this._visibleX = null           // dock/hidden 时的可见 X
     this._mouseTimer = null
     this._hideTimer = null
     this._snapTimer = null
-    this._mouseInside = false
   }
 
   get window() { return this._getWindow() }
@@ -135,13 +133,11 @@ export class EdgeDockController {
   }
 
   onMouseEnter() {
-    this._mouseInside = true
     this._clearHideTimer()
   }
 
   onMouseLeave() {
     if (!this.autoHide || !this.isDocked() || this.isPinned || this.isEditing) return
-    this._mouseInside = false
     this._scheduleHide()
   }
 
@@ -184,7 +180,6 @@ export class EdgeDockController {
     const win = this.window
 
     this.state = newState
-    this._visibleX = this.isDocked() ? targetX : (this.isHidden() ? targetX : null)
 
     // 仅当 X 真的需要变时才 setBounds（避免触发多余的 moved 事件）
     if (win && !win.isDestroyed() && bounds.x !== targetX) {
@@ -206,7 +201,6 @@ export class EdgeDockController {
     if (this.isHidden()) {
       const bounds = win.getBounds()
       const area = this.getWorkArea()
-      // 恢复时使用 DOCKED 位置，而非隐藏时记录的离屏 _visibleX
       const dockedState = this.state === EDGE_STATE.HIDDEN_LEFT ? EDGE_STATE.DOCKED_LEFT : EDGE_STATE.DOCKED_RIGHT
       const targetX = this._xForState(dockedState, bounds, area)
       win.setBounds({ ...bounds, x: targetX })
@@ -214,22 +208,10 @@ export class EdgeDockController {
 
     if (!keepDock) {
       this.state = EDGE_STATE.NORMAL
-      this._visibleX = null
     } else if (this.isHidden()) {
       this.state = this.state === EDGE_STATE.HIDDEN_LEFT ? EDGE_STATE.DOCKED_LEFT : EDGE_STATE.DOCKED_RIGHT
     }
     this.onInteractionChange()
   }
 
-  // ===== 清理 =====
-
-  getDockedX() {
-    if (!this.isDocked()) return null
-    return this._visibleX
-  }
-
-  destroy() {
-    this.stopMouseWatcher()
-    clearTimeout(this._snapTimer)
-  }
 }

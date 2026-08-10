@@ -8,6 +8,7 @@ let autoFetchTimer = null
 let autoFetchInFlight = false
 let quickRetryTimer = null
 let quickRetryCount = 0
+let mailIntervalMinutes = DEFAULT_MAIL_INTERVAL_MINUTES
 
 const QUICK_RETRY_DELAY_MS = 30000
 const QUICK_RETRY_MAX = 5
@@ -24,13 +25,9 @@ export const useMailStore = defineStore('mail', {
     isRunning: false,
     connected: false,
     configured: false,
-    config: null,
     error: null,
     doctorResult: null,
-    doctorRunning: false,
-    lastSync: null,
-    unreadCount: 0,
-    mailInterval: DEFAULT_MAIL_INTERVAL_MINUTES
+    doctorRunning: false
   }),
 
   actions: {
@@ -42,7 +39,6 @@ export const useMailStore = defineStore('mail', {
         domain: String(config?.domain || DEFAULT_MAIL_DOMAIN).trim() || DEFAULT_MAIL_DOMAIN,
         password: String(config?.password || '')
       }
-      this.config = payload
       this.error = null
       try {
         const result = await window.api.mail.configure(payload)
@@ -101,7 +97,6 @@ export const useMailStore = defineStore('mail', {
         this.isRunning = status?.running || false
         this.connected = status?.connected || false
         this.configured = this.isRunning
-        this.unreadCount = this.mails.filter(m => !m.is_read).length
         if (this.isRunning) {
           await this.startAutoFetch()
         } else {
@@ -122,7 +117,6 @@ export const useMailStore = defineStore('mail', {
       try {
         await window.api.mail.fetch()
         await this.load()
-        this.lastSync = new Date().toISOString()
         quickRetryCount = 0
         this.clearQuickRetry()
       } catch (err) {
@@ -165,6 +159,23 @@ export const useMailStore = defineStore('mail', {
       }
     },
 
+    // 诊断后修复：reconnect=重连 Exchange；restart=重启服务进程
+    async fix(action) {
+      try {
+        const result = await window.api.mail.fix(action)
+        if (result?.ok) {
+          const status = await window.api.mail.status()
+          this.connected = status?.connected || false
+          this.isRunning = status?.running || false
+          this.configured = status?.running || false
+          this.error = null
+        }
+        return result
+      } catch (err) {
+        return { ok: false, error: err?.message || String(err || '修复失败') }
+      }
+    },
+
     async startAutoFetch() {
       if (this._startingAutoFetch) return
       this._startingAutoFetch = true
@@ -175,13 +186,13 @@ export const useMailStore = defineStore('mail', {
           window.clearInterval(autoFetchTimer)
           autoFetchTimer = null
         }
-        this.mailInterval = normalizeMailInterval(settings?.mailInterval)
+        mailIntervalMinutes = normalizeMailInterval(settings?.mailInterval)
 
         if (!this.isRunning) return
 
         autoFetchTimer = window.setInterval(() => {
           if (this.isRunning) this.fetch()
-        }, this.mailInterval * 60 * 1000)
+        }, mailIntervalMinutes * 60 * 1000)
       } finally {
         this._startingAutoFetch = false
       }
@@ -203,7 +214,6 @@ export const useMailStore = defineStore('mail', {
           const item = this.mails.find(m => m.id === id)
           if (item && !item.is_read) {
             item.is_read = 1
-            this.unreadCount = Math.max(0, this.unreadCount - 1)
           }
         }
       } catch (err) {

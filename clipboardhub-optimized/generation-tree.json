@@ -1,0 +1,118 @@
+{
+  "root": {
+    "id": "clipboardhub-optimized",
+    "type": "project",
+    "status": "planned",
+    "children": [
+      {
+        "id": "page-clipboard",
+        "type": "page",
+        "htmlSrc": "pages/clipboard.html",
+        "status": "pending",
+        "generationPath": [],
+        "inheritedFragments": [],
+        "privateRegions": ["main"]
+      },
+      {
+        "id": "page-email",
+        "type": "page",
+        "htmlSrc": "pages/email.html",
+        "status": "pending",
+        "generationPath": [],
+        "inheritedFragments": [],
+        "privateRegions": ["main"]
+      },
+      {
+        "id": "page-notes",
+        "type": "page",
+        "htmlSrc": "pages/notes.html",
+        "status": "pending",
+        "generationPath": [],
+        "inheritedFragments": [],
+        "privateRegions": ["main"]
+      },
+      {
+        "id": "page-settings",
+        "type": "page",
+        "htmlSrc": "pages/settings.html",
+        "status": "pending",
+        "generationPath": [],
+        "inheritedFragments": [],
+        "privateRegions": ["main"]
+      },
+      {
+        "id": "page-controls",
+        "type": "page",
+        "htmlSrc": "pages/controls.html",
+        "status": "pending",
+        "generationPath": [],
+        "inheritedFragments": [],
+        "privateRegions": ["main"]
+      },
+      {
+        "id": "page-tray-motion",
+        "type": "page",
+        "htmlSrc": "pages/tray-motion.html",
+        "status": "generated",
+        "generationPath": [],
+        "inheritedFragments": [],
+        "privateRegions": ["main"]
+      },
+      {
+        "id": "page-tray-motion-v2",
+        "type": "page",
+        "htmlSrc": "pages/tray-motion-v2.html",
+        "status": "pending",
+        "generationPath": ["page-tray-motion"],
+        "inheritedFragments": ["tray-motion.html"],
+        "privateRegions": ["main"],
+        "derivationType": "comparison-from-source"
+      },
+      {
+        "id": "page-login",
+        "type": "page",
+        "htmlSrc": "pages/login.html",
+        "status": "pending",
+        "generationPath": [],
+        "inheritedFragments": [],
+        "privateRegions": ["main"]
+      },
+      {
+        "id": "page-extractor",
+        "type": "page",
+        "htmlSrc": "pages/extractor.html",
+        "status": "pending",
+        "generationPath": [],
+        "inheritedFragments": [],
+        "privateRegions": ["main"]
+      },
+      {
+        "id": "page-attachment",
+        "type": "page",
+        "htmlSrc": "pages/attachment.html",
+        "status": "pending",
+        "generationPath": [],
+        "inheritedFragments": [],
+        "privateRegions": ["main"]
+      },
+      {
+        "id": "page-float-note",
+        "type": "page",
+        "htmlSrc": "pages/float-note.html",
+        "status": "pending",
+        "generationPath": [],
+        "inheritedFragments": [],
+        "privateRegions": ["main"]
+      },
+      {
+        "id": "page-whiteboard",
+        "type": "page",
+        "htmlSrc": "pages/whiteboard.html",
+        "status": "pending",
+        "generationPath": [],
+        "inheritedFragments": [],
+        "privateRegions": ["main"]
+      }
+    ]
+  }
+}

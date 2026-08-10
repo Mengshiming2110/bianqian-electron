@@ -22,7 +22,6 @@ function createStore(name = STORE_NAME) {
         autoStart: false,
         mailInterval: 5,
         mailConfig: { server: DEFAULT_MAIL_SERVER, email: '', domainUser: '', domain: DEFAULT_MAIL_DOMAIN },
-        windowMode: 'normal',
         edgeAutoHide: false,
         theme: 'system',
         shortcuts: {
@@ -81,7 +80,7 @@ function normalizeDate(value) {
   return /^\d{4}-\d{2}-\d{2}$/.test(value || '') ? value : today()
 }
 
-export function generateId() {
+function generateId() {
   return randomUUID()
 }
 
@@ -168,13 +167,6 @@ export function toggleNote(id) {
   return updateNote(id, { completed: !note.completed })
 }
 
-export function countByCategory(notes = getNotes()) {
-  return CATEGORIES.reduce((result, category) => {
-    result[category] = notes.filter((note) => note.category === category).length
-    return result
-  }, {})
-}
-
 function clampOpacity(value) {
   const number = Number(value)
 
@@ -207,7 +199,6 @@ export function getSettings() {
     autoStart: Boolean(settings.autoStart),
     mailInterval: typeof settings.mailInterval === 'number' ? settings.mailInterval : 5,
     mailConfig: normalizeMailConfig(settings.mailConfig),
-    windowMode: 'normal',
     edgeAutoHide: Boolean(settings.edgeAutoHide),
     theme: settings.theme === 'light' || settings.theme === 'dark' ? settings.theme : 'system',
     shortcuts: {

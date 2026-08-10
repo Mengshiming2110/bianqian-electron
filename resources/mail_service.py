@@ -30,8 +30,11 @@ DEFAULT_EWS_PORT = 443
 
 # 网络抖动自愈参数
 EWS_TIMEOUT_SECONDS = 20        # 单次 EWS 请求超时
+EWS_QUICK_TIMEOUT_SECONDS = 8   # 诊断模式认证测试的超时（避免 FaultTolerance 长重试拖垮 /doctor）
 EWS_RETRY_MAX_WAIT = 180        # FaultTolerance 策略最长重试窗口（秒）
 RECONNECT_COOLDOWN_SECONDS = 10  # 连接失效后重建账号的冷却期，避免断网时高频重连
+
+VERSION = '1.1.0'
 
 
 def _json(handler, status, payload):
@@ -41,6 +44,15 @@ def _json(handler, status, payload):
     handler.send_header('Content-Length', str(len(body)))
     handler.end_headers()
     handler.wfile.write(body)
+
+
+def _check_token(handler):
+    """Zcode/外部调用令牌：桥接层通过 MAIL_SERVICE_TOKEN 环境变量下发，
+    请求需带 X-Mail-Token 头；环境变量未设置（裸跑开发）时不鉴权。"""
+    expected = os.getenv('MAIL_SERVICE_TOKEN')
+    if not expected:
+        return True
+    return handler.headers.get('X-Mail-Token') == expected
 
 
 def _read_body(handler):
@@ -238,7 +250,7 @@ def _run_with_reconnect(fn, *args, **kwargs):
         return result
 
 
-def _account():
+def _account(quick=False):
     global ACCOUNT, LAST_ERROR, ACCOUNT_CREATED_AT
     with ACCOUNT_LOCK:
         if ACCOUNT is not None:
@@ -261,24 +273,25 @@ def _account():
 
         try:
             from exchangelib import Account, Configuration, Credentials, DELEGATE
-            from exchangelib.protocol import BaseProtocol, FaultTolerance
+            from exchangelib.protocol import BaseProtocol, FaultTolerance, FailFast
 
-            BaseProtocol.TIMEOUT = EWS_TIMEOUT_SECONDS
+            # quick（诊断）模式：短超时 + FailFast，认证测试有界执行；正常模式保留指数退避
+            BaseProtocol.TIMEOUT = EWS_QUICK_TIMEOUT_SECONDS if quick else EWS_TIMEOUT_SECONDS
             credentials = Credentials(username=f'{domain}\\{domain_user}', password=password)
             config = Configuration(
                 server=server,
                 credentials=credentials,
-                # 默认 FailFast 遇瞬时错误立即失败；FaultTolerance 做指数退避重试，
-                # 显著提升公司网络抖动场景下的稳定性
-                retry_policy=FaultTolerance(max_wait=EWS_RETRY_MAX_WAIT),
+                retry_policy=FailFast() if quick else FaultTolerance(max_wait=EWS_RETRY_MAX_WAIT),
             )
-            ACCOUNT = Account(
+            account = Account(
                 primary_smtp_address=smtp,
                 config=config,
                 autodiscover=False,
                 access_type=DELEGATE,
             )
-            _ = ACCOUNT.inbox.name
+            # 先验证再赋值：认证失败时不能把坏账号挂到全局，否则 connected 误报且后续请求全走死连接
+            _ = account.inbox.name
+            ACCOUNT = account
             ACCOUNT_CREATED_AT = time.time()
             LAST_ERROR = ''
             return ACCOUNT
@@ -304,8 +317,37 @@ def _doctor():
     server = os.getenv('MAIL_SERVER') or DEFAULT_SERVER
     network = _probe_server(server)
 
+    # 真实认证测试：quick 模式短超时 + FailFast，只测一次不拖长诊断
+    ews = {'ok': False, 'error': '', 'elapsed_ms': 0}
+    config_complete = bool(smtp and domain_user and password)
+    if not config_complete:
+        ews['error'] = '配置不完整，跳过认证测试'
+    elif not network.get('tcp'):
+        ews['error'] = '网络不可达，跳过认证测试'
+    else:
+        started = time.time()
+        try:
+            _account(quick=True)
+            ews = {'ok': True, 'elapsed_ms': int((time.time() - started) * 1000)}
+        except Exception as exc:
+            ews = {'ok': False, 'error': str(exc), 'elapsed_ms': int((time.time() - started) * 1000)}
+
+    # 可执行修复建议（action 供调用方触发，label 供界面展示）
+    fixes = []
+    if not config_complete:
+        fixes.append({'action': 'config', 'label': '补齐邮箱地址、AD 账号和密码'})
+    if not network.get('dns'):
+        fixes.append({'action': 'network', 'label': 'DNS 解析失败，请检查服务器地址与公司网络/VPN'})
+    elif not network.get('tcp'):
+        fixes.append({'action': 'network', 'label': f'无法连接 {network.get("host", server)}:{DEFAULT_EWS_PORT}，请检查网络/VPN'})
+    elif not ews.get('ok'):
+        fixes.append({'action': 'credentials', 'label': '核对 AD 账号/密码与域账号格式后重新连接'})
+        fixes.append({'action': 'reconnect', 'label': '重新连接 Exchange'})
+
     return {
-        'ok': exchangelib_ok and network.get('tcp') and bool(smtp and domain_user and password),
+        'ok': exchangelib_ok and network.get('tcp') and config_complete and ews.get('ok'),
+        'version': VERSION,
+        'probed_at': datetime.now(timezone.utc).isoformat(),
         'dependency': {
             'exchangelib': exchangelib_ok,
             'error': dependency_error,
@@ -318,6 +360,8 @@ def _doctor():
             'domain_user_present': bool(domain_user),
             'password_present': bool(password),
         },
+        'ews': ews,
+        'fixes': fixes,
         'connected': ACCOUNT is not None,
         'last_error': LAST_ERROR,
     }
@@ -441,11 +485,15 @@ class Handler(BaseHTTPRequestHandler):
         print('[MailService]', fmt % args, flush=True)
 
     def do_GET(self):
+        if not _check_token(self):
+            _json(self, 401, {'ok': False, 'error': 'unauthorized'})
+            return
         try:
             parsed = urlparse(self.path)
             if parsed.path == '/health':
                 _json(self, 200, {
                     'ok': True,
+                    'version': VERSION,
                     'connected': ACCOUNT is not None,
                     'error': LAST_ERROR,
                     'last_ok_at': LAST_OK_AT,
@@ -470,6 +518,9 @@ class Handler(BaseHTTPRequestHandler):
             _json(self, 500, {'ok': False, 'error': str(exc) or LAST_ERROR})
 
     def do_POST(self):
+        if not _check_token(self):
+            _json(self, 401, {'ok': False, 'error': 'unauthorized'})
+            return
         global SERVER
         try:
             parsed = urlparse(self.path)

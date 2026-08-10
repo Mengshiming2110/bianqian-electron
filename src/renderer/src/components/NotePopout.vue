@@ -1,6 +1,7 @@
 <template>
-  <div class="note-popout popout-enter" :class="['color-' + note.color]" @animationend="onEnterEnd">
-    <header class="popout-header" @mousedown.start="startDrag">
+  <div class="note-popout popout-enter" :class="note.color ? 'color-' + note.color : ''" @animationend="onEnterEnd">
+    <header class="popout-header">
+      <span class="note-dot" aria-hidden="true"></span>
       <strong>{{ note.title }}</strong>
       <button class="close-btn" title="关闭" type="button" @click="close">
         <X :size="14" />
@@ -76,16 +77,16 @@ function onEnterEnd(e) {
 @keyframes popout-expand {
   0% {
     opacity: 0;
-    transform: scale(0.4) translateY(-12px);
+    transform: scale(0.95) translateY(-8px);
     border-radius: 20px;
   }
   40% {
     opacity: 1;
-    transform: scale(0.92) translateY(2px);
+    transform: scale(0.98) translateY(2px);
     border-radius: 12px;
   }
   70% {
-    transform: scale(1.02) translateY(-1px);
+    transform: scale(1.01) translateY(-1px);
   }
   100% {
     opacity: 1;
@@ -98,26 +99,33 @@ function onEnterEnd(e) {
   display: flex;
   flex-direction: column;
   height: 100vh;
-  background: var(--bg-elevated, #fff);
+  background: var(--apple-card);
   border-radius: var(--radius-panel);
   overflow: hidden;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
   transform-origin: top center;
 }
 
 .note-popout.popout-enter {
-  animation: popout-expand 0.38s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  animation: popout-expand 0.3s cubic-bezier(0.22, 1, 0.36, 1) forwards;
 }
 
 .popout-header {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   gap: 8px;
   padding: 10px 12px;
+  background: var(--apple-accent);
+  border-bottom: 1px solid var(--apple-border);
   -webkit-app-region: drag;
   cursor: grab;
-  border-bottom: 1px solid var(--border, rgba(0,0,0,0.08));
+}
+
+.note-dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--apple-primary);
 }
 
 .popout-header strong {
@@ -127,7 +135,8 @@ function onEnterEnd(e) {
   text-overflow: ellipsis;
   white-space: nowrap;
   font-size: 14px;
-  color: var(--text, #1a2e2b);
+  font-weight: 600;
+  color: var(--apple-foreground);
 }
 
 .close-btn {
@@ -137,13 +146,20 @@ function onEnterEnd(e) {
   width: 24px;
   height: 24px;
   border: none;
-  border-radius: 6px;
+  border-radius: var(--radius-full);
   background: transparent;
-  color: var(--text-muted, #7a8e8a);
+  color: var(--apple-muted-foreground);
   cursor: pointer;
   -webkit-app-region: no-drag;
+  transition: background-color 0.15s var(--ease-out), color 0.15s var(--ease-out);
 }
-.close-btn:hover { background: var(--accent-soft, rgba(47,125,120,0.08)); }
+
+@media (hover: hover) and (pointer: fine) {
+  .close-btn:hover {
+    background: var(--apple-secondary);
+    color: var(--apple-foreground);
+  }
+}
 
 .popout-body {
   flex: 1;
@@ -160,7 +176,7 @@ function onEnterEnd(e) {
   margin: 0 !important;
   font-size: 13px !important;
   line-height: 1.6 !important;
-  color: var(--text, #1a2e2b) !important;
+  color: var(--apple-foreground) !important;
 }
 
 .popout-preview :where(p, div, h1, h2, h3, h4, h5, h6,
@@ -175,12 +191,12 @@ function onEnterEnd(e) {
 .popout-preview h3 { font-size: 14px; font-weight: 700; }
 .popout-preview ul { padding-left: 1.6em; }
 .popout-preview ol { padding-left: 1.6em; }
-.popout-preview blockquote { border-left: 3px solid var(--accent, #2f7d78); padding-left: 10px; margin-left: 0; }
-.popout-preview pre { background: var(--accent-soft, rgba(47,125,120,0.08)); padding: 8px; border-radius: 6px; }
-.popout-preview code { background: var(--accent-soft, rgba(47,125,120,0.08)); padding: 1px 5px; border-radius: 3px; font-family: Consolas, Monaco, monospace; font-size: 12px; }
+.popout-preview blockquote { border-left: 3px solid var(--apple-primary); padding-left: 10px; margin-left: 0; }
+.popout-preview pre { background: var(--brand-soft); padding: 8px; border-radius: 6px; }
+.popout-preview code { background: var(--brand-soft); padding: 1px 5px; border-radius: 3px; font-family: var(--font-mono); font-size: 12px; }
 
 .empty-hint {
-  color: var(--text-muted, #7a8e8a);
+  color: var(--apple-muted-foreground);
   font-size: 13px;
   text-align: center;
   margin-top: 40px;
@@ -191,23 +207,23 @@ function onEnterEnd(e) {
   align-items: center;
   justify-content: space-between;
   padding: 8px 12px;
-  border-top: 1px solid var(--border, rgba(0,0,0,0.08));
+  border-top: 1px solid var(--apple-border);
   font-size: 11px;
-  color: var(--text-muted, #7a8e8a);
+  color: var(--apple-muted-foreground);
 }
 
 .category-pill {
   padding: 2px 8px;
-  border-radius: 8px;
-  background: var(--accent-soft, rgba(47,125,120,0.08));
-  color: var(--accent, #2f7d78);
+  border-radius: var(--radius-full);
+  background: var(--brand-soft);
+  color: var(--apple-primary);
   font-size: 11px;
 }
 
-.color-red .popout-header { border-left: 3px solid #ef4444; }
-.color-orange .popout-header { border-left: 3px solid #f97316; }
-.color-yellow .popout-header { border-left: 3px solid #eab308; }
-.color-green .popout-header { border-left: 3px solid #22c55e; }
-.color-blue .popout-header { border-left: 3px solid #3b82f6; }
-.color-purple .popout-header { border-left: 3px solid #a855f7; }
+.color-red .popout-header { border-left: 3px solid var(--note-red); }
+.color-orange .popout-header { border-left: 3px solid var(--note-orange); }
+.color-yellow .popout-header { border-left: 3px solid var(--note-yellow); }
+.color-green .popout-header { border-left: 3px solid var(--note-green); }
+.color-blue .popout-header { border-left: 3px solid var(--note-blue); }
+.color-purple .popout-header { border-left: 3px solid var(--note-purple); }
 </style>

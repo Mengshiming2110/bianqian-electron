@@ -1,7 +1,7 @@
-import { app, screen } from 'electron'
+import { app } from 'electron'
 import { WindowManager } from './window-manager.js'
 import { TrayController } from './tray.js'
-import { registerIpc } from './ipc.js'
+import { applyAutoStart, registerIpc } from './ipc.js'
 import { registerAllShortcuts, unregisterAllShortcuts } from './shortcuts.js'
 import { initDatabase, closeDatabase } from './database'
 import { startClipboardMonitor, stopClipboardMonitor, setClipboardLimit } from './clipboard-monitor'
@@ -37,38 +37,13 @@ if (!gotLock) {
     // 加载设置，应用剪切板上限
     const settings = getSettings()
     setClipboardLimit(settings.clipboardLimit ?? 50)
-    try {
-      app.setLoginItemSettings({
-        openAtLogin: Boolean(settings.autoStart),
-        path: process.execPath
-      })
-    } catch (err) {
-      console.warn('[settings] autoStart restore failed:', err?.message || err)
-    }
 
     registerIpc(windowManager, trayController)
     setupClipboardHandlers()
     setupMailHandlers()
+    applyAutoStart(settings.autoStart)
 
     await windowManager.createFloatingWindow()
-
-    // 恢复窗口位置
-    const savedBounds = settings.windowBounds
-    if (savedBounds) {
-      const displays = screen.getAllDisplays()
-      const visible = displays.some(d => {
-        const { x, y, width, height } = d.workArea
-        return savedBounds.x >= x && savedBounds.y >= y &&
-               savedBounds.x < x + width && savedBounds.y < y + height
-      })
-      if (visible) {
-        const win = windowManager.getWindow()
-        if (win && !win.isDestroyed()) {
-          win.setBounds(savedBounds)
-          windowManager.edge.onWindowMoved()
-        }
-      }
-    }
 
     trayController.create()
     registerAllShortcuts(windowManager)

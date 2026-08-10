@@ -1,3 +1,8 @@
+/* ============================================================
+   领益工作助手 · 全局基础 + 共享组件层（v4.0 · clipboardhub-optimized）
+   壳层 / 页头 / 卡片 / 列表 / 按钮 / 开关 / 分段控件 等共享类
+   ============================================================ */
+
 * {
   box-sizing: border-box;
 }
@@ -33,9 +38,15 @@ body {
   color: var(--text);
   background: transparent;
   font-family:
-    "Microsoft YaHei",
-    "PingFang SC",
+    -apple-system,
+    BlinkMacSystemFont,
+    "SF Pro Text",
+    "SF Pro Display",
+    "Segoe UI Variable",
     "Segoe UI",
+    "PingFang SC",
+    "Microsoft YaHei",
+    system-ui,
     sans-serif;
   letter-spacing: 0;
   user-select: none;
@@ -43,11 +54,13 @@ body {
   text-rendering: optimizeLegibility;
 }
 
+/* ── 表单控件基础 ── */
 button,
 input,
 select,
 textarea {
   font: inherit;
+  color: inherit;
 }
 
 button {
@@ -62,49 +75,1072 @@ button {
     transform var(--dur-fast) var(--ease-out);
 }
 
-button:active {
-  transform: scale(0.97);
-}
-
 input,
 select,
 textarea {
-  color: var(--text);
   transition:
     border-color var(--dur-fast) var(--ease-out),
     box-shadow var(--dur-fast) var(--ease-out),
     background-color var(--dur-fast) var(--ease-out);
 }
 
-:focus-visible {
-  outline: none;
-  box-shadow: var(--focus-ring);
+input::placeholder,
+textarea::placeholder {
+  color: var(--text-faint);
 }
 
+/* ── 键盘可达性：统一焦点环 ── */
 button:focus-visible,
 input:focus-visible,
 select:focus-visible,
 textarea:focus-visible {
-  outline: 2px solid var(--accent);
+  outline: 2px solid var(--brand-500);
   outline-offset: 1px;
 }
 
+/* ── 滚动条 ── */
 ::-webkit-scrollbar {
   width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
 }
 
 ::-webkit-scrollbar-thumb {
   border: 2px solid transparent;
-  border-radius: 999px;
-  background: var(--accent-soft);
+  border-radius: var(--radius-full);
+  background: var(--border-strong);
   background-clip: content-box;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(47, 125, 120, 0.22);
+  background: var(--brand-400);
   background-clip: content-box;
 }
 
+/* ============================================================
+   共享组件层（原型 clipboardhub-optimized 类名）
+   ============================================================ */
+
+/* ── 壳层 ── */
+.app-frame {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: var(--apple-background);
+  color: var(--apple-foreground);
+  overflow: hidden;
+}
+
+.app-header {
+  flex: none;
+  padding: 14px 16px 10px;
+  -webkit-app-region: drag;
+}
+
+.app-header button,
+.app-header input,
+.app-header select {
+  -webkit-app-region: no-drag;
+}
+
+.app-content {
+  flex: 1;
+  min-height: 0;
+  padding: 0 16px 96px;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.app-footer {
+  flex: none;
+  padding: 4px 16px 10px;
+  text-align: center;
+  font-size: 10px;
+  line-height: 1.4;
+  color: var(--apple-muted-foreground);
+  -webkit-app-region: no-drag;
+}
+
+/* ── 底部标签栏 ── */
+.app-tabbar {
+  position: sticky;
+  bottom: 0;
+  height: 48px;
+  flex: none;
+  background: color-mix(in srgb, var(--apple-background) 92%, transparent);
+  border-top: 1px solid var(--apple-border);
+  display: flex;
+  z-index: 10;
+}
+
+.app-tabbar-inner {
+  display: flex;
+  width: 100%;
+}
+
+.tab-item {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  background: transparent;
+  border: 0;
+  color: var(--apple-muted-foreground);
+  min-height: 44px;
+  cursor: pointer;
+  transition: color 0.15s var(--ease-out);
+}
+
+.tab-item[data-active="true"] {
+  color: var(--apple-primary);
+}
+
+.tab-item:focus-visible {
+  outline: 2px solid var(--apple-ring);
+  outline-offset: -2px;
+}
+
+.tab-icon {
+  width: 20px;
+  height: 20px;
+}
+
+.tab-label {
+  font-size: 10px;
+  line-height: 1;
+}
+
+/* ── 悬浮收起按钮 ── */
+.peel-btn {
+  position: fixed;
+  right: 14px;
+  bottom: 64px;
+  width: 38px;
+  height: 38px;
+  border-radius: var(--radius-full);
+  background: var(--apple-card);
+  border: 1px solid var(--apple-border);
+  box-shadow: var(--shadow-md);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--apple-muted-foreground);
+  cursor: pointer;
+  transition: transform 0.15s var(--ease-out), color 0.15s var(--ease-out), box-shadow 0.15s var(--ease-out);
+  z-index: 20;
+}
+
+.peel-btn svg {
+  width: 18px;
+  height: 18px;
+}
+
+/* ── 页头行 ── */
+.header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.app-heading {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.page-title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.25;
+  color: var(--apple-foreground);
+}
+
+.page-subtitle {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--apple-muted-foreground);
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+}
+
+.clear-btn {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  padding: 6px 2px;
+  font-size: 12px;
+  color: var(--apple-muted-foreground);
+  cursor: pointer;
+  transition: color 0.15s var(--ease-out);
+}
+
+/* ── 搜索框 ── */
+.search-field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 36px;
+  padding: 0 14px;
+  margin: 2px 0 18px;
+  border-radius: var(--radius-full);
+  background: var(--apple-muted);
+  transition: background-color 0.15s var(--ease-out), box-shadow 0.15s var(--ease-out);
+}
+
+.search-field:focus-within {
+  background: var(--apple-card);
+  box-shadow: 0 0 0 1px var(--apple-ring);
+}
+
+.search-icon {
+  width: 16px;
+  height: 16px;
+  color: var(--apple-muted-foreground);
+  flex: none;
+}
+
+.search-input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  font-size: 12px;
+  color: var(--apple-foreground);
+}
+
+.search-input::placeholder {
+  color: var(--apple-muted-foreground);
+}
+
+/* ── 分组头 ── */
+.section-head {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  margin: 0 4px 10px;
+}
+
+.section-title {
+  margin: 0;
+  font-size: 11px;
+  color: var(--apple-muted-foreground);
+}
+
+.section-count {
+  font-size: 11px;
+  color: var(--apple-muted-foreground);
+}
+
+.clip-section + .clip-section {
+  margin-top: 16px;
+}
+
+/* ── 固定卡片网格 ── */
+.clip-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.clip-card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  background: var(--apple-card);
+  border: 1px solid var(--apple-border);
+  border-radius: var(--apple-radius-md);
+  box-shadow: var(--shadow-xs);
+  transition:
+    border-color 0.15s var(--ease-out),
+    box-shadow 0.15s var(--ease-out),
+    transform 0.15s var(--ease-out);
+  cursor: pointer;
+}
+
+.clip-card:focus-within {
+  border-color: var(--apple-ring);
+}
+
+.clip-card:active {
+  transform: scale(0.99);
+}
+
+.thumb {
+  width: 36px;
+  height: 36px;
+  border-radius: var(--apple-radius-lg);
+  background: var(--apple-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+}
+
+.thumb-icon {
+  width: 16px;
+  height: 16px;
+  color: var(--apple-muted-foreground);
+}
+
+.thumb-letter {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--apple-foreground);
+}
+
+.clip-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.clip-title {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.4;
+  color: var(--apple-foreground);
+  white-space: normal;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.clip-meta {
+  margin: 4px 0 0;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--apple-muted-foreground);
+}
+
+.clip-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: none;
+  opacity: 0;
+  transition: opacity 0.15s var(--ease-out);
+}
+
+.clip-card:focus-within .clip-actions {
+  opacity: 1;
+}
+
+/* ── 内聚列表组 ── */
+.list-group {
+  background: var(--apple-card);
+  border: 1px solid var(--apple-border);
+  border-radius: var(--apple-radius-md);
+  padding: 0 6px;
+  box-shadow: var(--shadow-xs);
+  overflow: hidden;
+}
+
+.list-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 44px;
+  border-bottom: 1px solid var(--apple-border);
+  transition: background-color 0.15s var(--ease-out);
+  cursor: pointer;
+}
+
+.list-row:last-child {
+  border-bottom: 0;
+}
+
+.list-row .clip-title {
+  white-space: nowrap;
+  display: block;
+  -webkit-line-clamp: unset;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.list-row:focus-within {
+  background: var(--apple-accent);
+}
+
+.row-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: none;
+  opacity: 0;
+  transition: opacity 0.15s var(--ease-out);
+}
+
+.list-row:focus-within .row-actions {
+  opacity: 1;
+}
+
+/* ── 通用图标按钮 ── */
+.icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-full);
+  background: transparent;
+  color: var(--apple-muted-foreground);
+  cursor: pointer;
+  transition:
+    background-color 0.15s var(--ease-out),
+    color 0.15s var(--ease-out),
+    transform 0.15s var(--ease-out);
+}
+
+.icon-btn svg {
+  width: 16px;
+  height: 16px;
+}
+
+.icon-btn:active {
+  transform: scale(0.95);
+}
+
+.icon-btn:focus-visible {
+  outline: 2px solid var(--apple-ring);
+  outline-offset: 1px;
+}
+
+.icon-btn.is-active,
+.icon-btn.pinned {
+  color: var(--apple-primary);
+}
+
+.icon-btn.done {
+  color: var(--state-success);
+}
+
+/* ── 胶囊按钮 ── */
+.btn-new,
+.btn-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  height: 30px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: var(--radius-full);
+  background: var(--apple-primary);
+  color: var(--apple-primary-foreground);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition:
+    transform 0.15s var(--ease-out),
+    filter 0.15s var(--ease-out);
+}
+
+.btn-new svg,
+.btn-primary svg {
+  width: 16px;
+  height: 16px;
+}
+
+.btn-new:active,
+.btn-primary:active {
+  transform: scale(0.97);
+}
+
+.btn-new:focus-visible,
+.btn-primary:focus-visible {
+  outline: 2px solid var(--apple-ring);
+  outline-offset: 2px;
+}
+
+.btn-secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  height: 30px;
+  padding: 0 14px;
+  border-radius: var(--radius-full);
+  background: var(--apple-background);
+  border: 1px solid var(--apple-border);
+  color: var(--apple-foreground);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition:
+    background-color 0.15s var(--ease-out),
+    border-color 0.15s var(--ease-out),
+    transform 0.15s var(--ease-out);
+}
+
+.btn-secondary:active {
+  transform: scale(0.97);
+}
+
+.btn-secondary:focus-visible {
+  outline: 2px solid var(--apple-ring);
+  outline-offset: 2px;
+}
+
+.btn-danger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  height: 30px;
+  padding: 0 14px;
+  border-radius: var(--radius-full);
+  background: color-mix(in srgb, var(--apple-destructive) 8%, transparent);
+  border: 1px solid color-mix(in srgb, var(--apple-destructive) 28%, transparent);
+  color: var(--apple-destructive);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition:
+    background-color 0.15s var(--ease-out),
+    transform 0.15s var(--ease-out);
+}
+
+.btn-danger:active {
+  transform: scale(0.97);
+}
+
+.btn-danger:focus-visible {
+  outline: 2px solid var(--apple-ring);
+  outline-offset: 2px;
+}
+
+/* ── 分类 chips ── */
+.chip {
+  flex: none;
+  height: 28px;
+  padding: 0 14px;
+  border-radius: var(--radius-full);
+  font-size: 12px;
+  line-height: 1;
+  cursor: pointer;
+  transition:
+    background-color 0.15s var(--ease-out),
+    color 0.15s var(--ease-out),
+    border-color 0.15s var(--ease-out);
+}
+
+.chip[data-active="false"] {
+  background: var(--apple-background);
+  border: 1px solid var(--apple-border);
+  color: var(--apple-muted-foreground);
+}
+
+.chip[data-active="true"] {
+  background: var(--apple-primary);
+  border: 1px solid transparent;
+  color: var(--apple-primary-foreground);
+}
+
+.chip:focus-visible {
+  outline: 2px solid var(--apple-ring);
+  outline-offset: 2px;
+}
+
+/* ── 便签卡片 ── */
+.note-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 12px;
+  background: var(--apple-card);
+  border: 1px solid var(--apple-border);
+  border-radius: var(--apple-radius-md);
+  transition:
+    border-color 0.15s var(--ease-out),
+    transform 0.15s var(--ease-out),
+    box-shadow 0.15s var(--ease-out);
+}
+
+.note-card:focus-within {
+  border-color: var(--apple-ring);
+}
+
+.note-head {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.note-title {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.4;
+  color: var(--apple-foreground);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.note-tag {
+  flex: none;
+  justify-self: end;
+  font-size: 10px;
+  line-height: 1;
+  color: var(--apple-muted-foreground);
+  background: var(--apple-muted);
+  border-radius: var(--radius-full);
+  padding: 6px 8px;
+}
+
+.note-preview {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--apple-muted-foreground);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.note-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 4px;
+  opacity: 0;
+  transition: opacity 0.15s var(--ease-out);
+}
+
+.note-card:focus-within .note-actions {
+  opacity: 1;
+}
+
+.note-card.is-done {
+  border-left: 2px solid var(--state-success);
+}
+
+.note-card.is-done .note-title {
+  text-decoration: line-through;
+}
+
+
+/* ── 状态 pill / 状态点 ── */
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 24px;
+  padding: 0 10px;
+  border-radius: var(--radius-full);
+  background: var(--state-success-surface);
+  color: var(--state-success);
+  font-size: 11px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.status-pill.off {
+  background: var(--state-error-surface);
+  color: var(--state-error);
+}
+
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--apple-border);
+  flex: none;
+}
+
+.status-dot.on {
+  background: var(--state-success);
+  animation: breathe 2s ease-in-out infinite;
+}
+
+.status-dot.off {
+  background: var(--state-error);
+}
+
+@keyframes breathe {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+/* ── 分段控件 ── */
+.segmented {
+  display: flex;
+  padding: 4px;
+  background: var(--apple-muted);
+  border-radius: var(--radius-full);
+}
+
+.seg-item {
+  flex: 1;
+  height: 30px;
+  border: 0;
+  border-radius: var(--radius-full);
+  background: transparent;
+  color: var(--apple-muted-foreground);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition:
+    background-color 0.15s var(--ease-out),
+    box-shadow 0.15s var(--ease-out),
+    color 0.15s var(--ease-out);
+}
+
+.seg-item[data-active="true"] {
+  background: var(--apple-card);
+  box-shadow: var(--shadow-xs);
+  color: var(--apple-foreground);
+}
+
+.seg-item:focus-visible {
+  outline: 2px solid var(--apple-ring);
+  outline-offset: -2px;
+}
+
+/* ── 设置分组 ── */
+.settings-group + .settings-group {
+  margin-top: 18px;
+}
+
+.group-title {
+  margin: 0 4px 6px;
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--apple-muted-foreground);
+}
+
+.group-card {
+  background: var(--apple-card);
+  border: 1px solid var(--apple-border);
+  border-radius: var(--apple-radius-md);
+  overflow: hidden;
+  box-shadow: var(--shadow-xs);
+}
+
+.setting-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  min-height: 44px;
+  padding: 0 12px;
+  border-bottom: 1px solid var(--apple-border);
+  font-size: 13px;
+  color: var(--apple-foreground);
+  transition: background-color 0.15s var(--ease-out);
+}
+
+.setting-row:last-child {
+  border-bottom: 0;
+}
+
+.setting-row > small {
+  font-size: 11px;
+  color: var(--apple-muted-foreground);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.setting-row select {
+  max-width: 140px;
+}
+
+/* ── 开关 ── */
+.switch {
+  position: relative;
+  width: 40px;
+  height: 24px;
+  flex: none;
+  appearance: none;
+  border-radius: var(--radius-full);
+  background: var(--apple-border);
+  cursor: pointer;
+  transition: background-color 0.2s var(--ease-out);
+}
+
+.switch::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--apple-card);
+  box-shadow: var(--shadow-xs);
+  transition: transform 0.2s var(--ease-out);
+}
+
+.switch:checked {
+  background: var(--state-success);
+}
+
+.switch:checked::after {
+  transform: translateX(16px);
+}
+
+.switch:focus-visible {
+  outline: 2px solid var(--apple-ring);
+  outline-offset: 2px;
+}
+
+/* ── 表单字段 ── */
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.field > span {
+  font-size: 12px;
+  color: var(--apple-muted-foreground);
+}
+
+.field input:not([type]),
+.field input[type="text"],
+.field input[type="password"],
+.field input[type="date"],
+.field input[type="time"],
+.field select,
+.field textarea {
+  width: 100%;
+  height: 36px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 10px;
+  background: var(--apple-muted);
+  color: var(--apple-foreground);
+  font-size: 13px;
+  outline: 0;
+  transition:
+    background-color 0.15s var(--ease-out),
+    box-shadow 0.15s var(--ease-out);
+}
+
+.field textarea {
+  height: auto;
+  padding: 8px 12px;
+  resize: vertical;
+  line-height: 1.5;
+}
+
+.field input:focus,
+.field select:focus,
+.field textarea:focus {
+  background: var(--apple-background);
+  box-shadow: 0 0 0 1px var(--apple-ring);
+}
+
+/* ── 空态 ── */
+.empty-state {
+  display: grid;
+  place-items: center;
+  align-content: center;
+  min-height: 180px;
+  padding: 14px 20px;
+  color: var(--apple-muted-foreground);
+  font-size: 13px;
+  gap: 5px;
+  text-align: center;
+}
+
+.empty-icon {
+  display: grid;
+  width: 48px;
+  height: 48px;
+  margin-bottom: 4px;
+  place-items: center;
+  border-radius: 12px;
+  background: var(--apple-muted);
+  color: var(--apple-muted-foreground);
+}
+
+.empty-title {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--apple-foreground);
+}
+
+.empty-hint {
+  margin: 0;
+  font-size: 11px;
+  color: var(--apple-muted-foreground);
+  line-height: 1.5;
+}
+
+.empty-tip {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  max-width: 300px;
+  margin-top: 8px;
+  padding: 6px 12px;
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--apple-card);
+  font-size: 11px;
+  color: var(--apple-muted-foreground);
+  line-height: 1.4;
+}
+
+/* ── 弹层基础 ── */
+.overlay-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: grid;
+  place-items: center;
+  padding: 12px;
+  background: color-mix(in srgb, var(--apple-foreground) 35%, transparent);
+  animation: fade var(--dur-base) var(--ease-out);
+}
+
+.overlay-backdrop.blur {
+  backdrop-filter: blur(2px);
+}
+
+/* ── 工具类 ── */
+
+/* ============================================================
+   全局动画 keyframes（所有组件统一引用）
+   ============================================================ */
+
+/* 遮罩淡入 */
+@keyframes fade {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+/* 面板上浮进入 */
+@keyframes rise {
+  from { opacity: 0; transform: translateY(8px) scale(0.98); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* 小元素弹入 */
+@keyframes pop {
+  from { opacity: 0; transform: scale(0.92); }
+  to   { opacity: 1; transform: scale(1); }
+}
+
+/* 加载旋转 */
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ============================================================
+   hover 状态（仅精细指针设备）
+   ============================================================ */
+@media (hover: hover) and (pointer: fine) {
+  .clear-btn:hover {
+    color: var(--apple-destructive);
+  }
+
+  .clip-card:hover {
+    border-color: var(--apple-accent);
+    box-shadow: var(--shadow-sm);
+    transform: translateY(-1px);
+  }
+
+  .clip-card:hover .clip-actions {
+    opacity: 1;
+  }
+
+  .list-row:hover {
+    background: var(--apple-accent);
+  }
+
+  .list-row:hover .row-actions {
+    opacity: 1;
+  }
+
+  .icon-btn:hover {
+    background: var(--apple-secondary);
+    color: var(--apple-foreground);
+  }
+
+  .icon-btn.is-active:hover,
+  .icon-btn.pinned:hover {
+    color: var(--apple-primary);
+  }
+
+  .icon-btn.is-danger:hover {
+    color: var(--apple-destructive);
+  }
+
+  .icon-btn.done:hover {
+    color: var(--state-success);
+  }
+
+  .btn-new:hover,
+  .btn-primary:hover {
+    filter: brightness(0.97);
+  }
+
+
+  .chip[data-active="false"]:hover {
+    border-color: var(--apple-ring);
+    color: var(--apple-foreground);
+  }
+
+  .note-card:hover {
+    border-color: var(--apple-accent);
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-sm);
+  }
+
+  .note-card:hover .note-actions {
+    opacity: 1;
+  }
+
+
+  .setting-row:hover {
+    background: var(--apple-accent);
+  }
+
+  .peel-btn:hover {
+    color: var(--apple-foreground);
+    transform: scale(1.06);
+  }
+
+  .tab-item:hover {
+    color: var(--apple-foreground);
+  }
+
+  .tab-item[data-active="true"]:hover {
+    color: var(--apple-primary);
+  }
+}
+
+/* ============================================================
+   动效降级
+   ============================================================ */
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

@@ -79,24 +79,18 @@ export class TrayController {
         submenu: CATEGORIES.map((category) => ({
           label: category,
           click: () => {
+            this.windowManager.show(category)
             const win = getWin()
-            if (!win) return
-            win.show()
-            win.focus()
-            win.webContents.send('filter-category', category)
-            win.webContents.send('navigate-tab', 'notes')
+            if (win) win.webContents.send('navigate-tab', 'notes')
           }
         }))
       },
       {
         label: '新建备忘',
         click: () => {
+          this.windowManager.openNewNote()
           const win = getWin()
-          if (!win) return
-          win.show()
-          win.focus()
-          win.webContents.send('new-note')
-          win.webContents.send('navigate-tab', 'notes')
+          if (win) win.webContents.send('navigate-tab', 'notes')
         }
       },
       { type: 'separator' },

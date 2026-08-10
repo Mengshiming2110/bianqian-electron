@@ -272,7 +272,7 @@ export const useNotesStore = defineStore('notes', {
         })
     },
     syncTrayCounts() {
-      api?.tray.updateCounts(this.categoryCounts)
+      api?.tray.updateCounts({ ...this.categoryCounts, total: this.notes.length })
     },
     persistFallback() {
       if (!api) {

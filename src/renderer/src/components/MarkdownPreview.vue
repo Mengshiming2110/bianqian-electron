@@ -50,12 +50,12 @@ function onClick(event) {
   display: -webkit-box;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
-  max-height: calc(2 * 17px);
+  max-height: calc(2 * 18px);
   overflow: hidden;
-  margin: 6px 0 8px 29px;
-  color: var(--text-muted);
+  margin: 0;
+  color: var(--apple-muted-foreground);
   font-size: 12px;
-  line-height: 17px;
+  line-height: 18px;
   word-break: break-word;
 }
 
@@ -71,7 +71,7 @@ function onClick(event) {
 
 .markdown-preview :where(h1, h2, h3, h4, h5, h6)::before {
   content: "#";
-  color: var(--accent);
+  color: var(--brand-500);
   margin-right: 1px;
 }
 
@@ -87,19 +87,19 @@ function onClick(event) {
 
 .markdown-preview blockquote::before {
   content: "| ";
-  color: var(--accent-strong);
+  color: var(--brand-600);
 }
 
 .markdown-preview code {
   padding: 1px 4px;
   border-radius: 3px;
-  background: var(--accent-soft);
+  background: var(--brand-soft);
   font-size: 11px;
   font-family: Consolas, Monaco, monospace;
 }
 
 .markdown-preview a {
-  color: var(--accent);
+  color: var(--brand-500);
   text-decoration: none;
 }
 

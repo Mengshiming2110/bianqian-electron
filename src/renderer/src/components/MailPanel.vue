@@ -3,38 +3,47 @@
     <!-- 未配置 -->
     <div v-if="!store.configured" class="login-area">
       <div class="login-card">
-        <div class="login-icon"><Mail :size="24" /></div>
+        <div class="login-icon"><Mail :size="22" /></div>
         <h3>连接公司邮箱</h3>
         <p>Exchange 账户登录后可自动拉取出货单邮件</p>
         <form @submit.prevent="handleConfig" class="mail-form">
-          <label class="field"><span>Exchange 服务器</span><input v-model="form.server" placeholder="mail.lingyiitech.com" required @input="scheduleSaveMailIdentity"></label>
-          <label class="field"><span>邮箱地址</span><input v-model="form.email" placeholder="zhang.wei@company.com" required @input="scheduleSaveMailIdentity"></label>
+          <label class="field"><span>Exchange 服务器</span><input type="text" v-model="form.server" placeholder="mail.lingyiitech.com" required @input="scheduleSaveMailIdentity"></label>
+          <label class="field"><span>邮箱地址</span><input type="text" v-model="form.email" placeholder="zhang.wei@company.com" required @input="scheduleSaveMailIdentity"></label>
           <div class="field-row">
-            <label class="field"><span>AD 域</span><input v-model="form.domain" placeholder="LSTECH" required @input="scheduleSaveMailIdentity"></label>
-            <label class="field"><span>AD 账号</span><input v-model="form.domainUser" placeholder="zhang.wei" required @input="scheduleSaveMailIdentity"></label>
+            <label class="field"><span>AD 域</span><input type="text" v-model="form.domain" placeholder="LSTECH" required @input="scheduleSaveMailIdentity"></label>
+            <label class="field"><span>AD 账号</span><input type="text" v-model="form.domainUser" placeholder="zhang.wei" required @input="scheduleSaveMailIdentity"></label>
           </div>
           <label class="field"><span>密码</span><input v-model="form.password" type="password" placeholder="邮箱密码" required></label>
           <div class="mail-actions">
-            <button type="submit" class="save-btn" :disabled="connecting">{{ connecting ? '连接中...' : '连接邮箱' }}</button>
-            <button type="button" class="diagnose-btn" :disabled="store.doctorRunning" @click="handleDoctor">
+            <button type="submit" class="btn-primary" :disabled="connecting">{{ connecting ? '连接中...' : '连接邮箱' }}</button>
+            <button type="button" class="btn-secondary" :disabled="store.doctorRunning" @click="handleDoctor">
               {{ store.doctorRunning ? '诊断中' : '诊断' }}
             </button>
           </div>
           <div class="doctor-card" v-if="store.doctorResult">
             <div class="doctor-title">
               <span :class="['status-dot', store.doctorResult.ok ? 'on' : 'off']"></span>
-              <strong>{{ store.doctorResult.ok ? '配置已就绪' : '配置待补充' }}</strong>
+              <strong>{{ store.doctorResult.ok ? '配置已就绪' : '配置待修复' }}</strong>
             </div>
             <dl>
               <div><dt>依赖</dt><dd>{{ store.doctorResult.dependency?.exchangelib ? '正常' : (store.doctorResult.dependency?.error || '异常') }}</dd></div>
               <div><dt>服务器</dt><dd>{{ store.doctorResult.config?.server || form.server || DEFAULT_MAIL_SERVER }}</dd></div>
               <div><dt>DNS</dt><dd>{{ store.doctorResult.network?.dns ? (store.doctorResult.network?.address || '正常') : '未通' }}</dd></div>
               <div><dt>端口</dt><dd>{{ store.doctorResult.network?.tcp ? `443 已通` : '443 未通' }}</dd></div>
+              <div><dt>EWS 认证</dt><dd>{{ doctorEwsText }}</dd></div>
               <div><dt>AD 域</dt><dd>{{ store.doctorResult.config?.domain || form.domain || DEFAULT_MAIL_DOMAIN }}</dd></div>
               <div><dt>邮箱</dt><dd>{{ store.doctorResult.config?.smtp_present ? '已填写' : '未填写' }}</dd></div>
               <div><dt>账号</dt><dd>{{ store.doctorResult.config?.domain_user_present ? '已填写' : '未填写' }}</dd></div>
               <div><dt>密码</dt><dd>{{ store.doctorResult.config?.password_present ? '已填写' : '未填写' }}</dd></div>
             </dl>
+            <div v-if="store.doctorResult.fixes?.length" class="doctor-fixes">
+              <p v-for="fix in store.doctorResult.fixes" :key="fix.action">{{ fix.label }}</p>
+            </div>
+            <div class="doctor-actions">
+              <button type="button" class="btn-secondary" :disabled="fixing" @click="handleFix('reconnect')">重新连接</button>
+              <button type="button" class="btn-secondary" :disabled="fixing" @click="handleFix('restart')">重启服务</button>
+            </div>
+            <p v-if="fixResult" class="fix-result" :class="{ error: fixError }">{{ fixResult }}</p>
             <p v-if="store.doctorResult.network?.error">{{ store.doctorResult.network.error }}</p>
             <p v-if="store.doctorResult.error || store.doctorResult.last_error">{{ store.doctorResult.error || store.doctorResult.last_error }}</p>
           </div>
@@ -59,36 +68,47 @@
     <!-- 已连接 -->
     <div v-else class="mail-connected">
       <div class="mail-toolbar">
-        <span>{{ store.mails.length }} 封邮件</span>
-        <div style="display:flex;align-items:center;gap:4px">
-          <span class="status-dot" :class="store.connected ? 'on' : 'off'" :title="store.connected ? '已连接' : '连接中断，自动重连中'"></span>
-          <button class="mini-btn" title="拉取" @click="handleFetch"><RefreshCw :size="14" /></button>
-          <button class="mini-btn" title="断开" @click="handleStop"><Power :size="14" /></button>
+        <div class="segmented" role="group" aria-label="邮件筛选">
+          <button class="seg-item" :data-active="mailFilter === 'all'" type="button" @click="mailFilter = 'all'">全部</button>
+          <button class="seg-item" :data-active="mailFilter === 'unread'" type="button" @click="mailFilter = 'unread'">未读</button>
+        </div>
+        <div class="mail-toolbar-actions">
+          <button class="icon-btn" title="拉取" type="button" @click="handleFetch"><RefreshCw :size="16" /></button>
+          <button class="icon-btn" title="断开" type="button" @click="handleStop"><Power :size="16" /></button>
         </div>
       </div>
-      <div class="mail-list" v-if="store.mails.length">
-        <div v-for="mail in store.mails" :key="mail.id" class="mail-card" :class="{ unread: !mail.is_read }" @click="store.openDetail(mail.id)">
-          <div class="mail-top"><strong>{{ mail.subject }}</strong><time>{{ relativeTime(mail.received_at) }}</time></div>
+      <div class="mail-list" v-if="displayMails.length">
+        <div
+          v-for="mail in displayMails"
+          :key="mail.id"
+          class="mail-card"
+          :class="{ unread: !mail.is_read }"
+          @click="store.openDetail(mail.id)"
+        >
+          <div class="mail-head">
+            <strong>{{ mail.subject }}</strong>
+            <time>{{ relativeTime(mail.received_at) }}</time>
+          </div>
           <div class="mail-from">{{ mail.sender }}</div>
           <div class="mail-preview">{{ (mail.body || '').slice(0, 100) }}</div>
         </div>
       </div>
       <div v-else class="empty-state">
-        <Mail :size="30" />
-        <p>还没有拉取到邮件</p>
+        <span class="empty-icon"><Mail :size="28" /></span>
+        <p class="empty-title">还没有拉取到邮件</p>
         <small>保持公司网络连接后刷新，系统会读取最近的收件箱邮件。</small>
-        <button class="save-btn compact" @click="handleFetch">立即刷新</button>
+        <button class="btn-primary" style="height: 34px; margin-top: 6px" @click="handleFetch">立即刷新</button>
       </div>
     </div>
 
     <!-- 详情 -->
     <div v-if="store.selectedMail" class="detail-overlay" @click.self="store.closeDetail()">
       <div class="detail-panel">
-        <div class="detail-header"><h3>{{ displaySummary?.title || store.selectedMail.subject }}</h3><button class="mini-btn" @click="store.closeDetail()"><X :size="14" /></button></div>
+        <div class="detail-header"><h3>{{ displaySummary?.title || store.selectedMail.subject }}</h3><button class="icon-btn" @click="store.closeDetail()"><X :size="18" /></button></div>
         <div class="detail-meta"><span>{{ store.selectedMail.sender }}</span><span>{{ relativeTime(store.selectedMail.received_at) }}</span></div>
 
         <!-- Excel 加载中 -->
-        <div v-if="excelLoading" class="detail-body" style="text-align:center;padding:24px;color:var(--text-muted)">解析附件中...</div>
+        <div v-if="excelLoading" class="excel-loading"><span class="spinner" aria-hidden="true"></span>解析附件中...</div>
 
         <!-- 任务卡片（正文 或 Excel 共用） -->
         <div v-else-if="displaySummary" class="task-detail">
@@ -195,6 +215,7 @@ import DOMPurify from 'dompurify'
 import { AlertCircle, Mail, RefreshCw, Power, X } from 'lucide-vue-next'
 import { useMailStore } from '../stores/mail'
 import { buildMailTaskSummary, buildExcelTaskSummary } from '../lib/mail-detail-summary.mjs'
+import { relativeTime } from '../lib/format'
 
 const store = useMailStore()
 const DEFAULT_MAIL_DOMAIN = 'LSTECH'
@@ -203,8 +224,23 @@ const form = ref({ server: DEFAULT_MAIL_SERVER, email: '', domainUser: '', domai
 const connecting = ref(false)
 const materialPage = ref(0)
 const copyToast = ref('')
+const mailFilter = ref('all')
+const fixing = ref(false)
+const fixResult = ref('')
+const fixError = ref(false)
+let fixResultTimer = null
+const displayMails = computed(() => {
+  if (mailFilter.value === 'unread') return store.mails.filter((mail) => !mail.is_read)
+  return store.mails
+})
 let saveIdentityTimer = null
 let copyToastTimer = null
+
+const doctorEwsText = computed(() => {
+  const ews = store.doctorResult?.ews
+  if (!ews) return '未测试'
+  return ews.ok ? '已通过' : '失败'
+})
 
 const sanitizedMailHtml = computed(() => {
   const raw = store.selectedMail?.html || ''
@@ -284,11 +320,7 @@ function backToHtml() {
   excelSummary.value = null
 }
 
-watch(materialPage, () => {
-  copyToast.value = ''
-})
-
-watch(excelMaterialPage, () => {
+watch(displayMaterialPage, () => {
   copyToast.value = ''
 })
 
@@ -321,6 +353,30 @@ async function handleConfig() {
 async function handleDoctor() {
   await saveMailIdentity()
   await store.doctor(mailConfigPayload())
+}
+async function handleFix(action) {
+  fixing.value = true
+  fixError.value = false
+  fixResult.value = ''
+  try {
+    const result = await store.fix(action)
+    if (result?.ok) {
+      fixResult.value = action === 'reconnect' ? '已重新连接 Exchange' : '邮件服务已重启'
+    } else {
+      fixError.value = true
+      fixResult.value = result?.error || '修复失败'
+    }
+  } catch (err) {
+    fixError.value = true
+    fixResult.value = err?.message || '修复失败'
+  } finally {
+    fixing.value = false
+    if (fixResultTimer) clearTimeout(fixResultTimer)
+    fixResultTimer = setTimeout(() => {
+      fixResult.value = ''
+      fixError.value = false
+    }, 4000)
+  }
 }
 async function handleFetch() { await store.fetch() }
 async function handleStop() {
@@ -360,6 +416,7 @@ function mailConfigPayload() {
 onBeforeUnmount(() => {
   if (saveIdentityTimer) clearTimeout(saveIdentityTimer)
   if (copyToastTimer) clearTimeout(copyToastTimer)
+  if (fixResultTimer) clearTimeout(fixResultTimer)
 })
 function parseFields(raw) {
   try { const f = typeof raw === 'string' ? JSON.parse(raw) : raw; return f && typeof f === 'object' ? f : {} } catch { return {} }
@@ -386,394 +443,783 @@ function formatSize(bytes) {
   return `${(bytes / 1048576).toFixed(1)} MB`
 }
 
-function relativeTime(iso) {
-  if (!iso) return ''
-  const diff = Date.now() - new Date(iso).getTime()
-  if (diff < 60000) return '刚刚'
-  if (diff < 3600000) return `${Math.floor(diff / 60000)} 分钟前`
-  if (diff < 86400000) return `${Math.floor(diff / 3600000)} 小时前`
-  return new Date(iso).toLocaleDateString('zh-CN')
-}
-
 </script>
 
 <style scoped>
-.mail-panel { flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
-.login-area { display: grid; min-height: 0; padding: 8px 18px 4px; }
-.login-card { width: 100%; align-self: start; padding: 20px 18px 18px; border: 1px solid var(--border); border-radius: 12px; background: var(--bg-card); text-align: center; }
-.login-icon { width: 42px; height: 42px; border-radius: 8px; background: var(--accent-soft); border: 1px solid rgba(47,125,120,0.12); display: grid; place-items: center; margin: 0 auto 12px; color: var(--accent); }
-.login-card h3 { font-size: 16px; font-weight: 600; color: var(--text); margin-bottom: 4px; }
-.login-card > p { font-size: 12px; color: var(--text-muted); margin-bottom: 14px; line-height: 1.45; }
-.mail-form { display: flex; flex-direction: column; gap: 7px; text-align: left; }
-.field-row { display: grid; grid-template-columns: minmax(78px, 0.8fr) minmax(0, 1.2fr); gap: 8px; }
-.field { display: grid; gap: 4px; }
-.field span { font-size: 11px; color: var(--text-muted); }
-.field input { box-sizing: border-box; width: 100%; height: 36px; padding: 0 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg-input); color: var(--text); font-size: 12px; font-family: inherit; outline: 0; }
-.field input:focus {
-  border-color: var(--accent);
-  box-shadow: var(--focus-ring);
+.mail-panel {
+  min-width: 0;
 }
-.mail-actions { display: grid; grid-template-columns: minmax(0, 1fr) 72px; gap: 8px; }
-.save-btn { height: 38px; border: none; border-radius: 8px; background: var(--accent); color: #fff; font-size: 13px; font-weight: 600; cursor: pointer; font-family: inherit; }
-.save-btn.compact { height: 34px; margin-top: 6px; padding: 0 18px; }
-.save-btn:hover { background: var(--accent-strong); }
-.save-btn:disabled { opacity: 0.6; cursor: default; }
-.diagnose-btn { height: 38px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg-input); color: var(--text); font-size: 12px; font-weight: 600; cursor: pointer; font-family: inherit; }
-.diagnose-btn:hover { background: var(--accent-soft); color: var(--accent-strong); }
-.login-help { font-size: 11px; color: var(--text-muted); margin-top: 9px; }
+
+/* ===== 登录区 ===== */
+.login-area {
+  padding: 4px 0;
+}
+
+.login-card {
+  padding: 24px 18px 20px;
+  border: 1px solid var(--apple-border);
+  border-radius: var(--apple-radius-md);
+  background: var(--apple-card);
+  box-shadow: var(--shadow-xs);
+  text-align: center;
+}
+
+.login-icon {
+  width: 42px;
+  height: 42px;
+  border-radius: var(--apple-radius-lg);
+  background: var(--brand-soft);
+  display: grid;
+  place-items: center;
+  margin: 0 auto 12px;
+  color: var(--apple-primary);
+}
+
+.login-card h3 {
+  margin: 0 0 4px;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--apple-foreground);
+}
+
+.login-card > p {
+  margin: 0 0 14px;
+  font-size: 12px;
+  color: var(--apple-muted-foreground);
+  line-height: 1.45;
+}
+
+.mail-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  text-align: left;
+}
+
+.field-row {
+  display: grid;
+  grid-template-columns: minmax(78px, 0.8fr) minmax(0, 1.2fr);
+  gap: 10px;
+}
+
+.mail-actions {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 72px;
+  gap: 8px;
+}
+
+.mail-actions .btn-primary,
+.mail-actions .btn-secondary {
+  height: 38px;
+}
+
+.mail-actions .btn-primary:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.login-help {
+  margin: 14px 0 0;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--apple-muted-foreground);
+}
+
 .doctor-card {
   display: grid;
   gap: 6px;
-  padding: 9px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--bg-input);
-  animation: reveal-in var(--dur-base) var(--ease-out);
+  padding: 10px 12px;
+  border: 1px solid var(--apple-border);
+  border-radius: var(--apple-radius-md);
+  background: var(--apple-background);
+  animation: rise var(--dur-base) var(--ease-out);
 }
 
-@keyframes reveal-in {
-  from { opacity: 0; transform: translateY(4px); }
-  to   { opacity: 1; transform: translateY(0); }
-}
 .doctor-title {
   display: flex;
   align-items: center;
   gap: 6px;
-  color: var(--text);
+  color: var(--apple-foreground);
   font-size: 12px;
 }
+
 .doctor-card dl {
   display: grid;
   gap: 3px;
   margin: 0;
 }
+
 .doctor-card dl div {
   display: grid;
   grid-template-columns: 42px minmax(0, 1fr);
   gap: 7px;
   font-size: 10px;
 }
+
 .doctor-card dt,
 .doctor-card dd {
   margin: 0;
-  color: var(--text-muted);
+  color: var(--apple-muted-foreground);
 }
+
 .doctor-card dd {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
 .doctor-card p {
   margin: 0;
-  color: var(--danger);
+  color: var(--apple-destructive);
   font-size: 10px;
   line-height: 1.4;
 }
+
+.doctor-fixes {
+  display: grid;
+  gap: 2px;
+  padding: 6px 8px;
+  border-radius: var(--radius-sm);
+  background: var(--warning-soft);
+}
+
+.doctor-fixes p {
+  color: var(--apple-foreground);
+}
+
+.doctor-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.doctor-actions .btn-secondary {
+  height: 30px;
+  font-size: 11px;
+}
+
+.fix-result {
+  text-align: center;
+  color: var(--apple-primary) !important;
+  font-weight: 600;
+}
+
+.fix-result.error {
+  color: var(--apple-destructive) !important;
+  font-weight: 500;
+}
+
 .mail-error-card {
   display: grid;
   gap: 6px;
-  margin-top: 2px;
-  padding: 9px;
-  border: 1px solid rgba(226, 74, 74, 0.26);
-  border-radius: 8px;
-  background: rgba(226, 74, 74, 0.07);
-  color: var(--text);
-  animation: reveal-in var(--dur-base) var(--ease-out);
+  padding: 10px 12px;
+  border: 1px solid color-mix(in srgb, var(--apple-destructive) 28%, transparent);
+  border-radius: var(--apple-radius-md);
+  background: var(--state-error-surface);
+  color: var(--apple-foreground);
+  animation: rise var(--dur-base) var(--ease-out);
 }
+
 .mail-error-title {
   display: flex;
   align-items: center;
   gap: 5px;
-  color: var(--danger);
+  color: var(--apple-destructive);
   font-size: 12px;
   font-weight: 700;
 }
+
 .mail-error-card p {
   margin: 0;
-  color: var(--text);
+  color: var(--apple-foreground);
   font-size: 11px;
   line-height: 1.45;
 }
+
 .mail-error-card dl {
   display: grid;
   gap: 3px;
   margin: 0;
 }
+
 .mail-error-card dl div {
   display: grid;
   grid-template-columns: 42px minmax(0, 1fr);
   gap: 7px;
   font-size: 10px;
 }
+
 .mail-error-card dt {
-  color: var(--text-muted);
+  color: var(--apple-muted-foreground);
 }
+
 .mail-error-card dd {
   min-width: 0;
   margin: 0;
   overflow: hidden;
-  color: var(--text-muted);
+  color: var(--apple-muted-foreground);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.mail-toolbar { display: flex; justify-content: space-between; align-items: center; padding: 0 14px 6px; font-size: 11px; color: var(--text-muted); }
-.status-dot { width: 5px; height: 5px; border-radius: 50%; display: inline-block; }
-.status-dot.on { background: var(--accent); }
-.status-dot.off { background: var(--text-muted); }
-.mail-list { flex: 1; overflow-y: auto; padding: 0 12px; display: flex; flex-direction: column; gap: 6px; }
-.mail-card { padding: 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg-card); cursor: pointer; transition: background-color var(--dur-base) var(--ease-out), border-color var(--dur-base) var(--ease-out), box-shadow var(--dur-base) var(--ease-out), transform var(--dur-fast) var(--ease-out); }
-.mail-card:hover { background: var(--bg-card-hover); border-color: rgba(47, 125, 120, 0.22); box-shadow: var(--shadow-sm); transform: translateY(-1px); }
-.mail-card:active { transform: scale(0.99); }
-.mail-card.unread { border-left: 2px solid var(--accent); }
-.mail-top { display: flex; justify-content: space-between; margin-bottom: 3px; }
-.mail-top strong { font-size: 13px; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
-.mail-top time { font-size: 10px; color: var(--text-muted); flex-shrink: 0; }
-.mail-from { font-size: 11px; color: var(--accent); margin-bottom: 2px; }
-.mail-preview { font-size: 11px; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.mini-btn { width: 28px; height: 28px; border-radius: 6px; border: none; background: transparent; color: var(--text-muted); cursor: pointer; display: grid; place-items: center; }
-.mini-btn:hover { background: var(--bg-card-hover); color: var(--text); }
-.empty-state { display: grid; place-items: center; align-content: center; min-height: 180px; padding: 14px 26px; color: var(--text-muted); font-size: 13px; gap: 5px; text-align: center; }
-.empty-state p { margin: 0; color: var(--text); font-weight: 600; }
-.empty-state small { color: var(--text-muted); font-size: 11px; line-height: 1.45; }
-.detail-overlay { position: fixed; inset: 0; z-index: 1000; overflow: hidden; border-radius: var(--radius-window); background: var(--bg-overlay); clip-path: inset(0 round var(--radius-window)); display: grid; place-items: center; padding: 12px; animation: overlay-in var(--dur-base) var(--ease-out); }
-@keyframes overlay-in { from { opacity: 0; } to { opacity: 1; } }
-.detail-panel { width: 100%; max-height: 80vh; padding: 14px; border-radius: 12px; background: var(--bg-elevated); border: 1px solid var(--border); box-shadow: var(--shadow-pop); overflow-y: auto; animation: panel-in var(--dur-base) var(--ease-spring); }
-@keyframes panel-in { from { opacity: 0; transform: scale(0.96) translateY(6px); } to { opacity: 1; transform: scale(1) translateY(0); } }
-.detail-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
-.detail-header h3 { font-size: 15px; font-weight: 600; color: var(--text); }
-.detail-meta { font-size: 11px; color: var(--text-muted); display: flex; flex-direction: column; gap: 2px; margin-bottom: 10px; padding-bottom: 8px; border-bottom: 1px solid var(--border); }
-.task-detail { display: grid; gap: 10px; }
-.task-brief { display: grid; gap: 8px; }
-.brief-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 0.8fr); gap: 8px; }
+
+/* ===== 已连接 ===== */
+.mail-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin: 2px 0 14px;
+}
+
+.mail-toolbar .segmented {
+  flex: 1;
+}
+
+.mail-toolbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex: none;
+}
+
+.mail-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.mail-card {
+  padding: 10px 12px;
+  border: 1px solid var(--apple-border);
+  border-radius: var(--apple-radius-md);
+  background: var(--apple-card);
+  box-shadow: var(--shadow-xs);
+  cursor: pointer;
+  transition:
+    border-color 0.15s var(--ease-out),
+    box-shadow 0.15s var(--ease-out),
+    transform 0.15s var(--ease-out);
+}
+
+.mail-card:active {
+  transform: scale(0.99);
+}
+
+.mail-card.unread {
+  border-left: 2px solid var(--apple-primary);
+}
+
+.mail-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 3px;
+}
+
+.mail-head strong {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--apple-foreground);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mail-head time {
+  flex: none;
+  font-size: 10px;
+  color: var(--apple-muted-foreground);
+}
+
+.mail-from {
+  margin-bottom: 2px;
+  font-size: 11px;
+  color: var(--apple-primary);
+}
+
+.mail-preview {
+  font-size: 11px;
+  line-height: 16px;
+  color: var(--apple-muted-foreground);
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+}
+
+.empty-state small {
+  color: var(--apple-muted-foreground);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+/* ===== 详情弹层 ===== */
+.excel-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 24px;
+  color: var(--apple-muted-foreground);
+  font-size: 12px;
+}
+
+.spinner {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2px solid var(--brand-soft);
+  border-top-color: var(--apple-primary);
+  animation: spin 0.8s linear infinite;
+}
+
+.detail-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: grid;
+  place-items: center;
+  padding: 12px;
+  background: color-mix(in srgb, var(--apple-foreground) 35%, transparent);
+  backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: blur(2px);
+  clip-path: inset(0 round var(--radius-window));
+  animation: fade var(--dur-base) var(--ease-out);
+}
+
+.detail-panel {
+  width: 100%;
+  max-height: 80vh;
+  padding: 14px;
+  border-radius: var(--apple-radius-lg);
+  background: var(--apple-card);
+  border: 1px solid var(--apple-border);
+  box-shadow: var(--shadow-xl);
+  overflow-y: auto;
+  animation: rise var(--dur-base) var(--ease-spring);
+}
+
+.detail-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.detail-header h3 {
+  margin: 0;
+  min-width: 0;
+  overflow: hidden;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--apple-foreground);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.detail-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-bottom: 10px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--apple-border);
+  font-size: 11px;
+  color: var(--apple-muted-foreground);
+}
+
+.task-detail {
+  display: grid;
+  gap: 10px;
+}
+
+.task-brief {
+  display: grid;
+  gap: 8px;
+}
+
+.brief-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 0.8fr);
+  gap: 8px;
+}
+
 .brief-item {
   display: grid;
   gap: 3px;
   padding: 9px 10px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--bg-input);
+  border: 1px solid var(--apple-border);
+  border-radius: var(--apple-radius-md);
+  background: var(--apple-background);
 }
+
 .brief-item span,
 .brief-notes span {
-  color: var(--text-muted);
+  color: var(--apple-muted-foreground);
   font-size: 11px;
 }
+
 .brief-item strong {
   min-width: 0;
   overflow: hidden;
-  color: var(--accent);
+  color: var(--apple-primary);
   font-size: 13px;
-  font-weight: 800;
+  font-weight: 700;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.brief-item.owner { grid-column: 1 / -1; }
-.brief-item.owner.muted strong { color: var(--text-muted); font-weight: 600; }
+
+.brief-item.owner {
+  grid-column: 1 / -1;
+}
+
+.brief-item.owner.muted strong {
+  color: var(--apple-muted-foreground);
+  font-weight: 600;
+}
+
 .brief-notes {
   display: grid;
   gap: 5px;
   padding: 9px 10px;
-  border: 1px solid rgba(180, 135, 30, 0.22);
-  border-radius: 8px;
-  background: rgba(255, 193, 70, 0.12);
+  border: 1px solid var(--warning-soft);
+  border-radius: var(--apple-radius-md);
+  background: var(--warning-soft);
 }
+
 .brief-notes p {
   margin: 0;
-  color: var(--text);
+  color: var(--apple-foreground);
   font-size: 12px;
   line-height: 1.45;
 }
+
 .material-card {
   display: grid;
   gap: 10px;
   padding: 11px;
-  border: 1px solid rgba(47, 125, 120, 0.24);
-  border-radius: 10px;
-  background: var(--bg-elevated);
+  border: 1px solid var(--border-brand);
+  border-radius: var(--apple-radius-md);
+  background: var(--apple-card);
 }
+
 .material-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 10px;
 }
+
 .material-head span {
-  color: var(--text);
+  color: var(--apple-foreground);
   font-size: 13px;
   font-weight: 700;
 }
+
 .material-head strong {
   min-width: 0;
   overflow: hidden;
-  color: var(--accent);
+  color: var(--apple-primary);
   font-size: 12px;
-  font-weight: 800;
+  font-weight: 700;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
 .material-fields {
   display: grid;
   margin: 0;
-  border-top: 1px solid var(--border);
+  border-top: 1px solid var(--apple-border);
 }
+
 .material-fields div {
   display: grid;
   grid-template-columns: 72px minmax(0, 1fr);
   gap: 10px;
   align-items: center;
   min-height: 32px;
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--apple-border);
 }
+
 .material-fields dt,
 .material-fields dd {
   margin: 0;
   font-size: 12px;
 }
-.material-fields dt { color: var(--text-muted); }
+
+.material-fields dt {
+  color: var(--apple-muted-foreground);
+}
+
 .material-fields dd {
   min-width: 0;
   text-align: right;
 }
+
 .copy-value {
   max-width: 100%;
   padding: 2px 5px;
   border: 0;
   border-radius: 6px;
   background: transparent;
-  color: var(--accent);
+  color: var(--apple-primary);
   cursor: pointer;
   font-family: inherit;
   font-size: 12px;
-  font-weight: 800;
+  font-weight: 700;
   overflow: hidden;
   text-align: right;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.copy-value:not(:disabled):hover { background: var(--accent-soft); }
+
 .copy-value.missing,
 .copy-value:disabled {
-  color: var(--text-muted);
+  color: var(--apple-muted-foreground);
   cursor: default;
   font-weight: 500;
 }
+
 .material-pager {
   display: grid;
   grid-template-columns: 64px minmax(0, 1fr) 64px;
   align-items: center;
   gap: 8px;
-  color: var(--text-muted);
+  color: var(--apple-muted-foreground);
   font-size: 11px;
   text-align: center;
 }
+
 .pager-btn {
   height: 28px;
-  border: 1px solid var(--border);
-  border-radius: 7px;
-  background: var(--bg-input);
-  color: var(--accent);
+  border: 1px solid var(--apple-border);
+  border-radius: var(--radius-sm);
+  background: var(--apple-background);
+  color: var(--apple-primary);
   font-family: inherit;
   font-size: 11px;
   font-weight: 600;
   cursor: pointer;
 }
+
 .pager-btn:disabled {
   cursor: default;
   opacity: 0.42;
 }
-.pager-btn:not(:disabled):hover {
-  border-color: rgba(47, 125, 120, 0.35);
-  background: var(--accent-soft);
-}
+
 .copy-toast {
   justify-self: center;
   margin: -2px 0 0;
   padding: 4px 8px;
-  border-radius: 999px;
-  background: var(--accent-soft);
-  color: var(--accent);
+  border-radius: var(--radius-full);
+  background: var(--brand-soft);
+  color: var(--apple-primary);
   font-size: 11px;
   font-weight: 700;
 }
+
 .original-mail {
   margin-top: 2px;
-  color: var(--text-muted);
   font-size: 11px;
 }
+
 .original-mail summary {
   cursor: pointer;
   padding: 6px 0;
-  color: var(--text-muted);
+  color: var(--apple-muted-foreground);
 }
-.original-mail[open] summary { margin-bottom: 8px; }
-.detail-body { font-size: 12px; color: var(--text); line-height: 1.6; margin-bottom: 10px; white-space: pre-wrap; }
+
+.original-mail[open] summary {
+  margin-bottom: 8px;
+}
+
+.detail-body {
+  font-size: 12px;
+  color: var(--apple-foreground);
+  line-height: 1.6;
+  margin-bottom: 10px;
+  white-space: pre-wrap;
+}
+
 .html-body {
   max-width: 100%;
   overflow: auto;
   white-space: normal;
 }
+
 .html-body :deep(table) {
   min-width: 680px;
   max-width: none;
   border-collapse: collapse;
-  background: var(--bg-elevated);
+  background: var(--apple-card);
 }
+
 .html-body :deep(td),
 .html-body :deep(th) {
   padding: 4px 6px;
   border: 1px solid rgba(94, 112, 108, 0.35);
-  color: var(--text);
+  color: var(--apple-foreground);
   font-size: 11px;
   line-height: 1.35;
   vertical-align: top;
   white-space: nowrap;
 }
+
 .html-body :deep(p),
 .html-body :deep(div) {
   margin: 0 0 8px;
 }
+
 .html-body :deep(a) {
-  color: var(--accent);
+  color: var(--apple-primary);
 }
-.extract-table { width: 100%; border-collapse: collapse; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
-.extract-table td { padding: 6px 8px; font-size: 11px; border-bottom: 1px solid var(--border); }
-.extract-table td:first-child { color: var(--text-muted); }
-.extract-table td:last-child { text-align: right; font-weight: 600; color: var(--accent); cursor: pointer; }
-.extract-table td:last-child:hover { background: var(--accent-soft); }
-.extract-table tr:last-child td { border-bottom: none; }
+
+.extract-table {
+  width: 100%;
+  border-collapse: collapse;
+  border: 1px solid var(--apple-border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+
+.extract-table td {
+  padding: 6px 8px;
+  font-size: 11px;
+  border-bottom: 1px solid var(--apple-border);
+}
+
+.extract-table td:first-child {
+  color: var(--apple-muted-foreground);
+}
+
+.extract-table td:last-child {
+  text-align: right;
+  font-weight: 600;
+  color: var(--apple-primary);
+  cursor: pointer;
+}
+
+.extract-table tr:last-child td {
+  border-bottom: none;
+}
 
 /* ===== 附件控制 ===== */
-.attachment-bar { margin-top: 10px; display: flex; gap: 6px; }
-.attach-btn {
-  flex: 1; height: 32px; border: 1px solid var(--border); border-radius: 8px;
-  background: var(--bg-input); color: var(--text-muted); font-size: 11px; cursor: pointer;
-  font-family: inherit; transition: border-color 0.15s;
+.attachment-bar {
+  margin-top: 10px;
+  display: flex;
+  gap: 6px;
 }
-.attach-btn:hover { border-color: var(--accent); color: var(--accent); }
-.attach-btn.back { color: var(--accent); border-color: rgba(47,125,120,0.2); background: var(--accent-soft); }
+
+.attach-btn {
+  flex: 1;
+  height: 32px;
+  border: 1px solid var(--apple-border);
+  border-radius: var(--radius-full);
+  background: var(--apple-background);
+  color: var(--apple-muted-foreground);
+  font-size: 11px;
+  cursor: pointer;
+  font-family: inherit;
+  transition: border-color 0.15s, color 0.15s, background-color 0.15s;
+}
+
+.attach-btn.back {
+  color: var(--apple-primary);
+  border-color: var(--border-brand);
+  background: var(--brand-soft);
+}
 
 /* ===== 附件选择器 ===== */
 .picker-overlay {
-  position: fixed; inset: 0; z-index: 1100;
-  background: var(--bg-overlay); display: grid; place-items: center; padding: 20px;
+  position: fixed;
+  inset: 0;
+  z-index: 1100;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: color-mix(in srgb, var(--apple-foreground) 35%, transparent);
+  clip-path: inset(0 round var(--radius-window));
 }
+
 .picker-list {
-  width: min(100%, 260px); padding: 12px;
-  border-radius: 12px; background: var(--bg-elevated);
-  border: 1px solid var(--border); box-shadow: var(--shadow);
-  display: grid; gap: 4px;
+  width: min(100%, 260px);
+  padding: 12px;
+  border-radius: var(--apple-radius-lg);
+  background: var(--apple-card);
+  border: 1px solid var(--apple-border);
+  box-shadow: var(--shadow-xl);
+  display: grid;
+  gap: 4px;
+  animation: pop var(--dur-base) var(--ease-spring);
 }
+
 .picker-title {
-  font-size: 13px; font-weight: 600; color: var(--text);
-  padding-bottom: 6px; margin-bottom: 4px; border-bottom: 1px solid var(--border);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--apple-foreground);
+  padding-bottom: 6px;
+  margin-bottom: 4px;
+  border-bottom: 1px solid var(--apple-border);
 }
+
 .picker-item {
-  display: flex; align-items: center; justify-content: space-between;
-  width: 100%; padding: 8px 10px; border: none; border-radius: 8px;
-  background: transparent; color: var(--text); font-size: 12px; cursor: pointer;
-  font-family: inherit; text-align: left;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 8px 10px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--apple-foreground);
+  font-size: 12px;
+  cursor: pointer;
+  font-family: inherit;
+  text-align: left;
 }
-.picker-item:hover { background: var(--accent-soft); color: var(--accent); }
-.picker-item.muted { color: var(--text-muted); justify-content: center; }
-.picker-size { font-size: 10px; color: var(--text-muted); }
+
+.picker-item.muted {
+  color: var(--apple-muted-foreground);
+  justify-content: center;
+}
+
+.picker-size {
+  font-size: 10px;
+  color: var(--apple-muted-foreground);
+}
 </style>
+
+@media (hover: hover) and (pointer: fine) {
+  .mail-card:hover {
+    border-color: var(--apple-accent);
+    box-shadow: var(--shadow-sm);
+    transform: translateY(-1px);
+  }
+
+  .copy-value:not(:disabled):hover {
+    background: var(--brand-soft);
+  }
+
+  .pager-btn:not(:disabled):hover {
+    border-color: var(--border-brand);
+    background: var(--brand-soft);
+  }
+
+  .extract-table td:last-child:hover {
+    background: var(--brand-soft);
+  }
+
+  .attach-btn:hover {
+    border-color: var(--apple-ring);
+    color: var(--apple-primary);
+  }
+
+  .picker-item:hover {
+    background: var(--brand-soft);
+    color: var(--apple-primary);
+  }
+}

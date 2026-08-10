@@ -55,16 +55,15 @@ contextBridge.exposeInMainWorld('api', {
     create: (note) => ipcRenderer.invoke('notes:create', note),
     update: (id, patch) => ipcRenderer.invoke('notes:update', id, patch),
     delete: (id) => ipcRenderer.invoke('notes:delete', id),
-    toggle: (id) => ipcRenderer.invoke('notes:toggle', id),
-    saveAll: (notes) => ipcRenderer.invoke('notes:save-all', notes)
+    toggle: (id) => ipcRenderer.invoke('notes:toggle', id)
   },
   files: {
     selectAttachments: (limit) => ipcRenderer.invoke('dialog:select-attachments', limit),
     importAttachments: (paths, limit) => ipcRenderer.invoke('files:import-attachments', paths, limit),
     cleanupAttachments: (paths) => ipcRenderer.invoke('files:cleanup-attachments', paths),
-    maxAttachmentsPerNote: () => ipcRenderer.invoke('files:max-attachments-per-note'),
     pathsFromFiles,
-    openPath: (path) => ipcRenderer.invoke('shell:open-path', path)
+    openPath: (path) => ipcRenderer.invoke('shell:open-path', path),
+    openExternal: (url) => ipcRenderer.invoke('shell:open-external', url)
   },
   tray: {
     updateCounts: (counts) => ipcRenderer.send('tray:update-counts', counts)
@@ -72,37 +71,25 @@ contextBridge.exposeInMainWorld('api', {
   window: {
     hide: () => ipcRenderer.invoke('window:hide'),
     show: (category) => ipcRenderer.invoke('window:show', category),
-    newNote: () => ipcRenderer.invoke('window:new-note'),
     getInteractionState: () => ipcRenderer.invoke('window:get-interaction-state'),
     setPassThrough: (enabled) => ipcRenderer.invoke('window:set-pass-through', enabled),
     setOpacity: (opacity) => ipcRenderer.invoke('window:set-opacity', opacity),
-    setMode: (mode) => ipcRenderer.invoke('window:set-mode', mode),
     setEdgeAutoHide: (enabled) => ipcRenderer.invoke('window:set-edge-auto-hide', enabled),
     setTheme: (theme) => ipcRenderer.invoke('window:set-theme', theme),
-    resizeToContent: (height) => ipcRenderer.send('window:resize-to-content', height),
     mouseLeave: () => ipcRenderer.send('window:mouse-leave'),
     mouseEnter: () => ipcRenderer.send('window:mouse-enter'),
     setEditing: (editing) => ipcRenderer.send('window:set-editing', editing),
-    setPinned: (pinned) => ipcRenderer.send('window:set-pinned', pinned),
     onFilterCategory: (callback) => on('notes:filter', callback),
     onCreateNote: (callback) => on('editor:new', callback),
     onInteractionState: (callback) => on('window:interaction-state', callback)
   },
   noteWindow: {
     open: (noteId, noteData) => ipcRenderer.invoke('note-window:open', noteId, noteData),
-    close: (noteId) => ipcRenderer.invoke('note-window:close', noteId),
-    closeAll: () => ipcRenderer.invoke('note-window:close-all'),
-    onUpdate: (callback) => on('note-window:update', callback),
     onData: (callback) => on('note-window:data', callback)
   },
   contextMenu: {
     show: (noteData) => ipcRenderer.invoke('context-menu:show', noteData),
     onAction: (callback) => on('context-menu:action', callback)
-  },
-  settingsWindow: {
-    open: (screenX, screenY) => ipcRenderer.invoke('settings-window:open', screenX, screenY),
-    close: () => ipcRenderer.invoke('settings-window:close'),
-    onClosed: (callback) => on('settings-window:closed', callback)
   },
   shortcuts: {
     list: () => ipcRenderer.invoke('shortcuts:list'),
@@ -117,12 +104,10 @@ contextBridge.exposeInMainWorld('api', {
   },
   clipboard: {
     list: (limit, offset) => ipcRenderer.invoke('clipboard:list', limit, offset),
-    search: (query) => ipcRenderer.invoke('clipboard:search', query),
     delete: (id) => ipcRenderer.invoke('clipboard:delete', id),
     togglePin: (id) => ipcRenderer.invoke('clipboard:togglePin', id),
     clearAll: () => ipcRenderer.invoke('clipboard:clearAll'),
     paste: (id) => ipcRenderer.invoke('clipboard:paste', id),
-    stats: () => ipcRenderer.invoke('clipboard:stats'),
     onNewItem: (callback) => on('clipboard:newItem', callback)
   },
   mail: {
@@ -130,6 +115,8 @@ contextBridge.exposeInMainWorld('api', {
     list: () => ipcRenderer.invoke('mail:list'),
     fetch: () => ipcRenderer.invoke('mail:fetch'),
     doctor: (config) => ipcRenderer.invoke('mail:doctor', config),
+    fix: (action) => ipcRenderer.invoke('mail:fix', action),
+    config: () => ipcRenderer.invoke('mail:config'),
     detail: (id) => ipcRenderer.invoke('mail:detail', id),
     stop: () => ipcRenderer.invoke('mail:stop'),
     status: () => ipcRenderer.invoke('mail:status'),

@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>领益工作助手 · 全场景原型</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI Variable", "Segoe UI", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+  background: #f5f5f7;
+  color: #1d1d1f;
+  min-height: 100vh;
+  padding: 32px 24px 60px;
+  -webkit-font-smoothing: antialiased;
+}
+.header { max-width: 1080px; margin: 0 auto 8px; }
+.header h1 { font-size: 28px; font-weight: 700; letter-spacing: -0.02em; }
+.header p { margin-top: 6px; font-size: 14px; color: rgba(60, 60, 67, 0.6); }
+.stats { max-width: 1080px; margin: 16px auto 24px; display: flex; gap: 10px; }
+.stat-chip {
+  padding: 6px 14px; border-radius: 999px; font-size: 12px; font-weight: 600;
+  background: rgba(10, 132, 255, 0.12); color: #0a84ff;
+}
+.grid { max-width: 1080px; margin: 0 auto; display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 16px; }
+.card {
+  display: flex; flex-direction: column; text-decoration: none; color: inherit;
+  background: #fff; border: 1px solid rgba(0,0,0,0.08); border-radius: 16px; overflow: hidden;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+  transition: transform .18s cubic-bezier(.32,.72,0,1), box-shadow .18s cubic-bezier(.32,.72,0,1);
+}
+.card:hover { transform: translateY(-3px); box-shadow: 0 12px 28px rgba(0,0,0,0.12); }
+.preview { position: relative; aspect-ratio: 400/640; background: #e8e8ed; overflow: hidden; }
+.preview iframe { width: 400px; height: 640px; border: 0; transform: scale(0.3); transform-origin: 0 0; pointer-events: none; }
+.preview::after { content: ''; position: absolute; inset: 0; background: linear-gradient(180deg, transparent 70%, rgba(245,245,247,0.9)); }
+.meta { padding: 12px 14px; }
+.meta h2 { font-size: 14px; font-weight: 600; }
+.meta .tag { margin-top: 3px; font-size: 11px; color: rgba(60,60,67,0.5); }
+.pills { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 8px; }
+.pill { padding: 2px 8px; border-radius: 999px; background: #f0f7ff; color: #0a84ff; font-size: 10px; font-weight: 600; }
+</style>
+</head>
+<body>
+  <header class="header">
+    <h1>领益工作助手 · 全场景原型</h1>
+    <p>30 个页面 · 苹果设计语言 · Windows 桌面侧边栏 400×640 · 点击卡片查看页面</p>
+  </header>
+  <div class="stats">
+    <span class="stat-chip">30 页面</span>
+    <span class="stat-chip">400 × 640</span>
+    <span class="stat-chip">--apple-* Tokens</span>
+  </div>
+  <div class="grid" id="grid"></div>
+
+<script>
+const pages = [
+  ["welcome.html", "欢迎 · 引导", "首次使用引导", ["引导", "首次运行"]],
+  ["login.html", "邮件 · 连接配置", "Exchange 登录", ["邮件", "配置"]],
+  ["clipboard.html", "剪切板 · 主面板", "历史与固定", ["剪切板"]],
+  ["clipboard-manage.html", "剪切板 · 批量管理", "选择/固定/删除", ["剪切板", "批量"]],
+  ["clipboard-empty.html", "剪切板 · 空态", "无记录引导", ["剪切板", "空态"]],
+  ["notes.html", "便签 · 列表", "分类/搜索/新建", ["便签"]],
+  ["notes-search.html", "便签 · 搜索创建", "自然语言快速创建", ["便签", "搜索"]],
+  ["note-editor.html", "便签 · 编辑器", "富文本/附件/提醒", ["便签", "编辑"]],
+  ["note-sort.html", "便签 · 拖拽排序", "可交互拖拽", ["便签", "拖拽"]],
+  ["note-sort.html", "便签 · 排序演示", "实时拖拽手感", ["交互"]],
+  ["float-note.html", "浮动便签", "桌面浮窗", ["便签", "浮窗"]],
+  ["email.html", "邮件 · 列表", "收件箱/状态", ["邮件"]],
+  ["mail-detail.html", "邮件 · 详情", "摘要/字段", ["邮件", "详情"]],
+  ["mail-doctor.html", "邮件 · 诊断", "8 项连接检查", ["邮件", "诊断"]],
+  ["extractor.html", "邮件 · 字段提取", "Excel 表格解析", ["邮件", "解析"]],
+  ["attachment.html", "附件 · 表格视图", "窗口化表格", ["附件"]],
+  ["attach-popover.html", "附件 · 弹层", "文件管理", ["附件", "弹层"]],
+  ["settings.html", "设置 · 主面板", "透明度/分组", ["设置"]],
+  ["settings-subnav.html", "设置 · 子面板", "分类/主题", ["设置", "导航"]],
+  ["shortcuts.html", "设置 · 快捷键", "录制/冲突", ["设置", "快捷键"]],
+  ["display-presets.html", "设置 · 显示预设", "透明度组合", ["设置"]],
+  ["controls.html", "控件 · 演示", "下拉/开关/步进", ["控件"]],
+  ["tray-motion.html", "托盘 · 动效", "菜单/通知", ["托盘", "动效"]],
+  ["tray-motion-v2.html", "托盘 · 动效 v2", "细化版演示", ["托盘", "动效"]],
+  ["edge-dock.html", "边缘吸附", "贴边收纳", ["系统"]],
+  ["pass-through.html", "鼠标穿透", "穿透模式", ["系统"]],
+  ["reminder.html", "提醒通知", "到点提醒", ["便签", "通知"]],
+  ["mini-mode.html", "迷你模式", "窄窗卡片", ["窗口"]],
+  ["whiteboard.html", "白板", "空白编辑板", ["工具"]],
+  ["about.html", "关于", "版本信息", ["系统"]],
+  ["error-fallback.html", "错误回退", "异常兜底", ["系统", "异常"]]
+];
+const grid = document.getElementById('grid');
+pages.forEach(([file, title, desc, tags], i) => {
+  const card = document.createElement('a');
+  card.className = 'card';
+  card.href = 'pages/' + file;
+  card.target = '_blank';
+  card.innerHTML = `
+    <div class="preview"><iframe src="pages/${file}" loading="lazy" title="${title}"></iframe></div>
+    <div class="meta">
+      <h2>${title}</h2>
+      <div class="tag">${desc}</div>
+      <div class="pills">${tags.map(t => `<span class="pill">${t}</span>`).join('')}</div>
+    </div>`;
+  grid.appendChild(card);
+});
+</script>
+</body>
+</html>

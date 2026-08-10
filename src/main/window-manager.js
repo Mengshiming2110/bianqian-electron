@@ -6,9 +6,9 @@ import { getSettings, updateSettings } from './store.js'
 import { EdgeDockController, EDGE_STATE } from './edge-dock.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
-const NORMAL_WINDOW_WIDTH = 280
-const NORMAL_WINDOW_HEIGHT = 680
-const NORMAL_WINDOW_MIN_WIDTH = 260
+const NORMAL_WINDOW_WIDTH = 400
+const NORMAL_WINDOW_HEIGHT = 640
+const NORMAL_WINDOW_MIN_WIDTH = 380
 const APP_ICON_PATH = join(app.getAppPath(), 'resources', 'icon.ico')
 
 export class WindowManager {
@@ -23,10 +23,8 @@ export class WindowManager {
     this.alwaysOnTop = true
     const settings = getSettings()
     this.opacity = settings.opacity
-    this.windowMode = settings.windowMode
     this.interactionStateListener = null
     this.noteWindows = new Map()
-    this.settingsWin = null
 
     this.edge = new EdgeDockController(
       () => this.window,
@@ -43,7 +41,7 @@ export class WindowManager {
     return {
       width: NORMAL_WINDOW_WIDTH,
       height: NORMAL_WINDOW_HEIGHT,
-      x: workArea.x + workArea.width - 300,
+      x: workArea.x + workArea.width - NORMAL_WINDOW_WIDTH - 30,
       y: workArea.y + 20
     }
   }
@@ -185,10 +183,6 @@ export class WindowManager {
     this.ensureVisibleInWorkArea()
     if (this.edge.isHidden()) {
       this.edge.show()
-    } else if (this.edge.isDocked()) {
-      // keep docked position
-    } else {
-      this.placeNearTopRight()
     }
     if (this.passThroughMode) {
       this.window.setSkipTaskbar(true)
@@ -249,7 +243,6 @@ export class WindowManager {
       passThrough: this.passThroughMode,
       clickThrough: this.clickThrough,
       opacity: this.opacity,
-      windowMode: this.windowMode,
       edgeAutoHide: this.edge.autoHide,
       edgeState: this.edge.state,
       theme: settings.theme
@@ -272,14 +265,6 @@ export class WindowManager {
     return this.getInteractionState()
   }
 
-  setWindowMode(mode) {
-    this.windowMode = 'normal'
-    updateSettings({ windowMode: this.windowMode })
-    this.applyWindowMode()
-    this.broadcastInteractionState()
-    return this.getInteractionState()
-  }
-
   setEdgeAutoHide(enabled) {
     this.edge.autoHide = Boolean(enabled)
     updateSettings({ edgeAutoHide: this.edge.autoHide })
@@ -296,10 +281,6 @@ export class WindowManager {
 
   setEditing(editing) {
     this.edge.isEditing = Boolean(editing)
-  }
-
-  setPinned(pinned) {
-    this.edge.isPinned = Boolean(pinned)
   }
 
   onMouseLeave() {
@@ -367,26 +348,6 @@ export class WindowManager {
     this.edge.onWindowMoved()
   }
 
-  resizeToContent(contentHeight) {
-    if (!this.window || this.window.isDestroyed()) return
-    if (this.edge._animating) return
-
-    const bounds = this.window.getBounds()
-    const workArea = screen.getDisplayMatching(bounds).workArea
-    const minHeight = NORMAL_WINDOW_HEIGHT
-    const maxHeight = Math.min(workArea.height - 80, workArea.y + workArea.height - bounds.y - 40)
-    const targetHeight = Math.max(minHeight, Math.min(maxHeight, Math.ceil(contentHeight)))
-    const targetY = Math.max(
-      workArea.y + 12,
-      Math.min(bounds.y, workArea.y + workArea.height - targetHeight - 40)
-    )
-
-    if (Math.abs(bounds.height - targetHeight) < 4 && Math.abs(bounds.y - targetY) < 2) return
-
-    this.window.setBounds({ ...bounds, y: targetY, height: targetHeight })
-    this.ensureVisibleInWorkArea()
-    this.edge.onWindowMoved()
-  }
 
   broadcastInteractionState() {
     const state = this.getInteractionState()
@@ -409,14 +370,6 @@ export class WindowManager {
     } catch (error) {
       console.warn(`[window] skipped send:${channel}`, error?.message || error)
     }
-  }
-
-  placeNearTopRight() {
-    if (!this.window || this.window.isDestroyed()) {
-      return
-    }
-
-    this.ensureVisibleInWorkArea()
   }
 
   ensureVisibleInWorkArea() {
@@ -454,19 +407,6 @@ export class WindowManager {
       : Math.max(workArea.x + 12, Math.min(bounds.x, workArea.x + workArea.width - width - 12))
 
     this.window.setBounds({ x, y, width, height })
-  }
-
-  updateClickThrough() {
-    if (!this.window || this.window.isDestroyed() || !this.window.isVisible()) {
-      return
-    }
-
-    if (this.passThroughMode) {
-      this._setClickThrough(true, false)
-      return
-    }
-
-    this._setClickThrough(false, false)
   }
 
   _setClickThrough(enabled, forward = false) {
@@ -544,107 +484,4 @@ export class WindowManager {
     return win
   }
 
-  closeNoteWindow(noteId) {
-    const win = this.noteWindows.get(noteId)
-    if (win && !win.isDestroyed()) {
-      win.close()
-    }
-    this.noteWindows.delete(noteId)
-  }
-
-  closeAllNoteWindows() {
-    for (const [id, win] of this.noteWindows) {
-      if (!win.isDestroyed()) win.close()
-    }
-    this.noteWindows.clear()
-  }
-
-  sendToNoteWindow(noteId, channel, data) {
-    const win = this.noteWindows.get(noteId)
-    if (win && !win.isDestroyed()) {
-      win.webContents.send(channel, data)
-    }
-  }
-
-  openSettingsWindow(screenX, screenY) {
-    if (this.settingsWin && !this.settingsWin.isDestroyed()) {
-      this.settingsWin.setSkipTaskbar(true)
-      this.settingsWin.show()
-      this.settingsWin.focus()
-      setTimeout(() => {
-        if (this.settingsWin && !this.settingsWin.isDestroyed()) {
-          this.settingsWin.setSkipTaskbar(true)
-        }
-      }, 60)
-      return
-    }
-
-    const workArea = screen.getPrimaryDisplay().workArea
-    const width = 252
-    const height = 380
-    const x = Math.max(workArea.x + 8, Math.min(Math.round(screenX), workArea.x + workArea.width - width - 8))
-    const y = Math.max(workArea.y + 8, Math.min(Math.round(screenY), workArea.y + workArea.height - height - 8))
-
-    this.settingsWin = new BrowserWindow({
-      width,
-      height,
-      minWidth: 220,
-      minHeight: 200,
-      resizable: true,
-      frame: false,
-      transparent: true,
-      alwaysOnTop: true,
-      skipTaskbar: true,
-      parent: this.window,
-      x,
-      y,
-      show: false,
-      webPreferences: {
-        preload: join(__dirname, '../preload/index.js'),
-        contextIsolation: true,
-        nodeIntegration: false,
-        sandbox: false
-      }
-    })
-
-    this.settingsWin.on('closed', () => {
-      this.settingsWin = null
-      if (this.window && !this.window.isDestroyed()) {
-        this.window.webContents.send('settings-window:closed')
-      }
-    })
-
-    this.settingsWin.on('blur', () => {
-      setTimeout(() => {
-        if (this.settingsWin && !this.settingsWin.isDestroyed() && !this.settingsWin.isFocused()) {
-          this.closeSettingsWindow()
-        }
-      }, 150)
-    })
-
-    if (process.env.ELECTRON_RENDERER_URL) {
-      this.settingsWin.loadURL(process.env.ELECTRON_RENDERER_URL + '/#/settings')
-    } else {
-      this.settingsWin.loadFile(join(__dirname, '../renderer/index.html'), { hash: '/settings' })
-    }
-
-    this.settingsWin.once('ready-to-show', () => {
-      if (this.settingsWin && !this.settingsWin.isDestroyed()) {
-        this.settingsWin.setSkipTaskbar(true)
-        this.settingsWin.show()
-        this.settingsWin.focus()
-        setTimeout(() => {
-          if (this.settingsWin && !this.settingsWin.isDestroyed()) {
-            this.settingsWin.setSkipTaskbar(true)
-          }
-        }, 60)
-      }
-    })
-  }
-
-  closeSettingsWindow() {
-    if (this.settingsWin && !this.settingsWin.isDestroyed()) {
-      this.settingsWin.close()
-    }
-  }
 }

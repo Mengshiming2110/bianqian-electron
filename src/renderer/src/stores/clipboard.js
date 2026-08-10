@@ -1,5 +1,7 @@
 import { defineStore } from 'pinia'
 
+const MAX_CLIPBOARD_ITEMS = 200
+
 export const useClipboardStore = defineStore('clipboard', {
   state: () => ({
     items: [],
@@ -27,14 +29,14 @@ export const useClipboardStore = defineStore('clipboard', {
   actions: {
     async load() {
       try {
-        this.items = await window.api.clipboard.list(100, 0) || []
+        this.items = await window.api.clipboard.list(MAX_CLIPBOARD_ITEMS, 0) || []
       } catch (err) {
         console.error('[clipboard] load failed:', err?.message || err)
         this.items = []
       }
     },
 
-    async search(query) {
+    search(query) {
       this.searchQuery = query || ''
     },
 
@@ -82,8 +84,8 @@ export const useClipboardStore = defineStore('clipboard', {
 
     addItem(item) {
       this.items.unshift(item)
-      if (this.items.length > 200) {
-        this.items = this.items.slice(0, 200)
+      if (this.items.length > MAX_CLIPBOARD_ITEMS) {
+        this.items = this.items.slice(0, MAX_CLIPBOARD_ITEMS)
       }
     },
 

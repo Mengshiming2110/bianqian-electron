@@ -1,20 +1,31 @@
 <template>
-  <div v-if="visible" class="welcome-overlay">
+  <div v-if="visible" class="welcome-overlay" role="dialog" aria-modal="true" aria-label="首次启动欢迎引导">
     <div class="welcome-card">
-      <h3>领益工作助手</h3>
-      <div class="welcome-features">
-        <div><b>备忘</b> 记录待办和事项</div>
-        <div><b>剪切板</b> 找回复制过的内容</div>
-        <div><b>邮件</b> 拉取公司出货邮件</div>
-      </div>
+      <div class="brand-badge"><StickyNote :size="24" /></div>
+      <h2 class="welcome-title">领益工作助手</h2>
+      <ul class="feature-list">
+        <li class="feature-row">
+          <StickyNote :size="16" class="feature-icon" />
+          <p class="feature-text"><span class="feature-label">备忘</span> · 记录待办和事项</p>
+        </li>
+        <li class="feature-row">
+          <ClipboardList :size="16" class="feature-icon" />
+          <p class="feature-text"><span class="feature-label">剪切板</span> · 找回复制过的内容</p>
+        </li>
+        <li class="feature-row">
+          <Mail :size="16" class="feature-icon" />
+          <p class="feature-text"><span class="feature-label">邮件</span> · 拉取公司出货邮件</p>
+        </li>
+      </ul>
       <p class="welcome-tip">托盘图标可切换功能，F3 隐藏窗口，拖到屏幕边缘可吸附</p>
-      <button class="confirm-btn" @click="dismiss">进入</button>
+      <button class="enter-btn" type="button" @click="dismiss">进入</button>
     </div>
   </div>
 </template>
 
 <script setup>
 import { ref, onMounted } from 'vue'
+import { ClipboardList, Mail, StickyNote } from 'lucide-vue-next'
 const emit = defineEmits(['dismiss'])
 const visible = ref(false)
 onMounted(async () => {
@@ -34,14 +45,115 @@ async function dismiss() {
 </script>
 
 <style scoped>
-.welcome-overlay { position: fixed; inset: 0; z-index: 2000; overflow: hidden; border-radius: var(--radius-window); background: var(--bg-overlay); backdrop-filter: blur(4px); clip-path: inset(0 round var(--radius-window)); display: grid; place-items: center; padding: 18px; animation: overlay-in var(--dur-base) var(--ease-out); }
-@keyframes overlay-in { from { opacity: 0; } to { opacity: 1; } }
-.welcome-card { box-sizing: border-box; width: 100%; max-width: 190px; padding: 22px 14px 18px; text-align: center; border: 1px solid var(--border); border-radius: 14px; background: var(--bg-elevated); box-shadow: var(--shadow-pop); animation: card-in var(--dur-base) var(--ease-spring); }
-@keyframes card-in { from { opacity: 0; transform: scale(0.96) translateY(6px); } to { opacity: 1; transform: scale(1) translateY(0); } }
-.welcome-card h3 { font-size: 15px; font-weight: 700; color: var(--text); margin-bottom: 12px; white-space: nowrap; }
-.welcome-features { text-align: left; font-size: 11px; color: var(--text-muted); line-height: 1.75; margin-bottom: 12px; }
-.welcome-features b { color: var(--text); }
-.welcome-tip { font-size: 10px; color: var(--text-muted); opacity: 0.72; margin-bottom: 14px; line-height: 1.45; }
-.confirm-btn { box-sizing: border-box; width: 100%; height: 38px; border: none; border-radius: 8px; background: var(--accent); color: #fff; font-size: 14px; font-weight: 600; cursor: pointer; font-family: inherit; }
-.confirm-btn:hover { background: var(--accent-strong); }
+.welcome-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  overflow: hidden;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: color-mix(in srgb, var(--apple-foreground) 18%, transparent);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  clip-path: inset(0 round var(--radius-window));
+  animation: fade 0.24s var(--ease-out);
+}
+
+.welcome-card {
+  width: 100%;
+  max-width: 360px;
+  box-sizing: border-box;
+  padding: 20px 18px 16px;
+  text-align: center;
+  border: 1px solid var(--apple-border);
+  border-radius: 16px;
+  background: var(--apple-popover);
+  box-shadow: var(--shadow-xl);
+  animation: rise 0.32s var(--ease-spring);
+}
+
+.brand-badge {
+  display: grid;
+  width: 44px;
+  height: 44px;
+  margin: 0 auto 10px;
+  place-items: center;
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--apple-primary) 12%, var(--apple-background));
+  color: var(--apple-primary);
+}
+
+.welcome-title {
+  margin: 0 0 12px;
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--apple-foreground);
+}
+
+.feature-list {
+  display: grid;
+  gap: 6px;
+  margin: 0 0 12px;
+  padding: 0;
+  list-style: none;
+  text-align: left;
+}
+
+.feature-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  border-radius: var(--apple-radius-md);
+  background: var(--apple-muted);
+  font-size: 12px;
+  color: var(--apple-muted-foreground);
+}
+
+.feature-icon {
+  flex: none;
+  color: var(--apple-primary);
+}
+
+.feature-text {
+  margin: 0;
+  line-height: 1.5;
+}
+
+.feature-label {
+  font-weight: 600;
+  color: var(--apple-foreground);
+}
+
+.welcome-tip {
+  margin: 0 0 16px;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--apple-muted-foreground);
+  opacity: 0.8;
+}
+
+.enter-btn {
+  width: 100%;
+  height: 38px;
+  border: 0;
+  border-radius: var(--radius-full);
+  background: var(--apple-primary);
+  color: var(--apple-primary-foreground);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 0.15s var(--ease-out), filter 0.15s var(--ease-out);
+}
+
+.enter-btn:active {
+  transform: scale(0.97);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .enter-btn:hover {
+    filter: brightness(0.95);
+  }
+}
 </style>

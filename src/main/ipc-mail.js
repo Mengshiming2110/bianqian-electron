@@ -78,17 +78,35 @@ export function setupMailHandlers() {
 
   ipcMain.handle('mail:doctor', async (_, config) => {
     try {
-      if (bridge) {
-        bridge.stop()
-        bridge = null
+      // 运行中的服务直接诊断（环境变量即当前配置），不打断现有连接
+      if (bridge && bridge.process) {
+        return await bridge.doctor()
       }
-      bridge = new MailBridge()
-      await bridge.start(normalizeMailConfig(config), { configure: false })
-      return await bridge.doctor()
+      // 未运行：临时拉起诊断，完事即停，不留僵尸进程
+      const temp = new MailBridge()
+      try {
+        await temp.start(normalizeMailConfig(config), { configure: false })
+        return await temp.doctor()
+      } finally {
+        temp.stop()
+      }
     } catch (err) {
       console.error('[ipc] mail:doctor 失败:', err.message)
       return { ok: false, error: err.message }
     }
+  })
+
+  // 诊断后修复：reconnect=重连 Exchange；restart=重启服务进程
+  ipcMain.handle('mail:fix', async (_, action) => {
+    if (!bridge) return { ok: false, error: '邮件服务未启动' }
+    return await bridge.fix(action)
+  })
+
+  // 当前连接配置（不含密码），供 UI/Zcode 确认连接目标
+  ipcMain.handle('mail:config', () => {
+    if (!bridge || !bridge.config) return null
+    const { password, ...safe } = bridge.config
+    return safe
   })
 
   ipcMain.handle('mail:detail', async (_, id) => {

@@ -123,10 +123,11 @@ export function validateShortcutUpdate(id, binding) {
 
 export function unregisterAllShortcuts() {
   globalShortcut.unregisterAll()
-  if (registeredBindings._wm && !registeredBindings._wm.isDestroyed()) {
-    try {
-      registeredBindings._wm.webContents.removeListener('before-input-event', handleBeforeInput)
-    } catch {}
+  if (beforeInputWindowId !== null) {
+    const win = BrowserWindow?.fromId?.(beforeInputWindowId)
+    if (win && !win.isDestroyed()) {
+      win.webContents.removeListener('before-input-event', handleBeforeInput)
+    }
   }
   registeredBindings = {}
   cachedShortcuts = null

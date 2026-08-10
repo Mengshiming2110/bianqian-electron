@@ -1,0 +1,707 @@
+{
+  "data": [
+    {
+      "id": "page-clipboard",
+      "title": "剪切板 · 优化版",
+      "type": "page",
+      "version": 1,
+      "createdAt": 1786320000000,
+      "canvasData": {
+        "x": 0,
+        "y": 0,
+        "group": 0,
+        "layoutSnapshot": {
+          "version": 1,
+          "contentHeight": 726,
+          "viewportWidth": 375,
+          "sourceHash": "fnv1a-de0dd0ca",
+          "measuredAt": 1786371189284
+        }
+      },
+      "devMetadata": {
+        "htmlSrc": "pages/clipboard.html",
+        "interactions": []
+      }
+    },
+    {
+      "id": "page-email",
+      "title": "邮件 · 优化版",
+      "type": "page",
+      "version": 1,
+      "createdAt": 1786320000000,
+      "canvasData": {
+        "x": 309,
+        "y": 0,
+        "group": 0,
+        "layoutSnapshot": {
+          "version": 1,
+          "contentHeight": 956,
+          "viewportWidth": 375,
+          "sourceHash": "fnv1a-ba4d31fb",
+          "measuredAt": 1786371189284
+        }
+      },
+      "devMetadata": {
+        "htmlSrc": "pages/email.html",
+        "interactions": []
+      }
+    },
+    {
+      "id": "page-notes",
+      "title": "便签 · 优化版",
+      "type": "page",
+      "version": 1,
+      "createdAt": 1786320000000,
+      "canvasData": {
+        "x": 618,
+        "y": 0,
+        "group": 0,
+        "layoutSnapshot": {
+          "version": 1,
+          "contentHeight": 973,
+          "viewportWidth": 375,
+          "sourceHash": "fnv1a-5118cecb",
+          "measuredAt": 1786371189284
+        }
+      },
+      "devMetadata": {
+        "htmlSrc": "pages/notes.html",
+        "interactions": []
+      }
+    },
+    {
+      "id": "page-settings",
+      "title": "设置 · 优化版",
+      "type": "page",
+      "version": 1,
+      "createdAt": 1786320000000,
+      "canvasData": {
+        "x": 927,
+        "y": 0,
+        "group": 0,
+        "layoutSnapshot": {
+          "version": 1,
+          "contentHeight": 1167,
+          "viewportWidth": 375,
+          "sourceHash": "fnv1a-4ae7fd28",
+          "measuredAt": 1786371189284
+        }
+      },
+      "devMetadata": {
+        "htmlSrc": "pages/settings.html",
+        "interactions": []
+      }
+    },
+    {
+      "id": "page-controls",
+      "title": "二级菜单与控件 · 优化版",
+      "type": "page",
+      "version": 1,
+      "createdAt": 1786320000000,
+      "canvasData": {
+        "x": 1236,
+        "y": 0,
+        "group": 0,
+        "layoutSnapshot": {
+          "version": 1,
+          "contentHeight": 1194,
+          "viewportWidth": 375,
+          "sourceHash": "fnv1a-6a5e3078",
+          "measuredAt": 1786371189284
+        }
+      },
+      "devMetadata": {
+        "htmlSrc": "pages/controls.html",
+        "interactions": []
+      }
+    },
+    {
+      "id": "page-tray-motion",
+      "title": "系统托盘与动效 · 优化版",
+      "type": "page",
+      "version": 1,
+      "createdAt": 1786320000000,
+      "canvasData": {
+        "x": 1545,
+        "y": 0,
+        "group": 0,
+        "layoutSnapshot": {
+          "version": 1,
+          "contentHeight": 1232,
+          "viewportWidth": 375,
+          "sourceHash": "fnv1a-7ec663e3",
+          "measuredAt": 1786371189284
+        }
+      },
+      "devMetadata": {
+        "htmlSrc": "pages/tray-motion.html",
+        "interactions": []
+      }
+    },
+    {
+      "id": "page-tray-motion-v2",
+      "title": "系统托盘与动效 · 动效细化版",
+      "type": "page",
+      "version": 1,
+      "createdAt": 1786320000000,
+      "canvasData": {
+        "x": 1854,
+        "y": 0,
+        "group": 0,
+        "layoutSnapshot": {
+          "version": 1,
+          "contentHeight": 1494,
+          "viewportWidth": 375,
+          "sourceHash": "fnv1a-21bb6e5c",
+          "measuredAt": 1786371189284
+        }
+      },
+      "devMetadata": {
+        "htmlSrc": "pages/tray-motion-v2.html",
+        "interactions": []
+      }
+    },
+    {
+      "id": "page-login",
+      "title": "邮件连接 · 优化版",
+      "type": "page",
+      "version": 1,
+      "createdAt": 1786320000000,
+      "canvasData": {
+        "x": 0,
+        "y": 548,
+        "group": 1,
+        "layoutSnapshot": {
+          "version": 1,
+          "contentHeight": 852,
+          "viewportWidth": 375,
+          "sourceHash": "fnv1a-ea57286d",
+          "measuredAt": 1786371189284
+        }
+      },
+      "devMetadata": {
+        "htmlSrc": "pages/login.html",
+        "interactions": []
+      }
+    },
+    {
+      "id": "page-extractor",
+      "title": "字段提取器 · 优化版",
+      "type": "page",
+      "version": 1,
+      "createdAt": 1786320000000,
+      "canvasData": {
+        "x": 309,
+        "y": 548,
+        "group": 1,
+        "layoutSnapshot": {
+          "version": 1,
+          "contentHeight": 945,
+          "viewportWidth": 375,
+          "sourceHash": "fnv1a-01935482",
+          "measuredAt": 1786371189284
+        }
+      },
+      "devMetadata": {
+        "htmlSrc": "pages/extractor.html",
+        "interactions": []
+      }
+    },
+    {
+      "id": "page-attachment",
+      "title": "附件查看器 · 优化版",
+      "type": "page",
+      "version": 1,
+      "createdAt": 1786320000000,
+      "canvasData": {
+        "x": 618,
+        "y": 548,
+        "group": 1,
+        "layoutSnapshot": {
+          "version": 1,
+          "contentHeight": 948,
+          "viewportWidth": 375,
+          "sourceHash": "fnv1a-c9e90ca0",
+          "measuredAt": 1786371189284
+        }
+      },
+      "devMetadata": {
+        "htmlSrc": "pages/attachment.html",
+        "interactions": []
+      }
+    },
+    {
+      "id": "page-float-note",
+      "title": "浮动便签 · 优化版",
+      "type": "page",
+      "version": 1,
+      "createdAt": 1786320000000,
+      "canvasData": {
+        "x": 927,
+        "y": 548,
+        "group": 1,
+        "layoutSnapshot": {
+          "version": 1,
+          "contentHeight": 916,
+          "viewportWidth": 375,
+          "sourceHash": "fnv1a-c291cf64",
+          "measuredAt": 1786371189284
+        }
+      },
+      "devMetadata": {
+        "htmlSrc": "pages/float-note.html",
+        "interactions": []
+      }
+    },
+    {
+      "id": "page-whiteboard",
+      "title": "自由白板 · 优化版",
+      "type": "page",
+      "version": 1,
+      "createdAt": 1786320000000,
+      "canvasData": {
+        "x": 1236,
+        "y": 548,
+        "group": 1,
+        "layoutSnapshot": {
+          "version": 1,
+          "contentHeight": 706,
+          "viewportWidth": 375,
+          "sourceHash": "fnv1a-013c16d3",
+          "measuredAt": 1786371189284
+        }
+      },
+      "devMetadata": {
+        "htmlSrc": "pages/whiteboard.html",
+        "interactions": []
+      }
+    },
+    {
+      "id": "page-note-editor",
+      "title": "备忘编辑器 · 完整版",
+      "type": "page",
+      "version": 1,
+      "createdAt": 1786337396000,
+      "canvasData": {
+        "x": 0,
+        "y": 938,
+        "group": 2,
+        "layoutSnapshot": {
+          "version": 1,
+          "contentHeight": 916,
+          "viewportWidth": 375,
+          "sourceHash": "fnv1a-736eed28",
+          "measuredAt": 1786371189284
+        }
+      },
+      "devMetadata": {
+        "htmlSrc": "pages/note-editor.html",
+        "interactions": []
+      }
+    },
+    {
+      "id": "page-mail-detail",
+      "title": "邮件详情 · 任务卡片",
+      "type": "page",
+      "version": 1,
+      "createdAt": 1786337396000,
+      "canvasData": {
+        "x": 309,
+        "y": 938,
+        "group": 2,
+        "layoutSnapshot": {
+          "version": 1,
+          "contentHeight": 785,
+          "viewportWidth": 375,
+          "sourceHash": "fnv1a-229e1295",
+          "measuredAt": 1786371189284
+        }
+      },
+      "devMetadata": {
+        "htmlSrc": "pages/mail-detail.html",
+        "interactions": []
+      }
+    },
+    {
+      "id": "page-clipboard-manage",
+      "title": "剪切板 · 批量管理",
+      "type": "page",
+      "version": 1,
+      "createdAt": 1786337396000,
+      "canvasData": {
+        "x": 618,
+        "y": 938,
+        "group": 2,
+        "layoutSnapshot": {
+          "version": 1,
+          "contentHeight": 640,
+          "viewportWidth": 375,
+          "sourceHash": "fnv1a-a5b9b9ec",
+          "measuredAt": 1786371189284
+        }
+      },
+      "devMetadata": {
+        "htmlSrc": "pages/clipboard-manage.html",
+        "interactions": []
+      }
+    },
+    {
+      "id": "page-welcome",
+      "title": "欢迎引导 · 首次启动",
+      "type": "page",
+      "version": 1,
+      "createdAt": 1786337396000,
+      "canvasData": {
+        "x": 927,
+        "y": 938,
+        "group": 2,
+        "layoutSnapshot": {
+          "version": 1,
+          "contentHeight": 640,
+          "viewportWidth": 375,
+          "sourceHash": "fnv1a-c8d86c54",
+          "measuredAt": 1786371189284
+        }
+      },
+      "devMetadata": {
+        "htmlSrc": "pages/welcome.html",
+        "interactions": []
+      }
+    },
+    {
+      "id": "page-about",
+      "title": "关于 · 版本信息",
+      "type": "page",
+      "version": 1,
+      "createdAt": 1786337396000,
+      "canvasData": {
+        "x": 1236,
+        "y": 938,
+        "group": 2,
+        "layoutSnapshot": {
+          "version": 1,
+          "contentHeight": 640,
+          "viewportWidth": 375,
+          "sourceHash": "fnv1a-7e7d4012",
+          "measuredAt": 1786371189284
+        }
+      },
+      "devMetadata": {
+        "htmlSrc": "pages/about.html",
+        "interactions": []
+      }
+    },
+    {
+      "id": "page-attach-popover",
+      "title": "附件管理 · 弹层",
+      "type": "page",
+      "version": 1,
+      "createdAt": 1786337396000,
+      "canvasData": {
+        "x": 1545,
+        "y": 938,
+        "group": 2,
+        "layoutSnapshot": {
+          "version": 1,
+          "contentHeight": 640,
+          "viewportWidth": 375,
+          "sourceHash": "fnv1a-25227caa",
+          "measuredAt": 1786371189284
+        }
+      },
+      "devMetadata": {
+        "htmlSrc": "pages/attach-popover.html",
+        "interactions": []
+      }
+    },
+    {
+      "id": "page-error-fallback",
+      "title": "错误回退 · 界面恢复",
+      "type": "page",
+      "version": 1,
+      "createdAt": 1786337396000,
+      "canvasData": {
+        "x": 1854,
+        "y": 938,
+        "group": 2,
+        "layoutSnapshot": {
+          "version": 1,
+          "contentHeight": 900,
+          "viewportWidth": 400,
+          "sourceHash": "fnv1a-page-error-fallback"
+        }
+      },
+      "devMetadata": {
+        "htmlSrc": "pages/error-fallback.html",
+        "interactions": []
+      }
+    },
+    {
+      "id": "page-mini-mode",
+      "title": "迷你卡片 · 悬浮模式",
+      "type": "page",
+      "version": 1,
+      "createdAt": 1786350000000,
+      "canvasData": {
+        "x": 0,
+        "y": 1318,
+        "group": 3,
+        "layoutSnapshot": {
+          "version": 1,
+          "contentHeight": 400,
+          "viewportWidth": 375,
+          "sourceHash": "fnv1a-961c5f6f",
+          "measuredAt": 1786371189284
+        }
+      },
+      "devMetadata": {
+        "htmlSrc": "pages/mini-mode.html",
+        "interactions": []
+      }
+    },
+    {
+      "id": "page-shortcuts",
+      "title": "快捷键设置 · 录制子窗口",
+      "type": "page",
+      "version": 1,
+      "createdAt": 1786350000000,
+      "canvasData": {
+        "x": 309,
+        "y": 1318,
+        "group": 3,
+        "layoutSnapshot": {
+          "version": 1,
+          "contentHeight": 640,
+          "viewportWidth": 375,
+          "sourceHash": "fnv1a-4adab9a4",
+          "measuredAt": 1786371189284
+        }
+      },
+      "devMetadata": {
+        "htmlSrc": "pages/shortcuts.html",
+        "interactions": []
+      }
+    },
+    {
+      "id": "page-mail-doctor",
+      "title": "邮件诊断 · 连接检测",
+      "type": "page",
+      "version": 1,
+      "createdAt": 1786350000000,
+      "canvasData": {
+        "x": 618,
+        "y": 1318,
+        "group": 3,
+        "layoutSnapshot": {
+          "version": 1,
+          "contentHeight": 717,
+          "viewportWidth": 375,
+          "sourceHash": "fnv1a-7a4619a7",
+          "measuredAt": 1786371189284
+        }
+      },
+      "devMetadata": {
+        "htmlSrc": "pages/mail-doctor.html",
+        "interactions": []
+      }
+    },
+    {
+      "id": "page-pass-through",
+      "title": "鼠标穿透 · 悬浮模式",
+      "type": "page",
+      "version": 1,
+      "createdAt": 1786350000000,
+      "canvasData": {
+        "x": 927,
+        "y": 1318,
+        "group": 3,
+        "layoutSnapshot": {
+          "version": 1,
+          "contentHeight": 948,
+          "viewportWidth": 375,
+          "sourceHash": "fnv1a-9bbeaf93",
+          "measuredAt": 1786371189284
+        }
+      },
+      "devMetadata": {
+        "htmlSrc": "pages/pass-through.html",
+        "interactions": []
+      }
+    },
+    {
+      "id": "page-settings-subnav",
+      "title": "设置子面板 · 分类与主题",
+      "type": "page",
+      "version": 1,
+      "createdAt": 1786350000000,
+      "canvasData": {
+        "x": 1236,
+        "y": 1318,
+        "group": 3,
+        "layoutSnapshot": {
+          "version": 1,
+          "contentHeight": 938,
+          "viewportWidth": 375,
+          "sourceHash": "fnv1a-039ead69",
+          "measuredAt": 1786371189284
+        }
+      },
+      "devMetadata": {
+        "htmlSrc": "pages/settings-subnav.html",
+        "interactions": []
+      }
+    },
+    {
+      "id": "page-notes-search",
+      "title": "便签搜索 · 自然语言快速创建",
+      "type": "page",
+      "version": 1,
+      "createdAt": 1786360000000,
+      "canvasData": {
+        "x": 0,
+        "y": 1708,
+        "group": 4,
+        "layoutSnapshot": {
+          "version": 1,
+          "contentHeight": 977,
+          "viewportWidth": 375,
+          "sourceHash": "fnv1a-07060a97",
+          "measuredAt": 1786371189284
+        }
+      },
+      "devMetadata": {
+        "htmlSrc": "pages/notes-search.html",
+        "interactions": []
+      }
+    },
+    {
+      "id": "page-edge-dock",
+      "title": "边缘吸附 · 贴边收纳",
+      "type": "page",
+      "version": 1,
+      "createdAt": 1786360000000,
+      "canvasData": {
+        "x": 309,
+        "y": 1708,
+        "group": 4,
+        "layoutSnapshot": {
+          "version": 1,
+          "contentHeight": 715,
+          "viewportWidth": 375,
+          "sourceHash": "fnv1a-2078f277",
+          "measuredAt": 1786371189284
+        }
+      },
+      "devMetadata": {
+        "htmlSrc": "pages/edge-dock.html",
+        "interactions": []
+      }
+    },
+    {
+      "id": "page-reminder",
+      "title": "提醒通知 · 到点提醒",
+      "type": "page",
+      "version": 1,
+      "createdAt": 1786360000000,
+      "canvasData": {
+        "x": 618,
+        "y": 1708,
+        "group": 4,
+        "layoutSnapshot": {
+          "version": 1,
+          "contentHeight": 900,
+          "viewportWidth": 375,
+          "sourceHash": "fnv1a-e3df59a3",
+          "measuredAt": 1786371189284
+        }
+      },
+      "devMetadata": {
+        "htmlSrc": "pages/reminder.html",
+        "interactions": []
+      }
+    },
+    {
+      "id": "page-display-presets",
+      "title": "显示预设 · 窗口模式",
+      "type": "page",
+      "version": 1,
+      "createdAt": 1786360000000,
+      "canvasData": {
+        "x": 927,
+        "y": 1708,
+        "group": 4,
+        "layoutSnapshot": {
+          "version": 1,
+          "contentHeight": 640,
+          "viewportWidth": 375,
+          "sourceHash": "fnv1a-55f6d30c",
+          "measuredAt": 1786371189284
+        }
+      },
+      "devMetadata": {
+        "htmlSrc": "pages/display-presets.html",
+        "interactions": []
+      }
+    },
+    {
+      "id": "page-note-sort",
+      "title": "便签排序 · 拖拽重排",
+      "type": "page",
+      "version": 1,
+      "createdAt": 1786370000000,
+      "canvasData": {
+        "x": 0,
+        "y": 2106,
+        "group": 5,
+        "layoutSnapshot": {
+          "version": 1,
+          "contentHeight": 806,
+          "viewportWidth": 375,
+          "sourceHash": "fnv1a-2d5bcbf2",
+          "measuredAt": 1786371189284
+        }
+      },
+      "devMetadata": {
+        "htmlSrc": "pages/note-sort.html",
+        "interactions": []
+      }
+    },
+    {
+      "id": "page-clipboard-empty",
+      "title": "剪切板空态 · 无记录",
+      "type": "page",
+      "version": 1,
+      "createdAt": 1786370000000,
+      "canvasData": {
+        "x": 309,
+        "y": 2106,
+        "group": 5,
+        "layoutSnapshot": {
+          "version": 1,
+          "contentHeight": 640,
+          "viewportWidth": 375,
+          "sourceHash": "fnv1a-5eb23ee9",
+          "measuredAt": 1786371189284
+        }
+      },
+      "devMetadata": {
+        "htmlSrc": "pages/clipboard-empty.html",
+        "interactions": []
+      }
+    }
+  ],
+  "config": {
+    "autoLayout": true,
+    "deviceType": "mobile",
+    "projectName": "全场景剪切板 UI 优化",
+    "designLibrary": {
+      "name": "苹果",
+      "id": "dl_builtin_apple",
+      "version": "",
+      "scope": "built-in-global",
+      "path": "c:\\Users\\70715\\.trae-cn\\design_libraries\\dl_builtin_apple",
+      "versionSource": "selected-context"
+    },
+    "visualEditorEnabled": false
+  }
+}

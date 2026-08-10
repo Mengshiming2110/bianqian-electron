@@ -1,204 +1,237 @@
 <template>
-  <main v-if="!hasError" ref="appShellRef" class="app-shell" :class="{ 'pass-through-mode': passThroughMode }">
+  <main v-if="!hasError" class="app-shell app-frame" :class="{ 'pass-through-mode': passThroughMode }">
     <header class="app-header">
-      <div class="header-title">
-        <p class="eyebrow">{{ tabEyebrow }}</p>
-      </div>
-      <div class="header-actions">
-        <button ref="settingsButtonRef" class="icon-button" :class="{ active: settingsOpen }" title="设置" type="button" @click="toggleSettings"><Settings :size="18" /></button>
-        <button v-if="activeTab === 'notes'" class="icon-button" title="新建备忘" type="button" @click="openEditor()"><Plus :size="18" /></button>
-        <button v-if="activeTab === 'clipboard'" class="icon-button" title="清空剪切板" type="button" @click="clipboardStore.clearAll()"><Trash2 :size="18" /></button>
-        <button v-if="activeTab === 'mail'" class="icon-button" title="拉取邮件" type="button" @click="mailStore.fetch()"><Bell :size="18" /></button>
-        <button class="icon-button" title="隐藏窗口" type="button" @click="hideWindow"><Minus :size="18" /></button>
+      <div class="header-row">
+        <div class="app-heading">
+          <h1 class="page-title">{{ tabMeta.title }}</h1>
+          <p class="page-subtitle">{{ tabMeta.subtitle }}</p>
+        </div>
+        <div class="header-actions">
+          <button v-if="activeTab === 'notes'" class="btn-new" type="button" title="新建备忘" @click="openEditor()">
+            <Plus :size="16" />
+            <span>新建</span>
+          </button>
+          <button v-if="activeTab === 'clipboard'" class="clear-btn" type="button" title="清空剪切板" @click="handleClearAllClipboard">
+            清空
+          </button>
+          <span v-if="activeTab === 'mail'" class="status-pill" :class="{ off: !mailOnline }">
+            <span class="status-dot" :class="mailOnline ? 'on' : 'off'"></span>
+            {{ mailStatusLabel }}
+          </span>
+          <button class="icon-btn" title="隐藏窗口" type="button" @click="hideWindow"><Minus :size="16" /></button>
+        </div>
       </div>
     </header>
 
-    <section class="tab-content">
+    <div class="app-content">
       <div v-show="activeTab === 'notes'" class="tab-pane notes-pane">
-    <section v-show="activeTab === 'notes'" class="toolbar">
-      <div class="search-box">
-        <Search :size="15" />
-        <input
-          :value="notes.search"
-          type="search"
-          :placeholder="searchPlaceholder"
-          @input="notes.setSearch($event.target.value)"
-          @keydown.enter="handleSearchEnter"
-        />
-      </div>
-    </section>
+        <label class="search-field">
+          <Search :size="16" class="search-icon" aria-hidden="true" />
+          <input
+            class="search-input"
+            type="search"
+            :value="notes.search"
+            :placeholder="searchPlaceholder"
+            @input="notes.setSearch($event.target.value)"
+            @keydown.enter="handleSearchEnter"
+          />
+        </label>
 
-    <section v-show="activeTab === 'notes'" class="note-list" :class="{ 'sort-active': sortDrag.active, 'sort-settling': sortDrag.settling }" aria-label="备忘列表">
-      <article
-        v-for="note in displayedNotes"
-        :key="note.id"
-        :data-note-id="note.id"
-        class="note-card"
-        :class="{
-          completed: note.completed,
-          'animating-completing': animatingCardIds.get(note.id) === 'completing',
-          'animating-incompleting': animatingCardIds.get(note.id) === 'incompleting',
-          'drag-over': dragTargetNoteId === note.id,
-          'sort-dragging': sortDrag.active && sortDrag.noteId === note.id,
-          'sort-pulsed': sortDrag.pulsed[note.id],
-          ['color-' + note.color]: note.color
-        }"
-        :style="getSortDragStyle(note.id)"
-        @mousedown="onSortMouseDown(note, $event)"
-        @click="onCardClick(note)"
-        @contextmenu.prevent="openContextMenu(note, $event)"
-        @dragover.prevent="onNoteDragOver(note, $event)"
-        @dragleave="onNoteDragLeave(note, $event)"
-        @drop.prevent.stop="onNoteDrop(note, $event)"
-      >
-        <div class="card-row card-top">
-          <button class="check-button" title="切换完成状态" type="button" @click.stop="handleToggleCompleted(note.id)">
-            <CheckCircle v-if="note.completed" :size="18" />
-            <Circle v-else :size="18" />
-          </button>
+        <div class="category-chips" role="group" aria-label="分类筛选">
           <button
-            class="pin-button"
-            :class="{ active: note.pinned }"
-            :title="note.pinned ? '取消置顶' : '置顶备忘'"
+            v-for="cat in allCategoryList"
+            :key="cat"
+            class="chip"
+            :data-active="notes.activeCategory === cat"
             type="button"
-            @click.stop="notes.togglePinned(note.id)"
-          >
-            <Pin :size="14" />
-          </button>
-          <strong>{{ note.title }}</strong>
-          <time>{{ note.time }}</time>
+            @click="notes.setFilter(cat)"
+          >{{ cat }}</button>
         </div>
-        <MarkdownPreview v-if="note.content" :content="note.content" :is-mini="false" />
-        <div class="card-row card-meta">
-          <span class="category-pill">{{ note.category }}</span>
-          <span
-            v-if="note.attachments.length"
-            class="attach-pill"
-            @click.stop="openAttachPopover(note, $event)"
+
+        <section class="note-list" :class="{ 'sort-active': sortDrag.active, 'sort-settling': sortDrag.settling }" aria-label="备忘列表">
+          <article
+            v-for="note in displayedNotes"
+            :key="note.id"
+            :data-note-id="note.id"
+            class="note-card"
+            :class="{
+              completed: note.completed,
+              'is-done': note.completed,
+              'animating-completing': animatingCardIds.get(note.id) === 'completing',
+              'animating-incompleting': animatingCardIds.get(note.id) === 'incompleting',
+              'drag-over': dragTargetNoteId === note.id,
+              'sort-dragging': sortDrag.active && sortDrag.noteId === note.id,
+              'sort-pulsed': sortDrag.pulsed[note.id],
+              ['color-' + note.color]: note.color
+            }"
+            :style="getSortDragStyle(note.id)"
+            @mousedown="onSortMouseDown(note, $event)"
+            @click="onCardClick(note)"
+            @contextmenu.prevent="openContextMenu(note, $event)"
+            @dragover.prevent="onNoteDragOver(note, $event)"
+            @dragleave="onNoteDragLeave(note, $event)"
+            @drop.prevent.stop="onNoteDrop(note, $event)"
           >
-            <Paperclip :size="12" />
-            {{ note.attachments.length }}
-          </span>
-        </div>
-      </article>
+            <div class="note-head">
+              <h3 class="note-title">{{ note.title }}</h3>
+              <div class="note-head-right">
+                <span
+                  v-if="note.attachments.length"
+                  class="attach-pill"
+                  @click.stop="openAttachPopover(note, $event)"
+                >
+                  <Paperclip :size="10" />
+                  {{ note.attachments.length }}
+                </span>
+                <span class="note-tag">{{ note.category }}</span>
+              </div>
+            </div>
+            <MarkdownPreview v-if="note.content" :content="note.content" :is-mini="false" @link-click="openExternalLink" />
+            <div class="note-actions">
+              <button class="icon-btn" title="弹出" type="button" @click.stop="popOutNote(note)">
+                <ExternalLink :size="16" />
+              </button>
+              <button
+                class="icon-btn"
+                :class="{ pinned: note.pinned }"
+                :title="note.pinned ? '取消置顶' : '置顶备忘'"
+                type="button"
+                @click.stop="notes.togglePinned(note.id)"
+              >
+                <Pin :size="16" />
+              </button>
+              <button class="icon-btn" :class="{ done: note.completed }" title="切换完成状态" type="button" @click.stop="handleToggleCompleted(note.id)">
+                <CheckCircle :size="16" />
+              </button>
+              <button class="icon-btn" title="编辑" type="button" @click.stop="openEditor(note)">
+                <PencilLine :size="16" />
+              </button>
+            </div>
+          </article>
 
-      <div v-if="!notes.filteredNotes.length" class="empty-state">
-        <StickyNote :size="30" />
-        <p>没有备忘</p>
-      </div>
-    </section>
-
+          <div v-if="!notes.filteredNotes.length" class="empty-state">
+            <span class="empty-icon"><StickyNote :size="28" /></span>
+            <p class="empty-title">还没有备忘</p>
+            <p class="empty-hint">点击右上角 + 新建，或输入「明天9点交报告 #工作」快速创建</p>
+          </div>
+        </section>
       </div>
 
       <ClipboardPanel v-if="activeTab === 'clipboard'" class="tab-pane" />
       <MailPanel v-if="activeTab === 'mail'" class="tab-pane" />
-    </section>
+      <SettingsPanel v-if="activeTab === 'settings'" class="tab-pane settings-pane" @close="hideWindow" @theme-change="themePreference = $event" />
+    </div>
 
-    <footer class="app-footer">
-      <span>{{ todayLabel }}</span>
-    </footer>
+    <footer class="app-footer"><span>{{ todayLabel }}</span></footer>
 
-    <nav class="tab-bar">
-      <button v-for="tab in tabs" :key="tab.id" class="tab-btn" :class="{ active: activeTab === tab.id }" @click="switchTab(tab.id)">
-        <component :is="tabIcons[tab.id]" :size="16" />
-        <span>{{ tab.label }}</span>
-      </button>
+    <nav class="app-tabbar" aria-label="主导航">
+      <div class="app-tabbar-inner">
+        <button
+          v-for="tab in tabs"
+          :key="tab.id"
+          class="tab-item"
+          :data-active="activeTab === tab.id"
+          :data-tab-key="tab.id"
+          type="button"
+          @click="switchTab(tab.id)"
+        >
+          <component :is="tabIcons[tab.id]" class="tab-icon" />
+          <span class="tab-label">{{ tab.label }}</span>
+        </button>
+      </div>
     </nav>
+
+    <button class="peel-btn" type="button" title="收起窗口" aria-label="收起窗口" @click="hideWindow"><ChevronUp :size="18" /></button>
 
     <div v-if="editorOpen" class="editor-overlay" @click.self="closeEditor">
       <form class="editor-panel" @submit.prevent="saveEditor">
         <header class="editor-header">
           <h2>{{ draft.id ? '编辑备忘' : '新建备忘' }}</h2>
-          <button class="icon-button" title="关闭" type="button" @click="closeEditor">
+          <button class="icon-btn" title="关闭" type="button" @click="closeEditor">
             <X :size="18" />
           </button>
         </header>
 
-        <label class="field full">
-          <span>标题</span>
-          <input v-model.trim="draft.title" type="text" autofocus required @keydown.enter.prevent="saveEditor" />
-        </label>
+        <div class="panel-body">
+          <label class="field full">
+            <span>标题</span>
+            <input v-model.trim="draft.title" type="text" autofocus required @keydown.enter.prevent="saveEditor" />
+          </label>
 
-        <div class="field-grid">
-          <label class="field">
-            <span>分类</span>
-            <select v-model="draft.category">
-              <option v-for="category in categories" :key="category" :value="category">
-                {{ category }}
-              </option>
-            </select>
-          </label>
-          <label class="field">
-            <span>颜色</span>
-            <div class="color-picker-row">
-              <button
-                v-for="c in noteColors"
-                :key="c.value"
-                type="button"
-                class="color-picker-dot"
-                :class="[c.value ? 'dot-' + c.value : 'dot-default', { active: draft.color === c.value }]"
-                :title="c.label"
-                @click="draft.color = c.value"
-              ></button>
-            </div>
-          </label>
-        </div>
-        <div class="field-grid">
-          <label class="field">
-            <span>日期</span>
-            <input v-model="draft.date" type="date" />
-          </label>
-          <label class="field">
-            <span>时间</span>
-            <input v-model="draft.time" type="time" />
-          </label>
-        </div>
+          <div class="field-grid">
+            <label class="field">
+              <span>分类</span>
+              <SelectMenu
+                v-model="draft.category"
+                :options="categoryOptions"
+              />
+            </label>
+            <label class="field">
+              <span>颜色</span>
+              <div class="color-picker-row">
+                <button
+                  v-for="c in noteColors"
+                  :key="c.value"
+                  type="button"
+                  class="color-picker-dot"
+                  :class="[c.value ? 'dot-' + c.value : 'dot-default', { active: draft.color === c.value }]"
+                  :title="c.label"
+                  @click="draft.color = c.value"
+                ></button>
+              </div>
+            </label>
+          </div>
 
-        <div class="field-grid">
-          <label class="remind-toggle">
-            <input v-model="draft.remind" type="checkbox" />
-            <Bell v-if="draft.remind" :size="16" />
-            <BellOff v-else :size="16" />
+          <div class="field-grid">
+            <label class="field">
+              <span>日期</span>
+              <DatePicker v-model="draft.date" />
+            </label>
+            <label class="field">
+              <span>时间</span>
+              <TimePicker v-model="draft.time" />
+            </label>
+          </div>
+
+          <div class="remind-toggle">
             <span>提醒</span>
+            <input v-model="draft.remind" type="checkbox" class="switch" />
+          </div>
+
+          <label class="field full">
+            <span>备注</span>
+            <textarea v-model="draft.content" rows="6" class="md-textarea"></textarea>
           </label>
-        </div>
 
-        <label class="field full">
-          <span>备注</span>
-          <div class="md-editor-row">
-            <textarea v-model="draft.content" rows="8" class="md-textarea"></textarea>
-            <MarkdownPreview v-if="draft.content" :content="draft.content" :is-mini="false" class="md-editor-preview" />
-          </div>
-        </label>
-
-        <section class="attachments">
-          <button class="secondary-button" type="button" @click="pickAttachments">
-            <Paperclip :size="15" />
-            附件
-          </button>
-          <div v-if="draft.attachments.length" class="attachment-list">
-            <button
-              v-for="file in draft.attachments"
-              :key="file"
-              class="attachment-chip"
-              type="button"
-              :title="file"
-              @click="notes.openAttachment(file)"
-            >
-              <span>{{ fileName(file) }}</span>
-              <X :size="13" @click.stop="removeAttachment(file)" />
+          <section class="attachments">
+            <button class="btn-secondary" type="button" @click="pickAttachments">
+              <Paperclip :size="15" />
+              附件
             </button>
-          </div>
-        </section>
+            <div v-if="draft.attachments.length" class="attachment-list">
+              <button
+                v-for="file in draft.attachments"
+                :key="file"
+                class="attachment-chip"
+                type="button"
+                :title="file"
+                @click="notes.openAttachment(file)"
+              >
+                <span>{{ fileName(file) }}</span>
+                <X :size="13" @click.stop="removeAttachment(file)" />
+              </button>
+            </div>
+          </section>
+        </div>
 
         <footer class="editor-actions">
-          <button v-if="draft.id" class="danger-button" type="button" @click="deleteEditorNote">
+          <button v-if="draft.id" class="btn-danger" type="button" @click="deleteEditorNote">
             <Trash2 :size="15" />
             删除
           </button>
           <span></span>
-          <button class="secondary-button" type="button" @click="closeEditor">取消</button>
-          <button class="primary-button" type="submit">
+          <button class="btn-secondary" type="button" @click="closeEditor">取消</button>
+          <button class="btn-primary" type="submit">
             <Save :size="15" />
             保存
           </button>
@@ -217,38 +250,40 @@
       @open="handleAttachOpen"
     />
 
+    <WelcomeCard />
+    <AboutCard ref="aboutRef" />
   </main>
+
   <div v-if="hasError" class="error-fallback">
     <div class="error-context">
       <span>{{ tabEyebrow }}</span>
       <time>{{ todayLabel }}</time>
     </div>
-    <div class="error-panel">
-      <StickyNote :size="32" />
-      <h2>界面临时失去响应</h2>
-      <p>数据仍保存在本机。重试会回到当前窗口，不会清空备忘、剪切板或邮箱配置。</p>
-      <div class="error-actions">
-        <button type="button" @click="hasError = false">重试</button>
-        <button type="button" class="secondary" @click="hideWindow">先隐藏</button>
+    <div class="error-panel-wrap">
+      <div class="error-panel">
+        <span class="error-icon"><StickyNote :size="26" /></span>
+        <h2>界面临时失去响应</h2>
+        <p>数据仍保存在本机。重试会回到当前窗口，不会清空备忘、剪切板或邮箱配置。</p>
+        <div class="error-actions">
+          <button type="button" class="btn-primary" @click="hasError = false">重试</button>
+          <button type="button" class="btn-secondary" @click="hideWindow">先隐藏</button>
+        </div>
       </div>
     </div>
   </div>
-
-  <WelcomeCard v-if="!welcomeSeen" @dismiss="welcomeSeen = true" />
-  <AboutCard ref="aboutRef" />
 </template>
 
 <script setup>
 import { computed, onErrorCaptured, onBeforeUnmount, onMounted, reactive, ref, watch, nextTick } from 'vue'
 import {
-  Bell,
-  BellOff,
   CheckCircle,
-  Circle,
+  ChevronUp,
   ClipboardList,
+  ExternalLink,
   Mail,
   Minus,
   Paperclip,
+  PencilLine,
   Pin,
   Plus,
   Save,
@@ -260,31 +295,67 @@ import {
 } from 'lucide-vue-next'
 import AttachmentPopover from './components/AttachmentPopover.vue'
 import MarkdownPreview from './components/MarkdownPreview.vue'
-import { CATEGORIES, MAX_ATTACHMENTS_PER_NOTE, loadCategories, useNotesStore } from './stores/notes'
+import { CATEGORIES, ALL_CATEGORY, MAX_ATTACHMENTS_PER_NOTE, loadCategories, useNotesStore } from './stores/notes'
 import { useClipboardStore } from './stores/clipboard'
 import { useMailStore } from './stores/mail'
 import ClipboardPanel from './components/ClipboardPanel.vue'
 import MailPanel from './components/MailPanel.vue'
+import SettingsPanel from './components/SettingsPanel.vue'
 import WelcomeCard from './components/WelcomeCard.vue'
 import AboutCard from './components/AboutCard.vue'
+import SelectMenu from './components/SelectMenu.vue'
+import DatePicker from './components/DatePicker.vue'
+import TimePicker from './components/TimePicker.vue'
+import { fileName } from './lib/format'
 
 const notes = useNotesStore()
 const clipboardStore = useClipboardStore()
 const mailStore = useMailStore()
 
 const activeTab = ref('notes')
-const tabs = [{ id: 'notes', label: '备忘' }, { id: 'clipboard', label: '剪切板' }, { id: 'mail', label: '邮件' }]
-const tabIcons = { notes: StickyNote, clipboard: ClipboardList, mail: Mail }
+const tabs = [
+  { id: 'notes', label: '便签' },
+  { id: 'clipboard', label: '剪切板' },
+  { id: 'mail', label: '邮件' },
+  { id: 'settings', label: '设置' }
+]
+const tabIcons = { notes: StickyNote, clipboard: ClipboardList, mail: Mail, settings: Settings }
 const aboutRef = ref(null)
-const welcomeSeen = ref(false)
 
-const searchPlaceholder = computed(() => ({ notes: '搜索，或输入：明天9点交报告 #工作', clipboard: '搜索剪切板历史...', mail: '搜索邮件...' }[activeTab.value] || '搜索...'))
+const searchPlaceholder = '搜索，或输入：明天9点交报告 #工作'
+
+const tabMeta = computed(() => {
+  const map = {
+    notes: {
+      title: '便签',
+      subtitle: notes.activeCategory === ALL_CATEGORY
+        ? `${notes.filteredNotes.length} 条记录`
+        : `${notes.activeCategory} · ${notes.filteredNotes.length} 条`
+    },
+    clipboard: {
+      title: '剪切板',
+      subtitle: `${clipboardStore.items.length} 条记录 · 本地保存`
+    },
+    mail: {
+      title: '邮件',
+      subtitle: mailStore.connected ? 'Exchange 已连接' : (mailStore.configured ? '连接中…' : '未连接邮箱')
+    },
+    settings: { title: '设置', subtitle: '个性化与系统选项' }
+  }
+  return map[activeTab.value]
+})
+
+const mailOnline = computed(() => Boolean(mailStore.connected || mailStore.isRunning))
+const mailStatusLabel = computed(() => {
+  if (mailStore.connected) return '已连接'
+  if (mailStore.isRunning) return '同步中'
+  return '未连接'
+})
 
 function switchTab(id) { activeTab.value = id }
 function onNavigateTab(tab) { activeTab.value = tab }
 function onShowAbout() { aboutRef.value?.show() }
 function onTogglePassThrough() { togglePassThrough() }
-const categories = CATEGORIES
 const noteColors = [
   { value: '', label: '默认' },
   { value: 'red', label: '红色' },
@@ -295,14 +366,10 @@ const noteColors = [
   { value: 'purple', label: '紫色' }
 ]
 const editorOpen = ref(false)
-const settingsOpen = ref(false)
-const settingsButtonRef = ref(null)
 watch(editorOpen, (val) => {
   window.api?.window.setEditing(val)
 })
 const passThroughMode = ref(false)
-const windowOpacity = ref(0.92)
-const edgeAutoHide = ref(false)
 const themePreference = ref('system')
 const systemDark = ref(false)
 let darkModeMq = null
@@ -318,7 +385,6 @@ watch(resolvedTheme, (theme) => {
 
 const animatingCardIds = reactive(new Map())
 const hasError = ref(false)
-const appShellRef = ref(null)
 const dragTargetNoteId = ref('')
 const sortDrag = reactive({
   active: false,
@@ -339,8 +405,6 @@ let lastShiftCount = 0
 let pulseCleanupTimers = {}
 const unsubscribeHandlers = []
 let reminderTimer = null
-let resizeObserver = null
-let resizeDebounce = null
 let lastFileDropKey = ''
 let lastFileDropAt = 0
 let originalDraftAttachments = []
@@ -357,52 +421,13 @@ const attachPopover = reactive({
 })
 
 const displayedNotes = computed(() => notes.filteredNotes)
+const allCategoryList = computed(() => [ALL_CATEGORY, ...CATEGORIES])
+const categoryOptions = computed(() => CATEGORIES.map((category) => ({ value: category, label: category })))
 const tabEyebrow = computed(() => {
   if (activeTab.value === 'notes') return notes.activeCategory
   if (activeTab.value === 'clipboard') return '剪切板工具'
   return '邮件工具'
 })
-
-let skipNextResize = false
-const NORMAL_WINDOW_HEIGHT = 680
-
-watch(
-  () => notes.filteredNotes.map((note) => `${note.id}:${note.title}:${note.content}:${note.attachments.length}:${note.completed}:${note.pinned}`).join('|'),
-  () => {
-    clearTimeout(resizeDebounce)
-    if (skipNextResize) {
-      skipNextResize = false
-      return
-    }
-    resizeDebounce = setTimeout(syncContentHeight, 80)
-  }
-)
-
-watch(activeTab, () => {
-  nextTick(() => syncContentHeight())
-})
-
-function toggleSettings() {
-  if (settingsOpen.value) {
-    window.api?.settingsWindow?.close()
-    return
-  }
-
-  const button = settingsButtonRef.value
-  if (!button) return
-
-  const rect = button.getBoundingClientRect()
-  const screenX = window.screenX + rect.right - 252
-  const screenY = window.screenY + rect.bottom + 8
-
-  settingsOpen.value = true
-  window.api?.settingsWindow?.open(screenX, screenY)
-}
-
-function closeSettings() {
-  settingsOpen.value = false
-  window.api?.settingsWindow?.close()
-}
 
 function openAttachPopover(note, event) {
   if (attachPopover.visible && attachPopover.note?.id === note.id) {
@@ -562,7 +587,6 @@ async function onSortMouseUp() {
         if (targetIndex >= 0 && targetIndex < cards.length) {
           const targetId = cards[targetIndex].dataset.noteId
           const position = shiftCount > 0 ? 'after' : 'before'
-          skipNextResize = true
           await notes.reorderNote(sortDrag.noteId, targetId, position)
         }
       }
@@ -917,28 +941,29 @@ async function removeAttachment(file) {
   }
 }
 
-function fileName(path) {
-  return path.split(/[\\/]/).pop()
-}
-
 function hideWindow() {
   window.api?.window.hide()
+}
+
+function openExternalLink(url) {
+  window.api?.files?.openExternal(url)
+}
+
+async function handleClearAllClipboard() {
+  if (!clipboardStore.items.length) return
+  if (!confirm('确定清空所有未固定的剪切板记录？')) return
+  await clipboardStore.clearAll()
 }
 
 async function refreshInteractionState() {
   const state = await window.api?.window.getInteractionState?.()
   passThroughMode.value = Boolean(state?.passThrough)
-  windowOpacity.value = Number(state?.opacity || 0.92)
-  edgeAutoHide.value = Boolean(state?.edgeAutoHide)
   if (state?.theme) themePreference.value = state.theme
 }
 
 async function togglePassThrough() {
-  if (!passThroughMode.value && settingsOpen.value) closeSettings()
   const state = await window.api?.window.setPassThrough?.(!passThroughMode.value)
   passThroughMode.value = Boolean(state?.passThrough)
-  windowOpacity.value = Number(state?.opacity || windowOpacity.value)
-  edgeAutoHide.value = Boolean(state?.edgeAutoHide)
 }
 
 function handleSearchEnter(event) {
@@ -1020,10 +1045,6 @@ function parseNaturalDate(text) {
 
 function onKeyDown(e) {
   if (e.key === 'Escape') {
-    if (settingsOpen.value) {
-      closeSettings()
-      return
-    }
     if (attachPopover.visible) {
       closeAttachPopover()
       return
@@ -1048,17 +1069,6 @@ onErrorCaptured((err) => {
   hasError.value = true
   return false
 })
-
-function syncContentHeight() {
-  const el = appShellRef.value
-  if (!el) return
-
-  const noteList = el.querySelector('.note-list')
-  if (!noteList) return
-
-  noteList.style.maxHeight = ''
-  window.api?.window.resizeToContent(NORMAL_WINDOW_HEIGHT)
-}
 
 function checkRemindersOnResume() {
   notes.checkReminders()
@@ -1099,29 +1109,14 @@ onMounted(async () => {
   if (window.api?.window.onInteractionState) {
     unsubscribeHandlers.push(
       window.api.window.onInteractionState((state) => {
-        const wasPassThrough = passThroughMode.value
         passThroughMode.value = Boolean(state?.passThrough)
-        windowOpacity.value = Number(state?.opacity || windowOpacity.value)
-        edgeAutoHide.value = Boolean(state?.edgeAutoHide)
         if (state?.theme) themePreference.value = state.theme
-        if (settingsOpen.value) {
-          const nowPassThrough = passThroughMode.value
-          if (!wasPassThrough && nowPassThrough) {
-            window.api?.settingsWindow?.close()
-          }
-        }
       })
     )
   }
 
   if (window.api?.contextMenu?.onAction) {
     unsubscribeHandlers.push(window.api.contextMenu.onAction(handleContextMenuAction))
-  }
-
-  if (window.api?.settingsWindow?.onClosed) {
-    unsubscribeHandlers.push(window.api.settingsWindow.onClosed(() => {
-      settingsOpen.value = false
-    }))
   }
 
   if (window.api?.notify?.onClick) {
@@ -1149,15 +1144,6 @@ onMounted(async () => {
   // Load clipboard + mail on mount
   clipboardStore.load()
   mailStore.load()
-  window.addEventListener('resize', syncContentHeight)
-
-  resizeObserver = new ResizeObserver(() => {
-    clearTimeout(resizeDebounce)
-    resizeDebounce = setTimeout(syncContentHeight, 80)
-  })
-  if (appShellRef.value) {
-    resizeObserver.observe(appShellRef.value)
-  }
 })
 
 onBeforeUnmount(() => {
@@ -1165,14 +1151,9 @@ onBeforeUnmount(() => {
   clearInterval(reminderTimer)
   if (darkModeMq && onDarkModeChange) darkModeMq.removeEventListener('change', onDarkModeChange)
   cancelSortDrag()
-  clearTimeout(resizeDebounce)
   clearTimeout(sortDragJustEndedTimer)
   clearTimeout(sortDragSettlingTimer)
   clearTimeout(toggleCompletedTimer)
-  if (resizeObserver) {
-    resizeObserver.disconnect()
-    resizeObserver = null
-  }
   document.removeEventListener('keydown', onKeyDown)
   document.removeEventListener('mouseout', onMouseOut)
   document.removeEventListener('mouseover', onMouseOver)
@@ -1181,180 +1162,114 @@ onBeforeUnmount(() => {
   document.removeEventListener('mouseup', onSortMouseUp)
   window.removeEventListener('focus', checkRemindersOnResume)
   window.removeEventListener('message', onPreloadFileDrop)
-  window.removeEventListener('resize', syncContentHeight)
 })
 </script>
 
 <style scoped>
+/* ===== 窗口外壳（透明无边框圆角窗口）===== */
 .app-shell {
   position: relative;
-  display: grid;
-  height: 100%;
-  width: 100%;
-  grid-template-rows: auto auto minmax(0, 1fr) 0 auto;
   overflow: hidden;
   border: 1px solid var(--border);
   border-radius: var(--radius-window);
   background: var(--bg-window);
   box-shadow: var(--shadow);
-  backdrop-filter: blur(18px);
   clip-path: inset(0 round var(--radius-window));
   isolation: isolate;
 }
 
-.tab-content {
-  min-height: 0;
-  overflow: hidden;
+/* ===== 内容区 ===== */
+.app-content {
+  scroll-behavior: smooth;
 }
 
 .tab-pane {
-  height: 100%;
-  min-height: 0;
+  min-width: 0;
 }
 
 .notes-pane {
   display: flex;
   flex-direction: column;
-}
-
-.app-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
   gap: 12px;
-  padding: 14px 14px 10px;
-  -webkit-app-region: drag;
 }
 
-.editor-header h2,
-.eyebrow {
-  margin: 0;
+.notes-pane .search-field {
+  margin-bottom: 0;
 }
 
-.eyebrow {
-  min-height: 32px;
+.category-chips {
   display: flex;
-  align-items: center;
-  color: var(--accent);
-  font-size: 13px;
-  font-weight: 700;
-}
-
-.header-title {
-  min-width: 0;
-}
-
-.header-actions,
-.editor-header,
-.editor-actions,
-.card-row,
-.search-box,
-.pin-button,
-.remind-toggle,
-.secondary-button,
-.primary-button,
-.danger-button,
-.attachment-chip {
-  display: flex;
-  align-items: center;
-}
-
-.header-actions {
-  gap: 6px;
-  -webkit-app-region: no-drag;
-}
-
-.icon-button {
-  display: inline-grid;
-  width: 32px;
-  height: 32px;
-  place-items: center;
-  border-radius: var(--radius-control);
-  color: var(--text);
-  background: var(--bg-card);
-}
-
-.icon-button:hover {
-  color: var(--accent-strong);
-  background: var(--accent-soft);
-  transform: scale(1.06);
-}
-
-.icon-button.active {
-  color: #fff;
-  background: var(--accent);
-}
-
-.pass-through-mode .icon-button:not(.active):hover {
-  color: var(--text);
-  background: var(--bg-card);
-}
-
-.toolbar {
-  padding: 0 12px 10px;
-}
-
-.search-box {
   gap: 8px;
-  height: 34px;
-  padding: 0 10px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-control);
-  color: var(--text-muted);
-  background: var(--bg-card);
+  overflow-x: auto;
+  padding: 2px;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
 }
 
-.search-box input {
-  width: 100%;
-  border: 0;
-  outline: 0;
-  background: transparent;
-  font-size: 13px;
-}
-
-.search-box:focus-within {
-  border-color: rgba(47, 125, 120, 0.42);
-  box-shadow: var(--focus-ring);
-  background: var(--bg-input);
+.category-chips::-webkit-scrollbar {
+  display: none;
 }
 
 .note-list {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
   min-height: 0;
-  overflow-y: auto;
-  padding: 0 12px 10px;
 }
 
 .note-card {
   flex: 0 0 auto;
-  padding: 10px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-control);
-  background: var(--bg-card);
-  transition:
-    background-color var(--dur-base) var(--ease-out),
-    border-color var(--dur-base) var(--ease-out),
-    box-shadow var(--dur-base) var(--ease-out),
-    transform var(--dur-fast) var(--ease-out),
-    opacity var(--dur-base) var(--ease-out);
+  cursor: pointer;
 }
 
-.note-card:hover {
-  background: var(--bg-card-hover);
-  border-color: rgba(47, 125, 120, 0.22);
-  box-shadow: var(--shadow-sm);
-  transform: translateY(-1px);
-}
 .note-card:active {
   transform: scale(0.99);
 }
 
-.note-card.drag-over {
-  border-color: rgba(47, 125, 120, 0.76);
-  background: rgba(232, 247, 244, 0.96);
-  box-shadow: inset 0 0 0 1px rgba(47, 125, 120, 0.22);
+.note-head-right {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+  justify-self: end;
+}
+
+.attach-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 4px 7px;
+  border-radius: var(--radius-full);
+  color: var(--apple-primary);
+  background: var(--brand-soft);
+  font-size: 10px;
+  line-height: 1;
+  cursor: pointer;
+  flex: none;
+}
+
+/* 颜色卡片 */
+.note-card.color-red { border-color: color-mix(in srgb, var(--note-red) 38%, transparent); background: color-mix(in srgb, var(--apple-card) 92%, var(--note-red)); }
+.note-card.color-orange { border-color: color-mix(in srgb, var(--note-orange) 38%, transparent); background: color-mix(in srgb, var(--apple-card) 92%, var(--note-orange)); }
+.note-card.color-yellow { border-color: color-mix(in srgb, var(--note-yellow) 38%, transparent); background: color-mix(in srgb, var(--apple-card) 92%, var(--note-yellow)); }
+.note-card.color-green { border-color: color-mix(in srgb, var(--note-green) 38%, transparent); background: color-mix(in srgb, var(--apple-card) 92%, var(--note-green)); }
+.note-card.color-blue { border-color: color-mix(in srgb, var(--note-blue) 38%, transparent); background: color-mix(in srgb, var(--apple-card) 92%, var(--note-blue)); }
+.note-card.color-purple { border-color: color-mix(in srgb, var(--note-purple) 38%, transparent); background: color-mix(in srgb, var(--apple-card) 92%, var(--note-purple)); }
+
+/* 完成态 */
+.note-card.completed {
+  opacity: 0.56;
+}
+
+.note-card.is-done .note-title {
+  text-decoration: line-through;
+}
+
+/* 拖拽排序 */
+.drag-over {
+  border-color: var(--border-brand);
+  background: var(--brand-soft);
+  box-shadow: inset 0 0 0 1px var(--border-brand);
 }
 
 .sort-active .note-card {
@@ -1367,252 +1282,91 @@ onBeforeUnmount(() => {
   cursor: grabbing;
 }
 
-.note-card.color-red { border-color: rgba(239, 68, 68, 0.38); background: color-mix(in srgb, var(--bg-card) 92%, #ef4444); }
-.note-card.color-orange { border-color: rgba(249, 115, 22, 0.38); background: color-mix(in srgb, var(--bg-card) 92%, #f97316); }
-.note-card.color-yellow { border-color: rgba(234, 179, 8, 0.38); background: color-mix(in srgb, var(--bg-card) 92%, #eab308); }
-.note-card.color-green { border-color: rgba(34, 197, 94, 0.38); background: color-mix(in srgb, var(--bg-card) 92%, #22c55e); }
-.note-card.color-blue { border-color: rgba(59, 130, 246, 0.38); background: color-mix(in srgb, var(--bg-card) 92%, #3b82f6); }
-.note-card.color-purple { border-color: rgba(168, 85, 247, 0.38); background: color-mix(in srgb, var(--bg-card) 92%, #a855f7); }
-
-.color-dot {
-  display: inline-block;
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  flex-shrink: 0;
-}
-.color-dot.dot-default { background: var(--border); }
-.color-dot.dot-red { background: #ef4444; }
-.color-dot.dot-orange { background: #f97316; }
-.color-dot.dot-yellow { background: #eab308; }
-.color-dot.dot-green { background: #22c55e; }
-.color-dot.dot-blue { background: #3b82f6; }
-.color-dot.dot-purple { background: #a855f7; }
-
-.color-submenu .color-option {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.color-picker-row {
-  display: flex;
-  gap: 6px;
-  padding: 4px 0;
-}
-
-.color-picker-dot {
-  width: 20px;
-  height: 20px;
-  border-radius: 50%;
-  border: 2px solid transparent;
-  cursor: pointer;
-  transition: border-color 0.15s, transform 0.15s;
-}
-.color-picker-dot:hover { transform: scale(1.15); }
-.color-picker-dot.active { border-color: var(--accent); }
-.color-picker-dot.dot-default { background: var(--border); }
-.color-picker-dot.dot-red { background: #ef4444; }
-.color-picker-dot.dot-orange { background: #f97316; }
-.color-picker-dot.dot-yellow { background: #eab308; }
-.color-picker-dot.dot-green { background: #22c55e; }
-.color-picker-dot.dot-blue { background: #3b82f6; }
-.color-picker-dot.dot-purple { background: #a855f7; }
-
 .sort-settling .note-card {
   transition: transform 0.22s ease-out;
 }
 
-.pass-through-mode .note-card:hover {
-  transform: none;
-  box-shadow: none;
-  background: var(--bg-card);
+@keyframes sort-pulse {
+  0%   { scale: 1; }
+  18%  { scale: 0.94; }
+  50%  { scale: 1.03; }
+  100% { scale: 1; }
 }
 
-.note-card.completed {
-  opacity: 0.56;
+.note-card.sort-pulsed {
+  animation: sort-pulse 0.2s ease-out;
 }
 
-.card-top {
-  gap: 7px;
+/* 完成动画 */
+.note-card.animating-completing {
+  animation: cardFadeOut 0.25s ease-out forwards;
 }
 
-.card-top strong {
-  min-width: 0;
-  flex: 1;
-  overflow: hidden;
-  font-size: 14px;
-  line-height: 20px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+.note-card.animating-incompleting {
+  animation: cardFadeIn 0.25s ease-out forwards;
 }
 
-.card-top time {
-  color: var(--text-muted);
-  font-size: 12px;
+@keyframes cardFadeOut {
+  from { opacity: 1; }
+  to   { opacity: 0.56; }
 }
 
-.check-button {
-  display: inline-grid;
-  width: 22px;
-  height: 22px;
-  flex: 0 0 22px;
-  place-items: center;
-  border-radius: 999px;
-  color: var(--accent);
-  background: transparent;
-  transition:
-    background-color var(--dur-fast) var(--ease-out),
-    color var(--dur-fast) var(--ease-out),
-    transform var(--dur-fast) var(--ease-out);
-}
-
-.check-button:hover {
-  background: var(--accent-soft);
-  transform: scale(1.08);
-}
-
-.pin-button {
-  width: 20px;
-  height: 20px;
-  justify-content: center;
-  border-radius: 5px;
-  color: var(--text-muted);
-  background: transparent;
-}
-
-.pin-button.active {
-  color: var(--accent-strong);
-  background: var(--accent-soft);
-}
-
-.pin-button:not(.active) {
-  opacity: 0;
-}
-
-.note-card:hover .pin-button,
-.pin-button:focus-visible {
-  opacity: 1;
-}
-
-.note-preview {
-  display: -webkit-box;
-  margin: 6px 0 8px 29px;
-  overflow: hidden;
-  color: var(--text-muted);
-  font-size: 12px;
-  line-height: 17px;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-}
-
-.card-meta {
-  justify-content: space-between;
-  gap: 8px;
-  margin-left: 29px;
-}
-
-.category-pill {
-  max-width: 76px;
-  overflow: hidden;
-  padding: 3px 8px;
-  border-radius: var(--radius-small);
-  color: var(--accent-strong);
-  background: var(--accent-soft);
-  font-size: 12px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.attach-pill {
-  display: flex;
-  align-items: center;
-  gap: 3px;
-  padding: 3px 8px;
-  border-radius: 4px;
-  color: var(--accent-strong);
-  background: var(--accent-soft);
-  font-size: 10px;
-  cursor: pointer;
-}
-
-.attach-pill:hover {
-  background: var(--accent-soft);
-}
-
-.empty-state {
-  display: grid;
-  min-height: 190px;
-  place-items: center;
-  align-content: center;
-  gap: 8px;
-  color: var(--text-muted);
-}
-
-.empty-state p {
-  margin: 0;
-  font-size: 13px;
-}
-
-.app-footer {
-  position: absolute;
-  top: 8px;
-  right: 70px;
-  z-index: 20;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 72px;
-  min-height: 16px;
-  padding: 0;
-  color: var(--text-muted);
-  font-size: 12px;
-  line-height: 1;
-  pointer-events: none;
-}
-
-.editor-overlay {
-  position: fixed;
-  inset: 0;
-  overflow: hidden;
-  display: grid;
-  place-items: center;
-  padding: 12px;
-  border-radius: var(--radius-window);
-  background: var(--bg-overlay);
-  clip-path: inset(0 round var(--radius-window));
-  animation: overlay-in var(--dur-base) var(--ease-out);
-}
-
-@keyframes overlay-in {
-  from { opacity: 0; }
+@keyframes cardFadeIn {
+  from { opacity: 0.56; }
   to   { opacity: 1; }
 }
 
-.editor-panel {
+/* ===== 便签编辑器弹层（原型 note-editor）===== */
+.editor-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
   display: grid;
-  width: min(100%, 360px);
-  max-height: calc(100vh - 24px);
-  gap: 12px;
-  overflow-y: auto;
-  padding: 14px;
-  border-radius: var(--radius-panel);
-  background: var(--bg-elevated);
-  box-shadow: var(--shadow-pop);
-  animation: panel-in var(--dur-base) var(--ease-spring);
+  place-items: center;
+  padding: 12px;
+  background: color-mix(in srgb, var(--apple-foreground) 42%, transparent);
+  backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: blur(2px);
+  clip-path: inset(0 round var(--radius-window));
+  animation: fade var(--dur-base) var(--ease-out);
 }
 
-@keyframes panel-in {
-  from { opacity: 0; transform: scale(0.96) translateY(6px); }
-  to   { opacity: 1; transform: scale(1) translateY(0); }
+.editor-panel {
+  display: flex;
+  flex-direction: column;
+  width: min(100%, 400px);
+  max-height: calc(100vh - 24px);
+  overflow: hidden;
+  background: var(--apple-card);
+  border: 1px solid var(--apple-border);
+  border-radius: var(--apple-radius-lg);
+  box-shadow: var(--shadow-xl);
+  animation: rise var(--dur-base) var(--ease-spring);
 }
 
 .editor-header {
+  display: flex;
+  align-items: center;
   justify-content: space-between;
+  padding: 14px 16px 10px;
+  border-bottom: 1px solid var(--apple-border);
 }
 
 .editor-header h2 {
-  font-size: 17px;
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--apple-foreground);
+}
+
+.panel-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 4px 16px 14px;
 }
 
 .field-grid {
@@ -1621,110 +1375,54 @@ onBeforeUnmount(() => {
   gap: 10px;
 }
 
-.field {
-  display: grid;
-  gap: 6px;
-}
-
 .field.full {
   grid-column: 1 / -1;
 }
 
-.field span,
-.remind-toggle span {
-  color: var(--text-muted);
-  font-size: 12px;
-}
-
-.field input,
-.field select,
-.field textarea {
-  width: 100%;
-  min-width: 0;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-control);
-  outline: 0;
-  background: var(--bg-input);
-  font-size: 13px;
-}
-
-.field input,
-.field select {
-  height: 34px;
-  padding: 0 10px;
-}
-
-.field textarea {
-  min-height: 102px;
-  resize: vertical;
-  padding: 9px 10px;
-}
-
-.md-editor-row {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
+.color-picker-row {
+  display: flex;
+  align-items: center;
   gap: 8px;
-  min-height: 160px;
+  height: 36px;
+}
+
+.color-picker-dot {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+  cursor: pointer;
+  transition: border-color 0.15s, transform 0.15s;
+}
+
+.color-picker-dot.active { border-color: var(--apple-ring); }
+.color-picker-dot.dot-default { background: var(--border-strong); }
+.color-picker-dot.dot-red { background: var(--note-red); }
+.color-picker-dot.dot-orange { background: var(--note-orange); }
+.color-picker-dot.dot-yellow { background: var(--note-yellow); }
+.color-picker-dot.dot-green { background: var(--note-green); }
+.color-picker-dot.dot-blue { background: var(--note-blue); }
+.color-picker-dot.dot-purple { background: var(--note-purple); }
+
+.remind-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 44px;
+  padding: 0 12px;
+  border: 1px solid var(--apple-border);
+  border-radius: var(--apple-radius-md);
+  background: var(--apple-background);
+  font-size: 13px;
+  color: var(--apple-foreground);
 }
 
 .md-textarea {
-  min-height: 160px !important;
-  font-family: Consolas, Monaco, monospace;
-  font-size: 12px !important;
-}
-
-.md-editor-preview {
-  -webkit-line-clamp: unset !important;
-  -webkit-box-orient: unset !important;
-  display: block !important;
-  max-height: unset !important;
-  overflow-y: auto !important;
-  padding: 8px 10px !important;
-  margin: 0 !important;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-control);
-  background: var(--bg-input);
-  font-size: 12px !important;
-  line-height: 1.5 !important;
-}
-
-.md-editor-preview :where(p, div, h1, h2, h3, h4, h5, h6,
-                          ul, ol, li, blockquote, pre, dl, dt, dd,
-                          table, thead, tbody, tr, th, td) {
-  display: block !important;
-  margin: 0.3em 0 !important;
-}
-
-.md-editor-preview h1 { font-size: 16px; font-weight: 700; }
-.md-editor-preview h2 { font-size: 14px; font-weight: 700; }
-.md-editor-preview h3 { font-size: 13px; font-weight: 700; }
-.md-editor-preview ul { padding-left: 1.4em; }
-.md-editor-preview ol { padding-left: 1.4em; }
-.md-editor-preview blockquote { border-left: 3px solid var(--accent); padding-left: 8px; margin-left: 0; }
-.md-editor-preview pre { background: var(--accent-soft); padding: 6px 8px; border-radius: 4px; }
-.md-editor-preview code { background: var(--accent-soft); padding: 1px 4px; border-radius: 3px; font-family: Consolas, Monaco, monospace; font-size: 11px; }
-
-.field input:focus,
-.field select:focus,
-.field textarea:focus {
-  border-color: rgba(47, 125, 120, 0.56);
-  box-shadow: 0 0 0 3px var(--accent-soft);
-}
-
-.remind-toggle {
-  gap: 7px;
-  height: 34px;
-  align-self: end;
-  padding: 0 10px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-control);
-  background: var(--bg-input);
-}
-
-.remind-toggle input {
-  width: 15px;
-  height: 15px;
-  accent-color: var(--accent);
+  min-height: 140px;
+  font-family: var(--font-mono);
+  font-size: 12px;
 }
 
 .attachments {
@@ -1739,13 +1437,15 @@ onBeforeUnmount(() => {
 }
 
 .attachment-chip {
-  max-width: 100%;
+  display: inline-flex;
+  align-items: center;
   gap: 6px;
+  max-width: 100%;
   padding: 5px 8px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-small);
-  color: var(--text-muted);
-  background: var(--bg-input);
+  border: 1px solid var(--apple-border);
+  border-radius: var(--radius-sm);
+  color: var(--apple-muted-foreground);
+  background: var(--apple-background);
   font-size: 12px;
 }
 
@@ -1759,91 +1459,70 @@ onBeforeUnmount(() => {
   display: grid;
   grid-template-columns: auto 1fr auto auto;
   gap: 8px;
+  padding: 12px 16px 14px;
+  border-top: 1px solid var(--apple-border);
+  background: var(--apple-muted);
 }
 
-.secondary-button,
-.primary-button,
-.danger-button {
-  justify-content: center;
-  gap: 6px;
-  min-height: 34px;
-  padding: 0 12px;
-  border-radius: var(--radius-control);
-  font-size: 13px;
-}
-
-.secondary-button {
-  border: 1px solid var(--border);
-  color: var(--text);
-  background: var(--bg-input);
-}
-
-.primary-button {
-  color: #fff;
-  background: var(--accent);
-}
-
-.danger-button {
-  color: #fff;
-  background: var(--danger);
-}
-
+/* ===== 错误回退（原型 error-fallback）===== */
 .error-fallback {
   position: relative;
-  display: grid;
+  display: flex;
+  flex-direction: column;
   height: 100%;
   width: 100%;
-  place-items: center;
-  padding: 22px;
+  padding: 20px 20px 24px;
   overflow: hidden;
   border: 1px solid var(--border);
   border-radius: var(--radius-window);
-  color: var(--text);
-  background: var(--bg-window);
+  background:
+    radial-gradient(120% 65% at 50% -12%, color-mix(in srgb, var(--apple-primary) 9%, transparent), transparent 58%),
+    var(--bg-window);
   box-shadow: var(--shadow);
   clip-path: inset(0 round var(--radius-window));
 }
 
-.error-fallback::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background:
-    radial-gradient(circle at 70% 85%, rgba(47, 125, 120, 0.12), transparent 34%),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.14), transparent 42%);
-  pointer-events: none;
-}
-
 .error-context {
-  position: absolute;
-  top: 14px;
-  left: 16px;
-  right: 16px;
-  z-index: 1;
   display: flex;
+  align-items: center;
   justify-content: space-between;
+  gap: 8px;
   color: var(--text-muted);
   font-size: 11px;
-  font-weight: 600;
+}
+
+.error-panel-wrap {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px 0;
 }
 
 .error-panel {
-  position: relative;
-  z-index: 1;
-  display: grid;
-  width: min(100%, 280px);
-  justify-items: center;
-  gap: 10px;
-  padding: 26px 20px 22px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-panel);
-  background: var(--bg-card);
+  width: 100%;
+  max-width: 280px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
   text-align: center;
-  box-shadow: 0 12px 30px rgba(32, 44, 42, 0.12);
+  gap: 12px;
+  padding: 28px 22px 22px;
+  border: 1px solid var(--apple-border);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--apple-card) 86%, transparent);
+  box-shadow: var(--shadow-xl);
 }
 
-.error-panel svg {
-  color: var(--text-muted);
+.error-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: var(--brand-soft);
+  color: var(--apple-primary);
 }
 
 .error-panel h2,
@@ -1853,7 +1532,7 @@ onBeforeUnmount(() => {
 
 .error-panel h2 {
   color: var(--text);
-  font-size: 18px;
+  font-size: 16px;
   font-weight: 700;
 }
 
@@ -1867,146 +1546,28 @@ onBeforeUnmount(() => {
 .error-actions {
   display: flex;
   gap: 8px;
+  margin-top: 4px;
 }
 
-.error-panel button {
+.error-actions .btn-primary,
+.error-actions .btn-secondary {
   min-width: 96px;
   height: 36px;
-  margin-top: 4px;
-  padding: 0 18px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-control);
-  color: #fff;
-  background: var(--accent);
-  font-size: 13px;
-  font-weight: 600;
 }
 
-.error-panel button:hover {
-  background: var(--accent-strong);
+/* ===== 穿透模式 ===== */
+.pass-through-mode .note-card:hover {
+  transform: none;
+  box-shadow: none;
 }
 
-.error-panel button.secondary {
-  color: var(--text);
-  background: var(--bg-input);
-}
+@media (hover: hover) and (pointer: fine) {
+  .attach-pill:hover {
+    background: var(--brand-soft-strong);
+  }
 
-.error-panel button.secondary:hover {
-  background: var(--accent-soft);
+  .color-picker-dot:hover {
+    transform: scale(1.15);
+  }
 }
-
-/* ===== 暗色模式适配 ===== */
-
-.note-card.drag-over {
-  background: var(--accent-soft);
-  box-shadow: inset 0 0 0 1px var(--accent);
-}
-
-/* ===== 拖拽排序脉冲 ===== */
-
-@keyframes sort-pulse {
-  0%   { scale: 1; }
-  18%  { scale: 0.94; }
-  50%  { scale: 1.03; }
-  100% { scale: 1; }
-}
-
-.note-card.sort-pulsed {
-  animation: sort-pulse 0.2s ease-out;
-}
-
-/* ===== 卡片完成动画 ===== */
-
-.note-card.completed strong,
-.note-card.animating-completing strong,
-.note-card.animating-incompleting strong {
-  position: relative;
-}
-
-.note-card.completed strong::after,
-.note-card.animating-completing strong::after,
-.note-card.animating-incompleting strong::after {
-  content: '';
-  position: absolute;
-  left: 0;
-  top: calc(50% - 0.75px);
-  width: 100%;
-  height: 1.5px;
-  background: currentColor;
-  transform-origin: left center;
-  pointer-events: none;
-}
-
-.note-card.completed strong::after {
-  transform: scaleX(1);
-}
-
-.note-card.animating-completing {
-  animation: cardFadeOut 0.45s ease-out forwards;
-}
-.note-card.animating-completing strong::after {
-  animation: lineGrowIn 0.45s ease-out forwards;
-}
-
-.note-card.animating-incompleting {
-  animation: cardFadeIn 0.45s ease-out forwards;
-}
-.note-card.animating-incompleting strong::after {
-  animation: lineShrinkOut 0.45s ease-out forwards;
-}
-
-@keyframes cardFadeOut {
-  from { opacity: 1; }
-  to   { opacity: 0.56; }
-}
-@keyframes cardFadeIn {
-  from { opacity: 0.56; }
-  to   { opacity: 1; }
-}
-@keyframes lineGrowIn {
-  from { transform: scaleX(0); }
-  to   { transform: scaleX(1); }
-}
-@keyframes lineShrinkOut {
-  from { transform: scaleX(1); }
-  to   { transform: scaleX(0); }
-}
-
-/* 移除旧的 text-decoration 完成样式，改用 ::after */
-.note-card.completed strong {
-  text-decoration: none;
-}
-
-/* ===== Tab Bar ===== */
-.tab-bar {
-  grid-row: 5;
-  display: flex;
-  border-top: 1px solid var(--border);
-  padding: 3px 6px 6px;
-  gap: 4px;
-}
-.tab-btn {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 5px;
-  height: 34px;
-  padding: 0 8px;
-  border: 1px solid transparent;
-  border-radius: 8px;
-  background: transparent;
-  color: var(--text-muted);
-  font-size: 11px;
-  font-weight: 500;
-  font-family: inherit;
-  cursor: pointer;
-  transition:
-    color var(--dur-fast) var(--ease-out),
-    background-color var(--dur-fast) var(--ease-out),
-    border-color var(--dur-fast) var(--ease-out);
-}
-.tab-btn:hover { color: var(--text); background: var(--bg-card); }
-.tab-btn.active { color: var(--accent-strong); background: var(--accent-soft); border-color: rgba(47,125,120,0.15); font-weight: 600; }
-.tab-btn:disabled { opacity: 0.4; cursor: not-allowed; }
 </style>

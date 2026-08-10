@@ -41,6 +41,7 @@
 <script setup>
 import { ref, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { FileText, Plus, X } from 'lucide-vue-next'
+import { fileName } from '../lib/format'
 
 const props = defineProps({
   attachments: { type: Array, default: () => [] },
@@ -60,9 +61,9 @@ let   trackingId = null
 let   lastStyleKey = ''
 
 const SAFE = 12
-const POPOVER_W = 168
+const POPOVER_W = 220
 const POPOVER_H = 180
-const MIN_W = 132
+const MIN_W = 160
 const MIN_H = 120
 const GAP = 6
 
@@ -176,10 +177,6 @@ onUnmounted(() => {
 
 // ── 其余逻辑不变 ──────────────────────────────────────────────
 
-function fileName(path) {
-  return path.split(/[\\/]/).pop()
-}
-
 function closePanel() {
   if (closeTimer) clearTimeout(closeTimer)
   isClosing.value = true
@@ -229,16 +226,21 @@ async function onDrop(e) {
 }
 
 .attach-popover {
-  background: var(--bg-elevated);
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  box-shadow: var(--shadow-pop);
+  background: var(--apple-card);
+  border: 1px solid var(--apple-border);
+  border-radius: var(--apple-radius-md);
+  box-shadow: var(--shadow-xl);
   overflow: hidden;
   display: flex;
   flex-direction: column;
-  animation: popIn 180ms ease-out;
+  animation: popIn 180ms var(--ease-out);
   width: 100%;
   height: 100%;
+}
+
+.attach-popover.drag-over {
+  border-color: var(--apple-ring);
+  box-shadow: 0 0 0 1px var(--apple-ring), var(--shadow-xl);
 }
 
 .attach-popover.closing {
@@ -259,30 +261,34 @@ async function onDrop(e) {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 6px 9px;
-  font-size: 11px;
-  color: var(--accent-strong);
-  background: var(--accent-soft);
-  border-bottom: 1px solid var(--border);
+  padding: 8px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--apple-foreground);
+  background: var(--apple-accent);
+  border-bottom: 1px solid var(--apple-border);
 }
 
 .popover-close {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 20px;
-  height: 20px;
-  color: var(--text-muted);
+  width: 22px;
+  height: 22px;
+  color: var(--apple-muted-foreground);
   background: transparent;
   border: 0;
-  border-radius: 5px;
+  border-radius: var(--radius-full);
   cursor: pointer;
   padding: 0;
+  transition: background-color 0.15s var(--ease-out), color 0.15s var(--ease-out);
 }
 
-.popover-close:hover {
-  color: var(--text);
-  background: var(--accent-soft);
+@media (hover: hover) and (pointer: fine) {
+  .popover-close:hover {
+    color: var(--apple-foreground);
+    background: var(--apple-secondary);
+  }
 }
 
 .popover-files {
@@ -296,16 +302,16 @@ async function onDrop(e) {
   display: flex;
   align-items: center;
   padding: 4px 5px;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   font-size: 11px;
   gap: 6px;
 }
 
-.popover-file-row:hover { background: var(--accent-soft); }
+
 
 .file-icon {
   flex-shrink: 0;
-  color: var(--text-muted);
+  color: var(--apple-muted-foreground);
 }
 
 .file-name {
@@ -315,10 +321,14 @@ async function onDrop(e) {
   text-overflow: ellipsis;
   white-space: nowrap;
   cursor: pointer;
-  color: var(--text);
+  color: var(--apple-foreground);
 }
 
-.file-name:hover { color: var(--accent); }
+@media (hover: hover) and (pointer: fine) {
+  .popover-file-row:hover { background: var(--apple-accent); }
+
+.file-name:hover { color: var(--apple-primary); }
+}
 
 .file-remove {
   display: flex;
@@ -326,20 +336,22 @@ async function onDrop(e) {
   justify-content: center;
   width: 18px;
   height: 18px;
-  color: var(--text-muted);
+  color: var(--apple-muted-foreground);
   background: none;
   border: 0;
-  border-radius: 4px;
+  border-radius: var(--radius-full);
   cursor: pointer;
   flex-shrink: 0;
   padding: 0;
 }
 
-.file-remove:hover { color: var(--danger); background: var(--accent-soft); }
+@media (hover: hover) and (pointer: fine) {
+  .file-remove:hover { color: var(--apple-destructive); background: var(--apple-secondary); }
+}
 
 .popover-footer {
-  border-top: 1px solid var(--border);
-  padding: 5px 7px;
+  border-top: 1px solid var(--apple-border);
+  padding: 6px 8px;
 }
 
 .popover-add-btn {
@@ -348,18 +360,24 @@ async function onDrop(e) {
   justify-content: center;
   gap: 4px;
   width: 100%;
+  height: 30px;
   border: 0;
-  border-radius: 5px;
-  padding: 6px;
-  background: var(--accent-soft);
-  color: var(--accent);
-  font-size: 11px;
+  border-radius: var(--radius-full);
+  background: var(--apple-primary);
+  color: var(--apple-primary-foreground);
+  font-size: 12px;
+  font-weight: 500;
   cursor: pointer;
-  font-weight: 600;
+  transition: transform 0.15s var(--ease-out), filter 0.15s var(--ease-out);
 }
 
-.popover-add-btn:hover {
-  background: var(--accent);
-  color: #fff;
+.popover-add-btn:active {
+  transform: scale(0.97);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .popover-add-btn:hover {
+    filter: brightness(0.95);
+  }
 }
 </style>
