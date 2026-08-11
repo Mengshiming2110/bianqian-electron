@@ -85,6 +85,7 @@ contextBridge.exposeInMainWorld('api', {
   },
   noteWindow: {
     open: (noteId, noteData) => ipcRenderer.invoke('note-window:open', noteId, noteData),
+    setPinned: (noteId, pinned) => ipcRenderer.invoke('note-window:set-pinned', noteId, pinned),
     onData: (callback) => on('note-window:data', callback)
   },
   contextMenu: {
@@ -121,7 +122,8 @@ contextBridge.exposeInMainWorld('api', {
     stop: () => ipcRenderer.invoke('mail:stop'),
     status: () => ipcRenderer.invoke('mail:status'),
     attachments: (mailId) => ipcRenderer.invoke('mail:attachments', mailId),
-    attachmentContent: (mailId, filename) => ipcRenderer.invoke('mail:attachment-content', mailId, filename)
+    attachmentContent: (mailId, filename) => ipcRenderer.invoke('mail:attachment-content', mailId, filename),
+    onDetailUpdated: (callback) => on('mail:detail-updated', callback)
   },
   settings: {
     get: () => ipcRenderer.invoke('settings:get'),

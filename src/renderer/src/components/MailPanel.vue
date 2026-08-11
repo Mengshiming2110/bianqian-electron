@@ -104,14 +104,17 @@
     <!-- 详情 -->
     <div v-if="store.selectedMail" class="detail-overlay" @click.self="store.closeDetail()">
       <div class="detail-panel">
-        <div class="detail-header"><h3>{{ displaySummary?.title || store.selectedMail.subject }}</h3><button class="icon-btn" @click="store.closeDetail()"><X :size="18" /></button></div>
-        <div class="detail-meta"><span>{{ store.selectedMail.sender }}</span><span>{{ relativeTime(store.selectedMail.received_at) }}</span></div>
+        <div class="detail-header"><h3>{{ displaySummary?.title || store.selectedMail?.subject || '加载中…' }}</h3><button class="icon-btn" @click="store.closeDetail()"><X :size="18" /></button></div>
+        <div v-if="store.selectedMail.sender" class="detail-meta"><span>{{ store.selectedMail.sender }}</span><span>{{ relativeTime(store.selectedMail.received_at) }}</span></div>
+
+        <!-- 无任何缓存/预览：后台拉取中 -->
+        <div v-if="store.selectedMail.loading && !store.selectedMail.body" class="excel-loading"><span class="spinner" aria-hidden="true"></span>加载中...</div>
 
         <!-- Excel 加载中 -->
-        <div v-if="excelLoading" class="excel-loading"><span class="spinner" aria-hidden="true"></span>解析附件中...</div>
+        <div v-else-if="excelLoading" class="excel-loading"><span class="spinner" aria-hidden="true"></span>解析附件中...</div>
 
-        <!-- 任务卡片（正文 或 Excel 共用） -->
-        <div v-else-if="displaySummary" class="task-detail">
+        <!-- 任务卡片（正文 或 Excel 共用）；预览占位阶段不解析摘要 -->
+        <div v-else-if="displaySummary && !store.selectedMail.loading" class="task-detail">
           <div class="task-brief">
             <div class="brief-grid">
               <div class="brief-item">
@@ -242,19 +245,25 @@ const doctorEwsText = computed(() => {
   return ews.ok ? '已通过' : '失败'
 })
 
-const sanitizedMailHtml = computed(() => {
-  const raw = store.selectedMail?.html || ''
-  if (!raw || !/<[a-z][\s\S]*>/i.test(raw)) return ''
-  return DOMPurify.sanitize(raw, {
-    ALLOWED_TAGS: [
-      'a', 'b', 'br', 'blockquote', 'body', 'caption', 'col', 'colgroup', 'div', 'em',
-      'font', 'h1', 'h2', 'h3', 'h4', 'hr', 'html', 'i', 'li', 'ol', 'p', 'pre',
-      'span', 'strong', 'table', 'tbody', 'td', 'tfoot', 'th', 'thead', 'tr', 'u', 'ul'
-    ],
-    ALLOWED_ATTR: ['align', 'bgcolor', 'border', 'cellpadding', 'cellspacing', 'colspan', 'href', 'rowspan', 'style', 'target', 'valign', 'width'],
-    FORBID_TAGS: ['script', 'style', 'iframe', 'object', 'embed', 'form', 'input', 'button'],
-    FORBID_ATTR: ['onerror', 'onload', 'onclick', 'onmouseover']
-  })
+// DOMPurify 异步清洗：大 HTML 同步清洗会卡住弹层首帧，延迟到下一帧执行
+const sanitizedMailHtml = ref('')
+let sanitizeTimer = null
+watch(() => store.selectedMail?.html, (raw) => {
+  if (sanitizeTimer) clearTimeout(sanitizeTimer)
+  sanitizedMailHtml.value = ''
+  if (!raw || !/<[a-z][\s\S]*>/i.test(raw)) return
+  sanitizeTimer = setTimeout(() => {
+    sanitizedMailHtml.value = DOMPurify.sanitize(raw, {
+      ALLOWED_TAGS: [
+        'a', 'b', 'br', 'blockquote', 'body', 'caption', 'col', 'colgroup', 'div', 'em',
+        'font', 'h1', 'h2', 'h3', 'h4', 'hr', 'html', 'i', 'li', 'ol', 'p', 'pre',
+        'span', 'strong', 'table', 'tbody', 'td', 'tfoot', 'th', 'thead', 'tr', 'u', 'ul'
+      ],
+      ALLOWED_ATTR: ['align', 'bgcolor', 'border', 'cellpadding', 'cellspacing', 'colspan', 'href', 'rowspan', 'style', 'target', 'valign', 'width'],
+      FORBID_TAGS: ['script', 'style', 'iframe', 'object', 'embed', 'form', 'input', 'button'],
+      FORBID_ATTR: ['onerror', 'onload', 'onclick', 'onmouseover']
+    })
+  }, 0)
 })
 
 const taskSummary = computed(() => buildMailTaskSummary(store.selectedMail, sanitizedMailHtml.value))
@@ -417,6 +426,7 @@ onBeforeUnmount(() => {
   if (saveIdentityTimer) clearTimeout(saveIdentityTimer)
   if (copyToastTimer) clearTimeout(copyToastTimer)
   if (fixResultTimer) clearTimeout(fixResultTimer)
+  if (sanitizeTimer) clearTimeout(sanitizeTimer)
 })
 function parseFields(raw) {
   try { const f = typeof raw === 'string' ? JSON.parse(raw) : raw; return f && typeof f === 'object' ? f : {} } catch { return {} }

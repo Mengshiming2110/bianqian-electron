@@ -346,7 +346,8 @@ export class MailBridge {
 
   async fetchMailDetail(id) {
     try {
-      return await this._fetch(`/mail/${id}`, { timeoutMs: MAIL_REQUEST_TIMEOUT_MS })
+      // 详情走缓存兜底 + 后台刷新，网络等待上限收紧到 8s，避免 EWS 慢时拖住界面
+      return await this._fetch(`/mail/${id}`, { timeoutMs: 8000 })
     } catch {
       return null
     }

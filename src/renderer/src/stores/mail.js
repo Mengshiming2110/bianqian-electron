@@ -207,19 +207,33 @@ export const useMailStore = defineStore('mail', {
     },
 
     async openDetail(id) {
+      // 先展示列表里的数据（标题/发件人/预览），弹层零等待出现
+      const listItem = this.mails.find(m => m.id === id)
+      this.selectedMail = listItem ? { ...listItem, loading: true } : { id, loading: true }
+      this._ensureDetailListener()
       try {
-        this.selectedMail = await window.api.mail.detail(id)
-        if (this.selectedMail) {
-          // mark as read (is_read 使用 1/0 与 SQLite INTEGER 对齐)
+        // 主进程秒回 SQLite 缓存；无缓存保持列表项占位，后台刷新经 onDetailUpdated 自动更新
+        const cached = await window.api.mail.detail(id)
+        if (cached && this.selectedMail?.id === id) {
+          this.selectedMail = cached
           const item = this.mails.find(m => m.id === id)
-          if (item && !item.is_read) {
-            item.is_read = 1
-          }
+          if (item && !item.is_read) item.is_read = 1
         }
       } catch (err) {
         console.error('[mail] openDetail failed:', err?.message || err)
-        this.selectedMail = null
       }
+    },
+
+    // 后台刷新的详情到位后更新当前打开的弹层（只注册一次）
+    _ensureDetailListener() {
+      if (this._detailUnsub || !window.api.mail.onDetailUpdated) return
+      this._detailUnsub = window.api.mail.onDetailUpdated((detail) => {
+        if (this.selectedMail?.id === detail?.id) {
+          this.selectedMail = detail
+          const item = this.mails.find(m => m.id === detail.id)
+          if (item && !item.is_read) item.is_read = 1
+        }
+      })
     },
 
     closeDetail() {

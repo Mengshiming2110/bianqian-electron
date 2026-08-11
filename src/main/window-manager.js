@@ -484,4 +484,12 @@ export class WindowManager {
     return win
   }
 
+  /** 浮动便签置顶开关（alwaysOnTop 切换） */
+  setNoteWindowPin(noteId, pinned) {
+    const win = this.noteWindows.get(noteId)
+    if (!win || win.isDestroyed()) return false
+    win.setAlwaysOnTop(Boolean(pinned))
+    return true
+  }
+
 }

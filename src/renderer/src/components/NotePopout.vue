@@ -1,12 +1,31 @@
 <template>
-  <div class="note-popout popout-enter" :class="note.color ? 'color-' + note.color : ''" @animationend="onEnterEnd">
+  <div class="note-popout popout-enter" :class="note.color ? 'color-' + note.color : ''" :style="{ opacity: opacity / 100 }" @animationend="onEnterEnd">
     <header class="popout-header">
       <span class="note-dot" aria-hidden="true"></span>
       <strong>{{ note.title }}</strong>
-      <button class="close-btn" title="关闭" type="button" @click="close">
+      <button
+        class="head-btn pin-btn"
+        :class="{ active: pinned }"
+        :title="pinned ? '取消置顶' : '置顶窗口'"
+        type="button"
+        @click="togglePin"
+      ><Pin :size="14" /></button>
+      <button
+        class="head-btn opacity-btn"
+        :class="{ active: opacityOpen }"
+        :title="'透明度 ' + opacity + '%'"
+        type="button"
+        @click="opacityOpen = !opacityOpen"
+      ><Droplet :size="14" /></button>
+      <button class="head-btn close-btn" title="关闭" type="button" @click="close">
         <X :size="14" />
       </button>
     </header>
+    <div v-if="opacityOpen" class="opacity-pop">
+      <Droplet :size="13" class="opacity-pop-icon" />
+      <input type="range" min="30" max="100" step="5" :value="opacity" aria-label="窗口透明度" @input="setOpacity($event.target.value)" />
+      <span class="opacity-pop-value">{{ opacity }}%</span>
+    </div>
     <section class="popout-body">
       <MarkdownPreview v-if="note.content" :content="note.content" :is-mini="false" class="popout-preview" />
       <p v-else class="empty-hint">暂无内容</p>
@@ -19,8 +38,8 @@
 </template>
 
 <script setup>
-import { reactive, onMounted, onBeforeUnmount } from 'vue'
-import { X } from 'lucide-vue-next'
+import { reactive, ref, onMounted, onBeforeUnmount } from 'vue'
+import { X, Pin, Droplet } from 'lucide-vue-next'
 import MarkdownPreview from './MarkdownPreview.vue'
 
 const props = defineProps({
@@ -35,6 +54,17 @@ const note = reactive({
   date: '',
   time: ''
 })
+
+// 置顶：窗口创建时默认置顶（主进程 alwaysOnTop: true）
+const pinned = ref(true)
+// 透明度：localStorage 持久化（30% ~ 100%），transparent 窗口直接用 CSS opacity
+const OPACITY_KEY = 'note-popout-opacity'
+const opacity = ref(100)
+const opacityOpen = ref(false)
+try {
+  const saved = Number(localStorage.getItem(OPACITY_KEY))
+  if (saved >= 30 && saved <= 100) opacity.value = saved
+} catch {}
 
 let unsubNoteData = null
 
@@ -66,8 +96,27 @@ function close() {
   window.close()
 }
 
+async function togglePin() {
+  pinned.value = !pinned.value
+  try {
+    await window.api?.noteWindow?.setPinned(props.noteId, pinned.value)
+  } catch (err) {
+    console.error('[NotePopout] setPinned failed:', err)
+    pinned.value = !pinned.value
+  }
+}
+
+function setOpacity(value) {
+  const v = Math.min(100, Math.max(30, Number(value)))
+  opacity.value = v
+  try {
+    localStorage.setItem(OPACITY_KEY, String(v))
+  } catch {}
+}
+
 function onEnterEnd(e) {
-  if (e.animationName === 'popout-expand') {
+  // scoped 样式会给 keyframes 加 hash 后缀（popout-expand-xxxx），用 includes 匹配
+  if (String(e.animationName).includes('popout-expand')) {
     e.currentTarget.classList.remove('popout-enter')
   }
 }
@@ -154,11 +203,77 @@ function onEnterEnd(e) {
   transition: background-color 0.15s var(--ease-out), color 0.15s var(--ease-out);
 }
 
+.head-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: none;
+  border-radius: var(--radius-full);
+  background: transparent;
+  color: var(--apple-muted-foreground);
+  cursor: pointer;
+  -webkit-app-region: no-drag;
+  transition: background-color 0.15s var(--ease-out), color 0.15s var(--ease-out);
+}
+
+.head-btn.active {
+  color: var(--apple-primary);
+  background: var(--brand-soft);
+}
+
 @media (hover: hover) and (pointer: fine) {
   .close-btn:hover {
     background: var(--apple-secondary);
     color: var(--apple-foreground);
   }
+
+  .head-btn:hover {
+    background: var(--apple-secondary);
+    color: var(--apple-foreground);
+  }
+
+  .head-btn.active:hover {
+    background: var(--brand-soft);
+    color: var(--apple-primary);
+  }
+}
+
+/* 透明度调节条 */
+.opacity-pop {
+  position: absolute;
+  top: 44px;
+  right: 38px;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--apple-border);
+  border-radius: var(--apple-radius-md);
+  background: var(--apple-popover);
+  box-shadow: var(--shadow-xl);
+}
+
+.opacity-pop-icon {
+  flex: none;
+  color: var(--apple-primary);
+}
+
+.opacity-pop input[type="range"] {
+  width: 96px;
+  accent-color: var(--apple-primary);
+  cursor: pointer;
+}
+
+.opacity-pop-value {
+  flex: none;
+  min-width: 34px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--apple-foreground);
+  text-align: right;
 }
 
 .popout-body {

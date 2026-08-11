@@ -25,6 +25,48 @@ function normalizeMailConfig(config = {}) {
   }
 }
 
+// 详情写库：is_read 用 MAX 合并，预热（markRead=false）不会把已读回退
+function upsertMail(next, options = {}) {
+  const markRead = options.markRead !== false
+  execute(
+    `INSERT INTO mail_items (id, subject, sender, body, html, received_at, is_read)
+     VALUES (?, ?, ?, ?, ?, ?, ?)
+     ON CONFLICT(id) DO UPDATE SET
+       subject = excluded.subject,
+       sender = excluded.sender,
+       body = excluded.body,
+       html = excluded.html,
+       received_at = excluded.received_at,
+       is_read = MAX(mail_items.is_read, excluded.is_read)`,
+    [
+      next.id,
+      next.subject || '',
+      next.sender || '',
+      next.body || '',
+      next.html || '',
+      next.received_at || next.datetime_received || '',
+      markRead ? 1 : 0
+    ]
+  )
+}
+
+// 预加载：后台预热最近几封未拉过详情的邮件，点击时缓存已就绪直接秒开完整内容
+function warmUpDetails(bridge, limit = 3) {
+  try {
+    const toWarm = queryAll(`SELECT id FROM mail_items WHERE html = '' ORDER BY received_at DESC LIMIT ${limit}`)
+    for (const { id } of toWarm) {
+      bridge.fetchMailDetail(id)
+        .then((detail) => {
+          if (!detail) return
+          upsertMail({ ...detail, id }, { markRead: false })
+        })
+        .catch(() => {})
+    }
+  } catch (err) {
+    console.warn('[ipc] mail 详情预热失败:', err.message)
+  }
+}
+
 export function setupMailHandlers() {
   ipcMain.handle('mail:configure', async (_, config) => {
     try {
@@ -69,6 +111,8 @@ export function setupMailHandlers() {
           [m.id, m.subject || '', m.sender || '', m.body || m.preview || '', m.html || '', m.received_at || '', m.is_read ? 1 : 0]
         )
       }
+      // 预加载：拉完列表后台预热详情，点开即完整内容（不标记已读）
+      warmUpDetails(bridge)
       return mails
     } catch (err) {
       console.error('[ipc] mail:fetch 失败:', err.message)
@@ -109,43 +153,30 @@ export function setupMailHandlers() {
     return safe
   })
 
-  ipcMain.handle('mail:detail', async (_, id) => {
+  ipcMain.handle('mail:detail', async (event, id) => {
     try {
       const cached = queryOne('SELECT * FROM mail_items WHERE id = ?', [id]) || null
       if (!bridge) return cached
 
-      const detail = await bridge.fetchMailDetail(id)
-      if (!detail) return cached
-
-      const next = {
-        ...(cached || {}),
-        ...detail,
-        id,
-        body: detail.body || cached?.body || '',
-        html: detail.html || cached?.html || ''
-      }
-
-      execute(
-        `INSERT INTO mail_items (id, subject, sender, body, html, received_at, is_read)
-         VALUES (?, ?, ?, ?, ?, ?, ?)
-         ON CONFLICT(id) DO UPDATE SET
-           subject = excluded.subject,
-           sender = excluded.sender,
-           body = excluded.body,
-           html = excluded.html,
-           received_at = excluded.received_at,
-           is_read = 1`,
-        [
-          next.id,
-          next.subject || '',
-          next.sender || '',
-          next.body || '',
-          next.html || '',
-          next.received_at || next.datetime_received || '',
-          1
-        ]
-      )
-      return queryOne('SELECT * FROM mail_items WHERE id = ?', [id]) || next
+      // 秒回缓存：弹层立即打开；网络详情后台拉取，完成后推送渲染层自动更新
+      const sender = event.sender
+      bridge.fetchMailDetail(id)
+        .then((detail) => {
+          if (!detail) return
+          const next = {
+            ...(cached || {}),
+            ...detail,
+            id,
+            body: detail.body || cached?.body || '',
+            html: detail.html || cached?.html || ''
+          }
+          upsertMail(next)
+          if (!sender.isDestroyed()) {
+            sender.send('mail:detail-updated', queryOne('SELECT * FROM mail_items WHERE id = ?', [id]) || next)
+          }
+        })
+        .catch((err) => console.warn('[ipc] mail:detail 后台刷新失败:', err.message))
+      return cached
     } catch (err) {
       console.error('[ipc] mail:detail 失败:', err.message)
       return queryOne('SELECT * FROM mail_items WHERE id = ?', [id]) || null

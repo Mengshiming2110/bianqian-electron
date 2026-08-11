@@ -210,6 +210,10 @@ export function registerIpc(windowManager, trayController) {
     return true
   })
 
+  ipcMain.handle('note-window:set-pinned', (_event, noteId, pinned) => {
+    return windowManager.setNoteWindowPin(noteId, pinned)
+  })
+
   ipcMain.handle('context-menu:show', (event, noteData) => {
     if (!noteData || !noteData.id) return
     const win = BrowserWindow.fromWebContents(event.sender)
