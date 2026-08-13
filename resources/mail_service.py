@@ -20,6 +20,8 @@ ACCOUNT_LOCK = threading.Lock()
 ACCOUNT_CREATED_AT = None
 LAST_ERROR = ''
 LAST_OK_AT = None
+LAST_FETCH_OK_AT = None
+LAST_FETCH_ERROR = ''
 MAIL_INDEX = {}
 SERVER = None
 MAIL_ENV_KEYS = {'MAIL_SMTP', 'MAIL_DOMAIN_USER', 'MAIL_PASS', 'MAIL_DOMAIN', 'MAIL_SERVER'}
@@ -34,7 +36,7 @@ EWS_QUICK_TIMEOUT_SECONDS = 8   # 诊断模式认证测试的超时（避免 Fau
 EWS_RETRY_MAX_WAIT = 180        # FaultTolerance 策略最长重试窗口（秒）
 RECONNECT_COOLDOWN_SECONDS = 10  # 连接失效后重建账号的冷却期，避免断网时高频重连
 
-VERSION = '1.1.0'
+VERSION = '1.2.1'
 
 
 def _json(handler, status, payload):
@@ -167,12 +169,14 @@ def _apply_openclaw_env():
 
 
 def _reset_account():
-    global ACCOUNT, LAST_ERROR, MAIL_INDEX, ACCOUNT_CREATED_AT, LAST_OK_AT
+    global ACCOUNT, LAST_ERROR, MAIL_INDEX, ACCOUNT_CREATED_AT, LAST_OK_AT, LAST_FETCH_OK_AT, LAST_FETCH_ERROR
     with ACCOUNT_LOCK:
         ACCOUNT = None
         ACCOUNT_CREATED_AT = None
         LAST_ERROR = ''
         LAST_OK_AT = None
+        LAST_FETCH_OK_AT = None
+        LAST_FETCH_ERROR = ''
         MAIL_INDEX = {}
 
 
@@ -197,31 +201,66 @@ _NON_TRANSIENT_ERROR_TYPES = None
 
 
 def _is_transient(exc):
-    """判断是否为瞬时网络/服务错误（可重连重试），认证类错误不算。
+    """判断是否为瞬时网络/服务错误（可重连重试）。
+
+    - 认证类错误（UnauthorizedError）永远不算瞬时，避免用坏密码反复轰炸服务器；
+    - EWS 业务错误（ResponseMessageError，全部继承自 TransportError）只有命中明确的可重试
+      错误码（服务器忙/内部瞬时错误/连接失败/超时/邮箱存储故障等）才算瞬时，
+      其余（ItemNotFound/AccessDenied 等永久错误）不做无谓重连；
+    - 传输层 TransportError / RateLimitError / RedirectError 与 socket 类异常视为瞬时。
 
     懒加载 exchangelib 错误类型：exchangelib 缺失时（/doctor 场景）退化为消息关键字判断。
     """
-    global _TRANSIENT_ERROR_TYPES, _NON_TRANSIENT_ERROR_TYPES
+    global _TRANSIENT_ERROR_TYPES, _NON_TRANSIENT_ERROR_TYPES, _RETRYABLE_RESPONSE_TYPES, _RESPONSE_ERROR_TYPE
     if _TRANSIENT_ERROR_TYPES is None:
         try:
             from exchangelib.errors import (
+                ResponseMessageError,
                 ErrorServerBusy,
                 ErrorInternalServerTransientError,
+                ErrorInternalServerError,
+                ErrorConnectionFailed,
+                ErrorConnectionFailedTransientError,
+                ErrorTimeoutExpired,
+                ErrorClientDisconnected,
+                ErrorMailboxStoreUnavailable,
+                ErrorMailboxFailover,
+                ErrorNoRespondingCASInDestinationSite,
+                ErrorNoApplicableProxyCASServersAvailable,
+                ErrorExceededConnectionCount,
+                ErrorNotEnoughMemory,
+                ErrorRequestAborted,
+                ErrorProxyRequestProcessingFailed,
                 RateLimitError,
                 RedirectError,
                 TransportError,
                 UnauthorizedError,
             )
-            _TRANSIENT_ERROR_TYPES = (
+            # EWS 业务响应错误中明确可重试的错误码（连不上/超时/服务器忙/邮箱存储故障等）
+            _RETRYABLE_RESPONSE_TYPES = (
                 ErrorServerBusy, ErrorInternalServerTransientError,
-                RateLimitError, RedirectError, TransportError,
+                ErrorInternalServerError, ErrorConnectionFailed,
+                ErrorConnectionFailedTransientError, ErrorTimeoutExpired,
+                ErrorClientDisconnected, ErrorMailboxStoreUnavailable,
+                ErrorMailboxFailover, ErrorNoRespondingCASInDestinationSite,
+                ErrorNoApplicableProxyCASServersAvailable, ErrorExceededConnectionCount,
+                ErrorNotEnoughMemory, ErrorRequestAborted,
+                ErrorProxyRequestProcessingFailed,
             )
+            _RESPONSE_ERROR_TYPE = ResponseMessageError
+            # 传输层异常（非业务响应）一律视为瞬时
+            _TRANSIENT_ERROR_TYPES = (RateLimitError, RedirectError, TransportError)
             _NON_TRANSIENT_ERROR_TYPES = (UnauthorizedError,)
         except Exception:
+            _RETRYABLE_RESPONSE_TYPES = ()
+            _RESPONSE_ERROR_TYPE = None
             _TRANSIENT_ERROR_TYPES = ()
             _NON_TRANSIENT_ERROR_TYPES = ()
     if isinstance(exc, _NON_TRANSIENT_ERROR_TYPES):
         return False
+    if _RESPONSE_ERROR_TYPE is not None and isinstance(exc, _RESPONSE_ERROR_TYPE):
+        # 业务错误只认明确的可重试错误码，其余按永久错误处理
+        return isinstance(exc, _RETRYABLE_RESPONSE_TYPES)
     if isinstance(exc, _TRANSIENT_ERROR_TYPES):
         return True
     if isinstance(exc, (TimeoutError, ConnectionError, socket.timeout, socket.error)):
@@ -236,29 +275,44 @@ def _is_transient(exc):
 
 
 def _run_with_reconnect(fn, *args, **kwargs):
-    """请求级自愈：瞬时故障时作废账号并重试一次（冷却期内直接抛错，由调用方处理）。"""
+    """请求级自愈：瞬时故障时作废账号并重试一次（冷却期内直接抛错，由调用方处理）。
+
+    同时记录最近一次 EWS 拉取的健康状态（LAST_FETCH_OK_AT / LAST_FETCH_ERROR），
+    供 /health 与状态文件报告——连接对象存在不代表拉取真的可用。
+    """
+    global LAST_FETCH_ERROR, LAST_FETCH_OK_AT
     try:
         result = fn(_account(), *args, **kwargs)
         _mark_ok()
+        LAST_FETCH_OK_AT = datetime.now(timezone.utc).isoformat()
+        LAST_FETCH_ERROR = ''
         return result
     except Exception as exc:
         if not _is_transient(exc):
+            LAST_FETCH_ERROR = f'{type(exc).__name__}: {exc}'
             raise
         _invalidate_account(str(exc))
-        result = fn(_account(), *args, **kwargs)
-        _mark_ok()
-        return result
+        try:
+            result = fn(_account(), *args, **kwargs)
+            _mark_ok()
+            LAST_FETCH_OK_AT = datetime.now(timezone.utc).isoformat()
+            LAST_FETCH_ERROR = ''
+            return result
+        except Exception as exc2:
+            LAST_FETCH_ERROR = f'{type(exc2).__name__}: {exc2}'
+            raise
 
 
 def _account(quick=False):
     global ACCOUNT, LAST_ERROR, ACCOUNT_CREATED_AT
     with ACCOUNT_LOCK:
-        if ACCOUNT is not None:
-            return ACCOUNT
+        if not quick:
+            if ACCOUNT is not None:
+                return ACCOUNT
 
-        # 冷却期内不立即重建，避免断网时反复重连打爆 Exchange
-        if ACCOUNT_CREATED_AT is not None and time.time() - ACCOUNT_CREATED_AT < RECONNECT_COOLDOWN_SECONDS:
-            raise RuntimeError(LAST_ERROR or 'Exchange 连接断开，正在等待重连')
+            # 冷却期内不立即重建，避免断网时反复重连打爆 Exchange
+            if ACCOUNT_CREATED_AT is not None and time.time() - ACCOUNT_CREATED_AT < RECONNECT_COOLDOWN_SECONDS:
+                raise RuntimeError(LAST_ERROR or 'Exchange 连接断开，正在等待重连')
 
         _apply_openclaw_env()
         smtp = os.getenv('MAIL_SMTP') or os.getenv('MAIL_EMAIL')
@@ -275,22 +329,32 @@ def _account(quick=False):
             from exchangelib import Account, Configuration, Credentials, DELEGATE
             from exchangelib.protocol import BaseProtocol, FaultTolerance, FailFast
 
-            # quick（诊断）模式：短超时 + FailFast，认证测试有界执行；正常模式保留指数退避
-            BaseProtocol.TIMEOUT = EWS_QUICK_TIMEOUT_SECONDS if quick else EWS_TIMEOUT_SECONDS
-            credentials = Credentials(username=f'{domain}\\{domain_user}', password=password)
-            config = Configuration(
-                server=server,
-                credentials=credentials,
-                retry_policy=FailFast() if quick else FaultTolerance(max_wait=EWS_RETRY_MAX_WAIT),
-            )
-            account = Account(
-                primary_smtp_address=smtp,
-                config=config,
-                autodiscover=False,
-                access_type=DELEGATE,
-            )
-            # 先验证再赋值：认证失败时不能把坏账号挂到全局，否则 connected 误报且后续请求全走死连接
-            _ = account.inbox.name
+            # quick（诊断）模式：短超时 + FailFast，认证测试有界执行；正常模式保留指数退避。
+            # TIMEOUT 是类属性且按请求实时读取，必须保存/恢复，避免诊断污染后续正常拉取
+            previous_timeout = BaseProtocol.TIMEOUT
+            try:
+                BaseProtocol.TIMEOUT = EWS_QUICK_TIMEOUT_SECONDS if quick else EWS_TIMEOUT_SECONDS
+                credentials = Credentials(username=f'{domain}\\{domain_user}', password=password)
+                config = Configuration(
+                    server=server,
+                    credentials=credentials,
+                    retry_policy=FailFast() if quick else FaultTolerance(max_wait=EWS_RETRY_MAX_WAIT),
+                )
+                account = Account(
+                    primary_smtp_address=smtp,
+                    config=config,
+                    autodiscover=False,
+                    access_type=DELEGATE,
+                )
+                # 先验证再赋值：认证失败时不能把坏账号挂到全局，否则 connected 误报且后续请求全走死连接
+                _ = account.inbox.name
+            finally:
+                BaseProtocol.TIMEOUT = previous_timeout
+
+            # 诊断模式：只做认证测试，不替换全局账号（FailFast/短超时账号不能用于常规拉取）
+            if quick:
+                LAST_ERROR = ''
+                return account
             ACCOUNT = account
             ACCOUNT_CREATED_AT = time.time()
             LAST_ERROR = ''
@@ -497,6 +561,8 @@ class Handler(BaseHTTPRequestHandler):
                     'connected': ACCOUNT is not None,
                     'error': LAST_ERROR,
                     'last_ok_at': LAST_OK_AT,
+                    'fetch_ok_at': LAST_FETCH_OK_AT,
+                    'fetch_error': LAST_FETCH_ERROR,
                 })
                 return
             if parsed.path == '/doctor':

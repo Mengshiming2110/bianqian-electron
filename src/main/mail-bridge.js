@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process'
-import { existsSync, writeFileSync } from 'node:fs'
+import { existsSync, writeFileSync, readFileSync } from 'node:fs'
 import { randomBytes } from 'node:crypto'
 import { join } from 'node:path'
 import { app } from 'electron'
@@ -11,6 +11,9 @@ const SERVICE_POLL_INTERVAL_MS = 300
 const MAIL_REQUEST_TIMEOUT_MS = 30000
 const HEALTH_CHECK_INTERVAL_MS = 30000
 const HEALTH_FAIL_LIMIT = 3
+const FETCH_FAIL_LIMIT = 2
+const RESTART_COOLDOWN_MS = 60 * 1000
+const MAIL_LOG_MAX_BYTES = 512 * 1024
 
 /**
  * Zcode / 外部自动化操作邮件服务的入口：
@@ -27,6 +30,7 @@ const HEALTH_FAIL_LIMIT = 3
  * - 也可通过 window.api.mail.*（IPC）或 mail:fix 触发修复
  */
 const MAIL_STATUS_FILE = () => join(app.getPath('userData'), 'mail-service.json')
+const MAIL_LOG_FILE = () => join(app.getPath('userData'), 'mail-service.log')
 
 export class MailBridge {
   constructor() {
@@ -43,6 +47,20 @@ export class MailBridge {
     this.unhealthyCount = 0
     this.connected = false
     this.lastError = ''
+    this.fetchFailStreak = 0
+    this.lastRestartAt = 0
+  }
+
+  /** 追加日志到 userData/mail-service.log（打包后控制台不可见，靠文件留痕排障） */
+  _logFile(msg) {
+    try {
+      const line = `[${new Date().toISOString()}] ${msg}\n`
+      const existing = existsSync(MAIL_LOG_FILE()) ? readFileSync(MAIL_LOG_FILE(), 'utf8') : ''
+      const next = existing + line
+      writeFileSync(MAIL_LOG_FILE(), next.length > MAIL_LOG_MAX_BYTES ? next.slice(next.length - MAIL_LOG_MAX_BYTES) : next, 'utf8')
+    } catch {
+      /* 日志失败不影响主流程 */
+    }
   }
 
   async start(config, options = {}) {
@@ -84,13 +102,18 @@ export class MailBridge {
       })
 
       this.process.stdout.on('data', (data) => {
-        console.log('[mail-bridge]', data.toString().trim())
+        const text = data.toString().trim()
+        console.log('[mail-bridge]', text)
+        this._logFile(`[service:out] ${text}`)
       })
       this.process.stderr.on('data', (data) => {
-        console.warn('[mail-bridge] stderr:', data.toString().trim())
+        const text = data.toString().trim()
+        console.warn('[mail-bridge] stderr:', text)
+        this._logFile(`[service:err] ${text}`)
       })
       this.process.on('exit', (code) => {
         console.warn('[mail-bridge] 进程退出, code:', code)
+        this._logFile(`进程退出, code=${code}`)
         this.process = null
         this.connected = false
         // restarting/stopping 期间主动 kill 不触发重试，避免双重重启
@@ -108,10 +131,13 @@ export class MailBridge {
         this.lastError = ''
       }
       this.unhealthyCount = 0
+      this.fetchFailStreak = 0
+      this._logFile(`服务启动成功, port=${port}, configured=${shouldConfigure}`)
       this._writeStatus()
       return true
     } catch (err) {
       console.error('[mail-bridge] 启动失败:', err.message)
+      this._logFile(`服务启动失败: ${err.message}`)
       throw err
     }
   }
@@ -126,6 +152,7 @@ export class MailBridge {
         pid: running ? this.process?.pid : null,
         running,
         connected: running && this.connected,
+        fetchFailStreak: this.fetchFailStreak,
         lastError: this.lastError,
         updatedAt: new Date().toISOString(),
         endpoints: {
@@ -179,10 +206,20 @@ export class MailBridge {
       this.unhealthyCount++
     }
 
-    // 连续多次不健康：服务自愈 —— 杀掉进程重新拉起（会重新发送配置并连接 Exchange）
-    if (this.unhealthyCount >= HEALTH_FAIL_LIMIT) {
-      console.warn(`[mail-bridge] 连续 ${HEALTH_FAIL_LIMIT} 次健康检查失败，重启邮件服务`)
+    // 连续多次不健康：服务自愈 —— 杀掉进程重新拉起（会重新发送配置并连接 Exchange）。
+    // 拉取失败看门狗：/health 报连接正常但 /mails 连续失败时（连接对象已死但未上报），同样触发重启，
+    // 补上「假绿灯」盲区。两次触发之间保留冷却，避免服务器故障时热循环重启。
+    const fetchSick = this.fetchFailStreak >= FETCH_FAIL_LIMIT
+    const now = Date.now()
+    const cooldownOk = now - this.lastRestartAt >= RESTART_COOLDOWN_MS
+    if ((this.unhealthyCount >= HEALTH_FAIL_LIMIT || fetchSick) && cooldownOk) {
+      const reason = fetchSick
+        ? `连续 ${this.fetchFailStreak} 次拉取失败（连接假绿灯），重启邮件服务`
+        : `连续 ${HEALTH_FAIL_LIMIT} 次健康检查失败，重启邮件服务`
+      console.warn(`[mail-bridge] ${reason}`)
+      this._logFile(reason)
       this.unhealthyCount = 0
+      this.fetchFailStreak = 0
       this._restart().catch(() => {})
     }
     this._writeStatus()
@@ -220,6 +257,8 @@ export class MailBridge {
   _restart() {
     if (this.stopping || this.restarting) return Promise.reject(new Error('服务正在重启或停止中'))
     this.restarting = true
+    this.lastRestartAt = Date.now()
+    this._logFile('手动/自动重启邮件服务')
     this._killProcess()
     return this.start(this.config)
       .then(() => {
@@ -331,13 +370,19 @@ export class MailBridge {
   async fetchMails(since, options = {}) {
     const url = `/mails${since ? `?since=${encodeURIComponent(since)}` : ''}`
     try {
-      return await this._fetch(url, { timeoutMs: MAIL_REQUEST_TIMEOUT_MS })
+      const result = await this._fetch(url, { timeoutMs: MAIL_REQUEST_TIMEOUT_MS })
+      this.fetchFailStreak = 0
+      return result
     } catch (err) {
       // 瞬时网络抖动：800ms 后重试一次再判定失败
       await new Promise((resolve) => setTimeout(resolve, 800))
       try {
-        return await this._fetch(url, { timeoutMs: MAIL_REQUEST_TIMEOUT_MS })
+        const result = await this._fetch(url, { timeoutMs: MAIL_REQUEST_TIMEOUT_MS })
+        this.fetchFailStreak = 0
+        return result
       } catch (err2) {
+        this.fetchFailStreak++
+        this._logFile(`拉取邮件失败(连续第 ${this.fetchFailStreak} 次): ${err2.message}`)
         if (options.throwOnError) throw err2
         return []
       }

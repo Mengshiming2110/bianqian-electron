@@ -77,6 +77,13 @@
           <button class="icon-btn" title="断开" type="button" @click="handleStop"><Power :size="16" /></button>
         </div>
       </div>
+      <div v-if="store.error" class="mail-error-card" role="alert">
+        <div class="mail-error-title">
+          <AlertCircle :size="15" />
+          <span>拉取异常，正在自动重试</span>
+        </div>
+        <p>{{ store.error }}</p>
+      </div>
       <div class="mail-list" v-if="displayMails.length">
         <div
           v-for="mail in displayMails"

@@ -1,6 +1,6 @@
 {
   "name": "lingyi-work-assistant",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "description": "领益内部备忘、剪切板和 Outlook 邮件桌面助手",
   "author": "Lingyi",
   "main": "out/main/index.js",

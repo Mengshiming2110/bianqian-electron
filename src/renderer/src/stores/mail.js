@@ -117,6 +117,7 @@ export const useMailStore = defineStore('mail', {
       try {
         await window.api.mail.fetch()
         await this.load()
+        this.error = null
         quickRetryCount = 0
         this.clearQuickRetry()
       } catch (err) {
