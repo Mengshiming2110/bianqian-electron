@@ -32,11 +32,10 @@ DEFAULT_EWS_PORT = 443
 
 # 网络抖动自愈参数
 EWS_TIMEOUT_SECONDS = 20        # 单次 EWS 请求超时
-EWS_QUICK_TIMEOUT_SECONDS = 8   # 诊断模式认证测试的超时（避免 FaultTolerance 长重试拖垮 /doctor）
-EWS_RETRY_MAX_WAIT = 180        # FaultTolerance 策略最长重试窗口（秒）
+EWS_QUICK_TIMEOUT_SECONDS = 8   # 诊断模式认证测试的超时
 RECONNECT_COOLDOWN_SECONDS = 10  # 连接失效后重建账号的冷却期，避免断网时高频重连
 
-VERSION = '1.2.1'
+VERSION = '1.2.2'
 
 
 def _json(handler, status, payload):
@@ -327,9 +326,11 @@ def _account(quick=False):
 
         try:
             from exchangelib import Account, Configuration, Credentials, DELEGATE
-            from exchangelib.protocol import BaseProtocol, FaultTolerance, FailFast
+            from exchangelib.protocol import BaseProtocol, FailFast
 
-            # quick（诊断）模式：短超时 + FailFast，认证测试有界执行；正常模式保留指数退避。
+            # 统一 FailFast：服务器忙/超时等错误立刻浮出，由 _run_with_reconnect 做一次
+            # 「作废账号+重建+重试」，JS 桥再做快速重试与服务重启。FaultTolerance 的内部指数退避
+            # （10s→160s）会把每个请求卡住数分钟，反而让拉取看起来死掉。
             # TIMEOUT 是类属性且按请求实时读取，必须保存/恢复，避免诊断污染后续正常拉取
             previous_timeout = BaseProtocol.TIMEOUT
             try:
@@ -338,7 +339,7 @@ def _account(quick=False):
                 config = Configuration(
                     server=server,
                     credentials=credentials,
-                    retry_policy=FailFast() if quick else FaultTolerance(max_wait=EWS_RETRY_MAX_WAIT),
+                    retry_policy=FailFast(),
                 )
                 account = Account(
                     primary_smtp_address=smtp,
@@ -518,6 +519,8 @@ def _summary(item):
 
 def _list_mails(account, since=None, limit=50):
     from exchangelib import Q
+    from exchangelib.fields import FieldOrder
+    from exchangelib.folders import FolderCollection
 
     if since:
         try:
@@ -527,8 +530,28 @@ def _list_mails(account, since=None, limit=50):
     else:
         start = datetime.now(timezone.utc) - timedelta(days=7)
 
-    qs = account.inbox.filter(Q(datetime_received__gte=start)).order_by('-datetime_received')
-    return [_summary(item) for item in qs[:limit]]
+    # 用低层 API 显式捕获被 exchangelib 静默吞掉的响应级错误：
+    # 高层 filter() 会把 FindItem/GetItem 的服务器错误过滤成空列表，
+    # 导致「服务器拒绝查询」被伪装成「没有新邮件」。
+    folder = account.inbox
+    ids = list(FolderCollection(account=account, folders=[folder]).find_items(
+        q=Q(datetime_received__gte=start),
+        shape='IdOnly',
+        order_fields=[FieldOrder.from_string(field_path='-datetime_received', folder=folder)],
+        page_size=limit,
+        max_items=limit,
+    ))
+    id_errors = [i for i in ids if isinstance(i, Exception)]
+    if id_errors:
+        # 原样抛出 exchangelib 异常，让 _run_with_reconnect 按错误类型分类（瞬时重试 / 永久上报）
+        raise id_errors[0]
+
+    items = list(account.fetch(ids=ids, only_fields=None))
+    ok_items = [i for i in items if not isinstance(i, Exception)]
+    error_items = [i for i in items if isinstance(i, Exception)]
+    if error_items and not ok_items:
+        raise error_items[0]
+    return [_summary(item) for item in ok_items]
 
 
 def _detail(account, mail_id):
@@ -581,7 +604,7 @@ class Handler(BaseHTTPRequestHandler):
             _json(self, 404, {'ok': False, 'error': 'not found'})
         except Exception as exc:
             traceback.print_exc()
-            _json(self, 500, {'ok': False, 'error': str(exc) or LAST_ERROR})
+            _json(self, 500, {'ok': False, 'error': f'{type(exc).__name__}: {str(exc) or LAST_ERROR}'})
 
     def do_POST(self):
         if not _check_token(self):
@@ -604,7 +627,7 @@ class Handler(BaseHTTPRequestHandler):
             _json(self, 404, {'ok': False, 'error': 'not found'})
         except Exception as exc:
             traceback.print_exc()
-            _json(self, 500, {'ok': False, 'error': str(exc) or LAST_ERROR})
+            _json(self, 500, {'ok': False, 'error': f'{type(exc).__name__}: {str(exc) or LAST_ERROR}'})
 
 
 def _shutdown_soon():
